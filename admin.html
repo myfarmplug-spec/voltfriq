@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>VoltFriq Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/shared.css" />
+  <link rel="stylesheet" href="css/chat.css" />
+  <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body>
+
+  <!-- ═══ SCREEN: LOGIN ═══════════════════════════════════════════ -->
+  <div id="screen-admin-login" class="screen active">
+    <div class="admin-login-wrap">
+      <div class="admin-login-logo">
+        <span class="bolt">⚡</span> voltfriq
+      </div>
+      <div class="admin-login-subtitle">Admin Portal</div>
+      <div class="admin-login-card">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="admin-email" placeholder="admin@voltfriq.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="admin-password" placeholder="Enter password" />
+        </div>
+        <button class="btn-primary btn-full" id="btn-admin-login">Login</button>
+        <div class="admin-login-error" id="admin-login-error">Invalid email or password</div>
+      </div>
+      <div class="admin-login-demo">
+        Demo credentials:<br />
+        <code>admin@voltfriq.com</code> / <code>admin123</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: DASHBOARD ═══════════════════════════════════════ -->
+  <div id="screen-admin-dashboard" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">Dashboard <small>Welcome back, Admin</small></div>
+
+      <div class="admin-stats" id="admin-stats">
+        <!-- JS fills -->
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-title">Pending Actions <span class="count-badge" id="pending-count">0</span></div>
+        <div class="admin-pending-cards" id="admin-pending-actions">
+          <!-- JS fills -->
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-title">Recent Activity</div>
+        <div class="admin-feed" id="admin-feed">
+          <!-- JS fills -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: REQUESTS ════════════════════════════════════════ -->
+  <div id="screen-admin-requests" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">Customer Requests</div>
+      <div class="admin-filter-tabs" id="requests-filter-tabs">
+        <button class="admin-filter-tab active" data-filter="all">All</button>
+        <button class="admin-filter-tab" data-filter="pending">New</button>
+        <button class="admin-filter-tab" data-filter="fee-pending">Assigned</button>
+        <button class="admin-filter-tab" data-filter="in-progress">In Progress</button>
+      </div>
+      <div class="admin-card-list" id="requests-list">
+        <!-- JS fills -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: REQUEST DETAIL ══════════════════════════════════ -->
+  <div id="screen-admin-request-detail" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Request Detail</div>
+    </div>
+    <div class="admin-detail-body" id="request-detail-body">
+      <!-- JS fills -->
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: ELECTRICIANS ════════════════════════════════════ -->
+  <div id="screen-admin-electricians" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">Electricians</div>
+      <div class="admin-filter-tabs" id="elec-filter-tabs">
+        <button class="admin-filter-tab active" data-filter="all">All</button>
+        <button class="admin-filter-tab" data-filter="pending">Pending</button>
+        <button class="admin-filter-tab" data-filter="active">Active</button>
+        <button class="admin-filter-tab" data-filter="suspended">Suspended</button>
+      </div>
+      <div class="admin-card-list" id="elec-list">
+        <!-- JS fills -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: ELECTRICIAN DETAIL ══════════════════════════════ -->
+  <div id="screen-admin-elec-detail" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Electrician Profile</div>
+    </div>
+    <div class="admin-detail-body" id="elec-detail-body">
+      <!-- JS fills -->
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: JOBS ════════════════════════════════════════════ -->
+  <div id="screen-admin-jobs" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">All Jobs</div>
+      <div class="admin-filter-tabs" id="jobs-filter-tabs">
+        <button class="admin-filter-tab active" data-filter="all">All</button>
+        <button class="admin-filter-tab" data-filter="pending">Pending</button>
+        <button class="admin-filter-tab" data-filter="fee-pending">Fee Pending</button>
+        <button class="admin-filter-tab" data-filter="assessment">Assessment</button>
+        <button class="admin-filter-tab" data-filter="quoted">Quoted</button>
+        <button class="admin-filter-tab" data-filter="payment">Payment</button>
+        <button class="admin-filter-tab" data-filter="in-progress">In Progress</button>
+        <button class="admin-filter-tab" data-filter="completed">Completed</button>
+      </div>
+      <div class="admin-card-list" id="jobs-list">
+        <!-- JS fills -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: JOB DETAIL ═════════════════════════════════════ -->
+  <div id="screen-admin-job-detail" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title" id="job-detail-title">Job Detail</div>
+    </div>
+    <div class="admin-detail-body" id="job-detail-body">
+      <!-- JS fills -->
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: MATERIALS ═══════════════════════════════════════ -->
+  <div id="screen-admin-materials" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">Material Requests</div>
+      <div id="materials-list">
+        <!-- JS fills -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: FINANCE ═════════════════════════════════════════ -->
+  <div id="screen-admin-finance" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">Finance</div>
+      <div id="finance-summary"></div>
+      <div class="admin-section">
+        <div class="admin-section-title">Transactions</div>
+        <div class="admin-tx-list" id="finance-tx-list">
+          <!-- JS fills -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: SETTINGS ════════════════════════════════════════ -->
+  <div id="screen-admin-settings" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">Settings</div>
+      <div id="settings-form">
+        <!-- JS fills -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: WORKMANSHIP PRICES ═══════════════════════════════ -->
+  <div id="screen-admin-prices" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Workmanship Prices</div>
+    </div>
+    <div class="admin-body" style="padding-top:8px">
+      <p style="font-size:13px;color:var(--mid);margin-bottom:14px">Estimated workmanship fees (without materials). These prices are shown to customers.</p>
+      <div id="price-list-container">
+        <!-- JS fills -->
+      </div>
+      <div class="price-add-form" id="price-add-form">
+        <div class="form-group">
+          <label class="form-label">Service description</label>
+          <input type="text" class="form-input" id="new-price-service" placeholder="e.g. Replacement of light switches" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Price (₦)</label>
+          <input type="number" class="form-input" id="new-price-amount" placeholder="e.g. 3000" />
+        </div>
+        <button class="btn-primary btn-full" id="btn-add-price">+ Add Price Item</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: CHATS ══════════════════════════════════════════ -->
+  <div id="screen-admin-chats" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">Chat Threads</div>
+      <div id="chats-list">
+        <!-- JS fills -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ BOTTOM NAV ══════════════════════════════════════════════ -->
+  <nav class="admin-bottom-nav" id="admin-bottom-nav" style="display:none">
+    <button class="admin-nav-item active" data-screen="admin-dashboard">
+      <span class="admin-nav-icon">📊</span>
+      <span class="admin-nav-label">Dashboard</span>
+    </button>
+    <button class="admin-nav-item" data-screen="admin-requests">
+      <span class="admin-nav-icon">📋</span>
+      <span class="admin-nav-label">Requests</span>
+    </button>
+    <button class="admin-nav-item" data-screen="admin-jobs">
+      <span class="admin-nav-icon">⚡</span>
+      <span class="admin-nav-label">Jobs</span>
+    </button>
+    <button class="admin-nav-item" data-screen="admin-electricians">
+      <span class="admin-nav-icon">👷</span>
+      <span class="admin-nav-label">Electricians</span>
+    </button>
+    <button class="admin-nav-item" data-screen="admin-settings">
+      <span class="admin-nav-icon">⚙️</span>
+      <span class="admin-nav-label">Settings</span>
+    </button>
+  </nav>
+
+  <script src="js/store.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

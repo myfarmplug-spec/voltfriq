@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoltFriq Ocean - Customer Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/shared.css" />
+  <link rel="stylesheet" href="css/customer.css" />
+  <link rel="stylesheet" href="css/chat.css" />
+</head>
+<body>
+  <div id="screen-welcome" class="screen active">
+    <div class="welcome-bg">
+      <div class="welcome-top-bar">
+        <div class="welcome-logo">&#9889; voltfriq</div>
+        <div class="welcome-top-links">
+          <button class="btn-ghost welcome-link" id="btn-track-job">Track Job</button>
+          <button class="btn-ghost welcome-link welcome-login-link" id="btn-welcome-login">Login</button>
+        </div>
+      </div>
+      <div class="welcome-hero">
+        <div class="welcome-glow"></div>
+        <div class="welcome-kicker">Transparent electrical help, built for mobile</div>
+        <h1 class="welcome-title">Search your area.<br/>See live VoltFriqs.<br/>Fix it clearly.</h1>
+        <p class="welcome-sub">Find the available electricians around you, explain the issue in a few taps, and track everything from assessment to receipt.</p>
+        <button class="btn-primary btn-large" id="btn-begin-area">&#128269; Search My Area</button>
+        <button class="btn-secondary welcome-outline-btn" id="btn-view-prices">&#128176; View Estimated Prices</button>
+      </div>
+      <div class="welcome-footer">
+        Dev: DotXan Tech &middot; Powered by Chapta Electrical Services LLC
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-service-area" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Search Your Area</div>
+    </div>
+    <div class="screen-body">
+      <div class="availability-hero card">
+        <div class="availability-hero-kicker">Step 1</div>
+        <h2>Pick where you need help</h2>
+        <p>We will show how many approved VoltFriqs are currently available in that service area before you describe the issue.</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Service Area</label>
+        <select class="form-select" id="service-area-select">
+          <option value="">Select a service area</option>
+        </select>
+      </div>
+
+      <button class="btn-secondary btn-full" id="btn-use-location">&#128205; Use Current Location Helper</button>
+      <div class="helper-note" id="location-helper-note">We will map you to the closest service area available in this demo.</div>
+
+      <div class="availability-card card" id="availability-card">
+        <div class="availability-card-label">Available VoltFriqs</div>
+        <div class="availability-card-value" id="availability-count">0</div>
+        <div class="availability-card-meta" id="availability-meta">Choose a service area to see live availability.</div>
+      </div>
+
+      <button class="btn-primary btn-large" id="btn-area-continue" disabled>Continue to Issue Intake</button>
+    </div>
+  </div>
+
+  <div id="screen-problem" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Tell Us The Problem</div>
+    </div>
+    <div class="screen-body">
+      <div class="summary-strip card">
+        <div>
+          <div class="summary-strip-label">Selected Area</div>
+          <div class="summary-strip-value" id="problem-area-label">--</div>
+        </div>
+        <div class="summary-strip-pill" id="problem-availability-pill">0 available</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Issue Category</label>
+        <select class="form-select" id="problem-category">
+          <option value="">Select the main issue</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">&#9200; Urgency</label>
+        <div class="urgency-selector" id="urgency-selector">
+          <button class="urgency-chip active" data-urgency="today">Today</button>
+          <button class="urgency-chip" data-urgency="emergency">Emergency</button>
+          <button class="urgency-chip" data-urgency="this-week">This Week</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Do you want an assessment visit?</label>
+        <div class="choice-row" id="assessment-choice">
+          <button class="choice-pill active" data-value="yes">Yes, send a VoltFriq to assess</button>
+          <button class="choice-pill" data-value="no">No, start with a remote quote</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Who will buy the materials?</label>
+        <div class="choice-row" id="material-choice">
+          <button class="choice-pill active" data-value="voltfriq-supplied">Voltfriq buys materials</button>
+          <button class="choice-pill" data-value="self-procured">I will buy materials</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Short note <span class="optional">(optional)</span></label>
+        <textarea class="form-input" id="problem-desc" rows="3" maxlength="220" placeholder="Share anything important like affected rooms, sounds, smells, or what you already tried."></textarea>
+        <div class="char-count"><span id="desc-count">0</span>/220</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">&#128247; Photos <span class="optional">(up to 3)</span></label>
+        <div class="photo-upload-area" id="photo-upload-area">
+          <input type="file" id="photo-input" accept="image/*" multiple style="display:none;" />
+          <button class="btn-secondary photo-add-btn" id="photo-add-btn">+ Add Photos</button>
+          <div class="photo-previews" id="photo-previews"></div>
+        </div>
+      </div>
+
+      <button class="btn-primary btn-large" id="btn-review-match" disabled>Review Best VoltFriq</button>
+    </div>
+  </div>
+
+  <div id="screen-customer-auth" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Login To Continue</div>
+    </div>
+    <div class="screen-body auth-body">
+      <div class="auth-icon">&#128274;</div>
+      <h2 class="auth-heading">Save your job and continue</h2>
+      <p class="auth-sub">We will keep your specialist recommendation, quote, receipt, and service history in one place.</p>
+
+      <div class="auth-tabs tabs">
+        <button class="tab active" id="tab-login" data-tab="login">Login</button>
+        <button class="tab" id="tab-register" data-tab="register">Register</button>
+      </div>
+
+      <div class="auth-form" id="auth-form">
+        <div class="form-group" id="auth-name-group" style="display:none;">
+          <label class="form-label">Full Name</label>
+          <input type="text" class="form-input" id="auth-name" placeholder="Your full name" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone or Email</label>
+          <input type="text" class="form-input" id="auth-contact" placeholder="08012345678 or email@example.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="auth-password" placeholder="Enter password" />
+        </div>
+        <div class="auth-error" id="auth-error" style="display:none;"></div>
+        <button class="btn-primary btn-full" id="btn-auth-submit">Login</button>
+      </div>
+
+      <div class="auth-divider"><span>or</span></div>
+      <button class="btn-secondary btn-full" id="btn-guest">Continue as Guest</button>
+      <a href="electrician.html" class="auth-elec-link">&#128736; Become a VoltFriq</a>
+    </div>
+  </div>
+
+  <div id="screen-match" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Recommended VoltFriq</div>
+    </div>
+    <div class="screen-body">
+      <div class="match-summary-card card" id="match-summary-card"></div>
+
+      <div class="match-electrician-card card" id="match-electrician-card">
+        <div class="match-electrician-head">
+          <div class="match-electrician-avatar" id="match-avatar">👷</div>
+          <div>
+            <div class="match-electrician-name" id="match-name">--</div>
+            <div class="match-electrician-specialty" id="match-specialty">--</div>
+          </div>
+        </div>
+        <div class="elec-stats">
+          <span class="badge badge-yellow">&#11088; <span id="match-rating">--</span></span>
+          <span class="badge badge-blue">&#128188; <span id="match-jobs">--</span> jobs</span>
+          <span class="badge badge-green">&#128205; <span id="match-distance">--</span> km</span>
+        </div>
+        <div class="match-reason" id="match-reason">--</div>
+      </div>
+
+      <div class="transparency-card card" id="transparency-card"></div>
+
+      <button class="btn-primary btn-large" id="btn-continue-match">Continue With This VoltFriq</button>
+      <button class="btn-secondary btn-full" id="btn-change-specialist">Change Specialist</button>
+    </div>
+  </div>
+
+  <div id="screen-appearance-fee" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Assessment Fee</div>
+    </div>
+    <div class="screen-body">
+      <div class="fee-card card">
+        <div class="fee-icon">&#128176;</div>
+        <div class="fee-amount" id="fee-amount">&#8358;5,000</div>
+        <p class="fee-explain">This covers the assessment visit, diagnosis, and the report-plus-quotation that follows the visit.</p>
+      </div>
+
+      <div class="snapshot-card card" id="assessment-snapshot"></div>
+
+      <div class="bank-card card" id="fee-bank-card">
+        <div class="bank-label" id="fee-bank-label">Transfer to</div>
+        <div class="bank-name" id="fee-bank-name">First Bank of Nigeria</div>
+        <div class="bank-number" id="fee-account-number">3012845678</div>
+        <div class="bank-acct-name" id="fee-account-name">Voltfriq Services Ltd</div>
+        <button class="btn-secondary btn-copy" id="fee-copy-btn">&#128203; Copy Account Number</button>
+      </div>
+
+      <button class="btn-primary btn-large" id="btn-fee-paid">I Have Paid For Assessment</button>
+    </div>
+  </div>
+
+  <div id="screen-assigned" class="screen">
+    <div class="screen-header">
+      <div class="screen-header-title">Job Tracking</div>
+      <button class="btn-icon" id="btn-assigned-history" title="Job History">&#128203;</button>
+    </div>
+    <div class="screen-body">
+      <div class="summary-strip card" id="tracking-summary"></div>
+
+      <div class="elec-card card" id="assigned-elec-card">
+        <div class="elec-avatar" id="assigned-avatar">&#128119;</div>
+        <div class="elec-info">
+          <div class="elec-name" id="assigned-name">--</div>
+          <div class="elec-specialty" id="assigned-specialty">--</div>
+          <div class="elec-stats">
+            <span class="badge badge-yellow">&#11088; <span id="assigned-rating">--</span></span>
+            <span class="badge badge-blue">&#128188; <span id="assigned-jobs">--</span> jobs</span>
+            <span class="badge badge-green">&#128205; <span id="assigned-distance">--</span> km</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="issue-summary card">
+        <div class="issue-summary-title">Job Transparency</div>
+        <div class="issue-summary-cats" id="assigned-categories"></div>
+        <div class="issue-summary-desc" id="assigned-desc"></div>
+        <div class="mini-meta-list" id="assigned-meta-list"></div>
+      </div>
+
+      <div class="timeline-card card">
+        <div class="issue-summary-title">Status</div>
+        <div class="status-lines" id="status-lines"></div>
+      </div>
+
+      <button class="btn-primary btn-large" id="btn-open-chat">&#128172; Open Chat</button>
+      <button class="btn-secondary btn-full" id="btn-view-quote" style="display:none;">&#128196; View Quote</button>
+    </div>
+  </div>
+
+  <div id="screen-chat" class="screen">
+    <div class="screen-header chat-header">
+      <button class="btn-icon" id="btn-chat-back" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="chat-header-info">
+        <div class="screen-header-title" id="chat-elec-name">Chat</div>
+        <div class="chat-ticket" id="chat-ticket-label">--</div>
+      </div>
+      <button class="btn-icon" id="btn-chat-quotation" title="View Quotation" style="display:none;">&#128196;</button>
+    </div>
+    <div class="chat-container" id="customer-chat-container"></div>
+  </div>
+
+  <div id="screen-quotation" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Quotation</div>
+    </div>
+    <div class="screen-body">
+      <div class="quot-card card">
+        <div class="quot-section">
+          <div class="quot-section-label">Findings</div>
+          <div class="quot-findings" id="quot-findings">Waiting for report...</div>
+        </div>
+        <div class="quot-section" id="quot-labour">
+          <div class="quot-section-label">Labour</div>
+          <div class="quot-items" id="quot-labour-items"></div>
+        </div>
+        <div class="quot-section" id="quot-materials">
+          <div class="quot-section-label">Materials</div>
+          <div class="quot-items" id="quot-material-items"></div>
+        </div>
+        <div class="quot-total">
+          <span>Customer pays now</span>
+          <span id="quot-total-amount">--</span>
+        </div>
+        <div class="quot-footnote" id="quotation-note"></div>
+      </div>
+
+      <div class="quot-actions">
+        <button class="btn-primary btn-full" id="btn-accept-quote">&#10003; Accept Quote</button>
+        <button class="btn-secondary btn-full" id="btn-negotiate-quote">&#128172; Ask A Question</button>
+        <button class="btn-ghost" id="btn-decline-quote">Decline</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-payment" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Payment Setup</div>
+    </div>
+    <div class="screen-body">
+      <div class="payment-amount-card card">
+        <div class="payment-label">Amount Due Now</div>
+        <div class="payment-amount" id="payment-amount">--</div>
+        <div class="payment-note" id="payment-note">--</div>
+      </div>
+
+      <div class="snapshot-card card" id="payment-snapshot"></div>
+
+      <div class="bank-card card" id="pay-bank-card">
+        <div class="bank-label" id="pay-bank-label">Transfer to</div>
+        <div class="bank-name" id="pay-bank-name">First Bank of Nigeria</div>
+        <div class="bank-number" id="pay-account-number">3012845678</div>
+        <div class="bank-acct-name" id="pay-account-name">Voltfriq Services Ltd</div>
+        <button class="btn-secondary btn-copy" id="pay-copy-btn">&#128203; Copy Account Number</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Upload Receipt <span class="optional">(optional)</span></label>
+        <input type="file" class="form-input" id="receipt-upload" accept="image/*" />
+      </div>
+
+      <button class="btn-primary btn-large" id="btn-payment-paid">I Have Paid</button>
+    </div>
+  </div>
+
+  <div id="screen-confirm-work" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Confirm Work</div>
+    </div>
+    <div class="screen-body">
+      <div class="confirm-summary card">
+        <div class="confirm-title">Final Summary</div>
+        <div class="confirm-items" id="confirm-items"></div>
+      </div>
+
+      <div class="confirm-elec-status card">
+        <div class="confirm-status-label">Electrician Status</div>
+        <div class="confirm-status-value" id="confirm-elec-status">
+          <span class="dot-live"></span> Waiting for electrician confirmation...
+        </div>
+      </div>
+
+      <div class="confirm-summary card" id="final-settlement-card"></div>
+
+      <label class="confirm-check-label">
+        <input type="checkbox" id="confirm-checkbox" />
+        <span>I confirm the work is complete and approve payout release</span>
+      </label>
+
+      <button class="btn-primary btn-large" id="btn-confirm-complete" disabled>&#10003; Confirm &amp; Release</button>
+    </div>
+  </div>
+
+  <div id="screen-rating" class="screen">
+    <div class="screen-body rating-body">
+      <div class="rating-success-icon">&#10004;</div>
+      <h2 class="rating-title">Job Complete</h2>
+      <p class="rating-sub">Rate the VoltFriq and save the receipt to your history.</p>
+
+      <div class="star-rating" id="star-rating">
+        <span class="star" data-star="1">&#9734;</span>
+        <span class="star" data-star="2">&#9734;</span>
+        <span class="star" data-star="3">&#9734;</span>
+        <span class="star" data-star="4">&#9734;</span>
+        <span class="star" data-star="5">&#9734;</span>
+      </div>
+
+      <div class="form-group" style="width:100%;">
+        <textarea class="form-input" id="rating-comment" rows="3" maxlength="200" placeholder="Optional feedback for transparency and quality control"></textarea>
+        <div class="char-count"><span id="rating-count">0</span>/200</div>
+      </div>
+
+      <div class="warranty-card card">
+        <div class="warranty-icon">&#128737;</div>
+        <div class="warranty-info">
+          <div class="warranty-title">Receipt &amp; History</div>
+          <div class="warranty-desc">Your rating, payout summary, and job details stay saved for both you and the VoltFriq.</div>
+        </div>
+      </div>
+
+      <button class="btn-primary btn-large" id="btn-submit-rating">Submit Rating</button>
+    </div>
+  </div>
+
+  <div id="screen-done" class="screen">
+    <div class="done-bg">
+      <div class="done-circle">
+        <span class="done-bolt">&#9889;</span>
+      </div>
+      <h2 class="done-title">Receipt Saved</h2>
+      <p class="done-sub">Your job is complete, the receipt is saved, and the full history is available any time you need it.</p>
+      <div class="done-receipt-card card" id="done-receipt-card"></div>
+      <button class="btn-ghost done-link" id="btn-view-history">View Job History</button>
+      <button class="btn-primary btn-large" id="btn-find-another">&#128269; Find Another Electrician</button>
+    </div>
+  </div>
+
+  <div id="screen-history" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" id="btn-history-back" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Job History</div>
+    </div>
+    <div class="screen-body">
+      <div class="tabs history-tabs" id="history-tabs">
+        <button class="tab active" data-filter="active">Active</button>
+        <button class="tab" data-filter="completed">Completed</button>
+      </div>
+      <div class="history-list" id="history-list"></div>
+    </div>
+  </div>
+
+  <div id="screen-prices" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" id="btn-prices-back" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Estimated Workmanship Prices</div>
+    </div>
+    <div class="screen-body" style="padding:16px">
+      <p style="font-size:13px;color:var(--mid);margin-bottom:16px;line-height:1.5">These are estimated workmanship fees without materials. Final pricing depends on assessment, billing mode, and whether materials are supplied by VoltFriq or by you.</p>
+      <div id="customer-price-list"></div>
+      <div style="margin-top:20px;text-align:center">
+        <button class="btn-primary btn-full" id="btn-prices-find">Search My Area</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet-backdrop" id="specialist-sheet" style="display:none;">
+    <div class="sheet-panel">
+      <div class="sheet-header">
+        <div>
+          <div class="sheet-title">Change Specialist</div>
+          <div class="sheet-sub" id="sheet-subtitle">Ranked by rating, completed jobs, and distance.</div>
+        </div>
+        <button class="btn-icon" id="btn-close-sheet" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="sheet-list" id="specialist-list"></div>
+      <button class="btn-primary btn-full" id="btn-select-specialist">Use Selected VoltFriq</button>
+    </div>
+  </div>
+
+  <script src="js/store.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/customer.js"></script>
+</body>
+</html>
