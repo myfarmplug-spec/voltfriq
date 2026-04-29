@@ -451,9 +451,25 @@
   function renderPrices() {
     const settings = Store.getSettings();
     const prices = settings.workmanship_prices || [];
-    $('#price-list-container').innerHTML = prices.length ? prices.map((item) => {
-      return '<div class="price-item"><div class="price-item-info"><div class="price-item-details"><div class="price-item-service">' + escapeHtml(item.service || 'Price item') + '</div><div class="price-item-amount">' + Store.formatCurrency(item.price || 0) + '</div></div></div></div>';
+    $('#price-list-container').innerHTML = prices.length ? prices.map((item, index) => {
+      return '<div class="price-item">' +
+        '<div class="price-item-info">' +
+          '<div class="price-item-num">' + String(index + 1) + '</div>' +
+          '<div class="price-item-details">' +
+            '<div class="price-item-service">' + escapeHtml(item.issue_type || item.service || 'Estimate item') + '</div>' +
+            '<div class="price-item-description">' + escapeHtml(item.description || item.short_description || 'Final cost may vary after inspection.') + '</div>' +
+            '<div class="price-item-amount">' + escapeHtml(formatEstimateRange(item)) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="price-item-actions"><button class="btn-icon" data-remove-price="' + index + '" aria-label="Remove estimate item">&times;</button></div>' +
+      '</div>';
     }).join('') : emptyState('No workmanship prices published yet.');
+    renderPriceCategoryOptions();
+    const addButton = $('#btn-add-price');
+    if (addButton) addButton.onclick = addPriceItem;
+    $$('#price-list-container [data-remove-price]').forEach((button) => {
+      button.addEventListener('click', () => removePriceItem(Number(button.dataset.removePrice)));
+    });
   }
 
   function renderSettings() {
@@ -500,6 +516,82 @@
       await loadData();
       renderSettings();
     });
+  }
+
+  async function addPriceItem() {
+    await withButtonLoading('btn-add-price', 'Adding...', async () => {
+      const issueType = $('#new-price-service').value.trim();
+      const description = $('#new-price-description').value.trim();
+      const skillCategory = $('#new-price-category').value.trim();
+      const min = Number($('#new-price-min').value || 0);
+      const maxValue = $('#new-price-max').value ? Number($('#new-price-max').value) : null;
+      if (!issueType) throw new Error('Enter the issue users can select.');
+      if (!min || min < 0) throw new Error('Enter the estimated minimum workmanship fee.');
+      if (maxValue && maxValue < min) throw new Error('Maximum estimate cannot be lower than minimum estimate.');
+
+      const settings = Store.getSettings();
+      const nextPrices = (settings.workmanship_prices || []).concat([{
+        issue_type: issueType,
+        service: issueType,
+        description: description || 'Final cost may vary after inspection.',
+        estimated_fee_min: min,
+        estimated_fee_max: maxValue,
+        value: skillCategory || inferSkillCategory(issueType),
+        created_at: new Date().toISOString()
+      }]);
+      await Store.saveSettings({ workmanship_prices: nextPrices });
+      await Store.loadSettings();
+      $('#new-price-service').value = '';
+      $('#new-price-description').value = '';
+      $('#new-price-min').value = '';
+      $('#new-price-max').value = '';
+      renderPrices();
+    });
+  }
+
+  async function removePriceItem(index) {
+    const settings = Store.getSettings();
+    const nextPrices = (settings.workmanship_prices || []).filter((_, itemIndex) => itemIndex !== index);
+    await Store.saveSettings({ workmanship_prices: nextPrices });
+    await Store.loadSettings();
+    renderPrices();
+  }
+
+  function renderPriceCategoryOptions() {
+    const select = $('#new-price-category');
+    if (!select) return;
+    const settings = Store.getSettings();
+    const categories = Array.from(new Set([
+      'Socket repair',
+      'Light fitting',
+      'Wiring issue',
+      'Tripped breaker',
+      'General Installation',
+      'Inverter',
+      'Generator',
+      'Other'
+    ].concat(settings.issue_categories || [])));
+    select.innerHTML = categories.map((category) => '<option value="' + escapeAttribute(category) + '">' + escapeHtml(humanizeIssue(category)) + '</option>').join('');
+  }
+
+  function formatEstimateRange(item) {
+    const min = Number(item.estimated_fee_min || item.price || item.amount || 0);
+    const max = Number(item.estimated_fee_max || item.price_max || item.max_amount || 0);
+    if (min && max && min !== max) return Store.formatCurrency(min) + ' - ' + Store.formatCurrency(max);
+    if (min) return Store.formatCurrency(min) + (max ? '' : '+');
+    return 'Quote after review';
+  }
+
+  function inferSkillCategory(issueType) {
+    const text = String(issueType || '').toLowerCase();
+    if (text.includes('socket') || text.includes('switch')) return 'Socket repair';
+    if (text.includes('light')) return 'Light fitting';
+    if (text.includes('wire') || text.includes('wiring')) return 'Wiring issue';
+    if (text.includes('breaker') || text.includes('fuse')) return 'Tripped breaker';
+    if (text.includes('solar') || text.includes('inverter')) return 'Inverter';
+    if (text.includes('generator')) return 'Generator';
+    if (text.includes('inspection') || text.includes('install')) return 'General Installation';
+    return 'Other';
   }
 
   async function handleLogout() {

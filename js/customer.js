@@ -1293,7 +1293,7 @@
       .map(normalizeInvoiceIssue)
       .filter(Boolean);
     const usedInvoiceIndexes = new Set();
-    return ISSUE_OPTIONS.map((issue) => {
+    const baseIssues = ISSUE_OPTIONS.map((issue) => {
       const invoiceIndex = invoiceItems.findIndex((item, index) => !usedInvoiceIndexes.has(index) && issueMatchesInvoice(issue, item));
       if (invoiceIndex === -1) return normalizeIssue(issue);
       usedInvoiceIndexes.add(invoiceIndex);
@@ -1305,13 +1305,26 @@
         estimated_fee_max: invoice.estimated_fee_max
       });
     });
+    const extraIssues = invoiceItems
+      .filter((item, index) => !usedInvoiceIndexes.has(index))
+      .map((item) => normalizeIssue({
+        issue_type: item.issue_type,
+        value: item.value || inferSkillCategory(item.issue_type),
+        description: item.description,
+        estimated_fee_min: item.estimated_fee_min,
+        estimated_fee_max: item.estimated_fee_max
+      }));
+    return baseIssues.concat(extraIssues);
   }
 
   function normalizeIssue(issue) {
+    const issueType = issue.issue_type || 'Other';
+    const value = issue.value || inferSkillCategory(issueType);
     return {
       ...issue,
-      key: slugifyIssue(issue.issue_type + '-' + issue.value),
-      issue_type: issue.issue_type || 'Other',
+      key: slugifyIssue(issueType + '-' + value),
+      issue_type: issueType,
+      value,
       description: issue.description || '',
       estimated_fee_min: parseFeeValue(issue.estimated_fee_min),
       estimated_fee_max: parseFeeValue(issue.estimated_fee_max)
@@ -1326,7 +1339,8 @@
     const max = item.estimated_fee_max ?? item.max_rate ?? item.max_amount ?? item.price_max ?? null;
     return {
       issue_type: String(issueType),
-      description: item.short_description || item.note || item.details || '',
+      value: item.value || item.category || null,
+      description: item.description || item.short_description || item.note || item.details || '',
       estimated_fee_min: parseFeeValue(min),
       estimated_fee_max: parseFeeValue(max)
     };

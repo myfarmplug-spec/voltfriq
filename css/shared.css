@@ -20,6 +20,10 @@
   --radius-sm:    12px;
   --shadow:       0 4px 24px rgba(0,0,0,0.10);
   --shadow-sm:    0 2px 8px rgba(0,0,0,0.07);
+  --app-max:       1200px;
+  --content-max:   960px;
+  --compact-max:   720px;
+  --shell-pad-x:   20px;
 }
 
 html, body {
@@ -35,6 +39,8 @@ html, body {
 .screen {
   position: fixed;
   inset: 0;
+  width: 100%;
+  max-width: none;
   display: flex;
   flex-direction: column;
   background: var(--white);
@@ -43,9 +49,45 @@ html, body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   z-index: 1;
+  border-radius: 0;
+  box-shadow: none;
 }
 .screen.active { transform: translateX(0); z-index: 2; }
 .screen.prev   { transform: translateX(-30%); z-index: 1; }
+
+.screen-body {
+  flex: 1;
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 20px var(--shell-pad-x) 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.screen-header {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.app-shell,
+.portal-shell,
+.admin-body,
+.admin-detail-body,
+.elec-reg-body,
+.elec-dash-scroll,
+.elec-job-scroll,
+.elec-assess-scroll,
+.elec-confirm-scroll,
+.elec-profile-scroll,
+.elec-history-scroll {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
 
 /* ─── BUTTONS ──────────────────────────────────────────────────── */
 .btn-primary {
@@ -295,10 +337,32 @@ textarea.form-input { resize: none; line-height: 1.55; }
 /* ─── RESPONSIVE — TABLET 640px+ ──────────────────────────────── */
 @media (min-width: 640px) {
   body { background: #0f0f1a; }
+  :root { --shell-pad-x: 24px; }
   .stats-row { grid-template-columns: repeat(3, 1fr); }
+  .screen-header,
+  .screen-body,
+  .admin-detail-body,
+  .elec-reg-body {
+    max-width: var(--compact-max);
+  }
 }
 
 /* ─── RESPONSIVE — DESKTOP 1024px+ ────────────────────────────── */
 @media (min-width: 1024px) {
+  :root { --shell-pad-x: 32px; }
   .stats-row { grid-template-columns: repeat(4, 1fr); }
+  .screen-header,
+  .screen-body,
+  .admin-detail-body {
+    max-width: var(--content-max);
+  }
+  .admin-body,
+  .elec-dash-scroll,
+  .elec-job-scroll,
+  .elec-assess-scroll,
+  .elec-confirm-scroll,
+  .elec-profile-scroll,
+  .elec-history-scroll {
+    max-width: var(--app-max);
+  }
 }

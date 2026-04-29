@@ -66,7 +66,7 @@ body {
 
 #screen-welcome .main {
   min-height: auto !important;
-  padding: 68px 22px 54px !important;
+  padding: 34px 22px 54px !important;
 }
 
 #screen-welcome .hero {
@@ -141,6 +141,7 @@ body {
   display: flex !important;
   justify-content: center;
   align-items: center;
+  order: -1;
   min-width: 0;
 }
 
@@ -282,6 +283,7 @@ body {
     display: flex !important;
     justify-content: flex-end;
     align-items: center;
+    order: 0;
   }
 
   #screen-welcome .home-image-card {

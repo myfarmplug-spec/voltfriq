@@ -7,9 +7,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/shared.css" />
-  <link rel="stylesheet" href="css/chat.css" />
-  <link rel="stylesheet" href="css/admin.css" />
+  <link rel="stylesheet" href="css/shared.css?v=20260429-stability" />
+  <link rel="stylesheet" href="css/chat.css?v=20260429-stability" />
+  <link rel="stylesheet" href="css/admin.css?v=20260429-stability" />
 </head>
 <body>
 
@@ -244,20 +244,34 @@
       <div class="screen-header-title">Workmanship Prices</div>
     </div>
     <div class="admin-body" style="padding-top:8px">
-      <p style="font-size:13px;color:var(--mid);margin-bottom:14px">Estimated workmanship fees (without materials). These prices are shown to customers.</p>
+      <p style="font-size:13px;color:var(--mid);margin-bottom:14px">Estimated workmanship fees only. Customers see these as selectable issue types; final cost still comes after inspection.</p>
       <div id="price-list-container">
         <!-- JS fills -->
       </div>
       <div class="price-add-form" id="price-add-form">
         <div class="form-group">
-          <label class="form-label">Service description</label>
-          <input type="text" class="form-input" id="new-price-service" placeholder="e.g. Replacement of light switches" />
+          <label class="form-label">Issue users can select</label>
+          <input type="text" class="form-input" id="new-price-service" placeholder="e.g. Generator connection" />
         </div>
         <div class="form-group">
-          <label class="form-label">Price (₦)</label>
-          <input type="number" class="form-input" id="new-price-amount" placeholder="e.g. 3000" />
+          <label class="form-label">Short description</label>
+          <input type="text" class="form-input" id="new-price-description" placeholder="What this work covers" />
         </div>
-        <button class="btn-primary btn-full" id="btn-add-price">+ Add Price Item</button>
+        <div class="form-group">
+          <label class="form-label">Matching category</label>
+          <select class="form-select" id="new-price-category"></select>
+        </div>
+        <div class="admin-price-range">
+          <div class="form-group">
+            <label class="form-label">Estimated minimum (₦)</label>
+            <input type="number" class="form-input" id="new-price-min" placeholder="e.g. 5000" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estimated maximum (₦)</label>
+            <input type="number" class="form-input" id="new-price-max" placeholder="Optional" />
+          </div>
+        </div>
+        <button class="btn-primary btn-full" id="btn-add-price">Add Estimate Item</button>
       </div>
     </div>
   </div>
@@ -301,11 +315,11 @@
   </nav>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="env.js?v=20260429-guestgps"></script>
-  <script src="js/config.js?v=20260429-guestgps"></script>
-  <script src="js/store.js?v=20260429-guestgps"></script>
-  <script src="js/navigation.js?v=20260429-guestgps"></script>
-  <script src="js/chat.js?v=20260429-guestgps"></script>
-  <script src="js/admin.js?v=20260429-guestgps"></script>
+  <script src="env.js?v=20260429-stability"></script>
+  <script src="js/config.js?v=20260429-stability"></script>
+  <script src="js/store.js?v=20260429-stability"></script>
+  <script src="js/navigation.js?v=20260429-stability"></script>
+  <script src="js/chat.js?v=20260429-stability"></script>
+  <script src="js/admin.js?v=20260429-stability"></script>
 </body>
 </html>

@@ -611,8 +611,14 @@
   font-size: 14px; font-weight: 600; color: var(--dark);
   margin-bottom: 4px; line-height: 1.4;
 }
+.price-item-description {
+  font-size: 12px;
+  color: var(--mid);
+  line-height: 1.45;
+}
 .price-item-amount {
   font-size: 16px; font-weight: 800; color: var(--yellow-dark);
+  margin-top: 4px;
 }
 .price-item-actions {
   display: flex; gap: 4px; flex-shrink: 0;
@@ -624,6 +630,11 @@
   margin-top: 20px; padding: 18px;
   background: var(--light); border-radius: 16px;
   border: 1.5px dashed #E5E7EB;
+}
+.admin-price-range {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
 }
 
 /* ─── RESPONSIVE — TABLET 640px+ ──────────────────────────────── */
@@ -637,6 +648,10 @@
   }
   .admin-action-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-price-range {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
   .admin-photo-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

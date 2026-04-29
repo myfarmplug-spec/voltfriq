@@ -7,36 +7,43 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/shared.css?v=20260429-addresspicker" />
-  <link rel="stylesheet" href="css/electrician.css?v=20260429-addresspicker" />
-  <link rel="stylesheet" href="css/chat.css?v=20260429-addresspicker" />
+  <link rel="stylesheet" href="css/shared.css?v=20260429-stability" />
+  <link rel="stylesheet" href="css/electrician.css?v=20260429-stability" />
+  <link rel="stylesheet" href="css/chat.css?v=20260429-stability" />
 </head>
 <body>
 
   <!-- ─── SCREEN: Login ───────────────────────────────────────────── -->
   <div id="screen-elec-login" class="screen active">
     <div class="elec-login-glow"></div>
-    <div class="elec-login-content">
-      <div class="logo">
-        <span class="logo-bolt">⚡</span>
-        <span class="logo-text">voltfriq</span>
-      </div>
-      <div class="elec-login-subtitle">Electrician Portal</div>
+    <div class="elec-login-shell">
+      <section class="elec-login-panel">
+        <div class="elec-login-content">
+          <div class="logo">
+            <span class="logo-bolt">⚡</span>
+            <span class="logo-text">VoltFriq</span>
+          </div>
+          <div class="elec-login-subtitle">Electrician Portal</div>
 
-      <div class="elec-login-form">
-        <div class="form-group">
-          <label class="form-label form-label-light">Email</label>
-          <input type="email" class="form-input form-input-dark" id="login-email" placeholder="you@email.com" />
-        </div>
-        <div class="form-group">
-          <label class="form-label form-label-light">Password</label>
-          <input type="password" class="form-input form-input-dark" id="login-password" placeholder="Enter password" />
-        </div>
-        <div id="login-error" class="elec-login-error" style="display:none"></div>
-        <button class="btn-primary btn-full" id="btn-login">Login</button>
-      </div>
+          <div class="elec-login-form">
+            <div class="form-group">
+              <label class="form-label form-label-light">Email</label>
+              <input type="email" class="form-input form-input-dark" id="login-email" placeholder="you@email.com" />
+            </div>
+            <div class="form-group">
+              <label class="form-label form-label-light">Password</label>
+              <input type="password" class="form-input form-input-dark" id="login-password" placeholder="Enter password" />
+            </div>
+            <div id="login-error" class="elec-login-error" style="display:none"></div>
+            <button class="btn-primary btn-full" id="btn-login">Login</button>
+          </div>
 
-      <button class="btn-ghost elec-apply-link" id="btn-apply">Become a VoltFriq</button>
+          <button class="btn-ghost elec-apply-link" id="btn-apply">Become a VoltFriq</button>
+        </div>
+      </section>
+      <aside class="elec-login-visual" aria-label="VoltFriq electrician welcome">
+        <img src="assets/voltfriq-home-hero.png?v=20260429-stability" alt="VoltFriq verified electrician" />
+      </aside>
     </div>
   </div>
 
@@ -675,11 +682,11 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="env.js?v=20260429-addresspicker"></script>
-  <script src="js/config.js?v=20260429-addresspicker"></script>
-  <script src="js/store.js?v=20260429-addresspicker"></script>
-  <script src="js/navigation.js?v=20260429-addresspicker"></script>
-  <script src="js/chat.js?v=20260429-addresspicker"></script>
-  <script src="js/electrician.js?v=20260429-addresspicker"></script>
+  <script src="env.js?v=20260429-stability"></script>
+  <script src="js/config.js?v=20260429-stability"></script>
+  <script src="js/store.js?v=20260429-stability"></script>
+  <script src="js/navigation.js?v=20260429-stability"></script>
+  <script src="js/chat.js?v=20260429-stability"></script>
+  <script src="js/electrician.js?v=20260429-stability"></script>
 </body>
 </html>
