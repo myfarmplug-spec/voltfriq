@@ -12,6 +12,11 @@
   let ratingValue = 0;
   let selectedRatingTags = [];
   let screenBusy = false;
+  let addressMode = 'saved';
+  let savedAddresses = [];
+  let mapInstance = null;
+  let mapMarker = null;
+  let pendingMapLocation = null;
 
   const ISSUE_OPTIONS = [
     { issue_type: 'Socket / Switch', value: 'Socket repair', description: 'Faulty socket, switch, or new socket point.', estimated_fee_min: 5000, estimated_fee_max: 8000 },
@@ -29,6 +34,7 @@
     locationLabel: '',
     latitude: null,
     longitude: null,
+    addressSource: '',
     issueCategory: '',
     issueLabel: '',
     issueKey: '',
@@ -104,12 +110,27 @@
       }
       updateAvailabilityCard();
     });
+    const addressTabs = document.getElementById('address-mode-tabs');
+    if (addressTabs) {
+      addressTabs.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-address-mode]');
+        if (!button) return;
+        setAddressMode(button.dataset.addressMode);
+      });
+    }
     on('manual-location-input', 'input', () => {
       const manualLocation = document.getElementById('manual-location-input').value.trim();
+      draft.addressSource = 'manual';
       draft.locationLabel = manualLocation || draft.serviceArea;
+      draft.serviceArea = manualLocation || draft.serviceArea;
+      if (manualLocation) {
+        draft.latitude = null;
+        draft.longitude = null;
+      }
       updateAvailabilityCard();
     });
     on('btn-use-location', 'click', () => useCurrentLocation(false));
+    on('btn-use-map-location', 'click', applyMapLocation);
     on('btn-area-continue', 'click', () => {
       goTo('problem');
     });
@@ -240,10 +261,110 @@
     renderIssueSelect();
   }
 
-  function startBooking() {
+  async function startBooking() {
     resetDraft();
     goTo('service-area');
-    window.setTimeout(() => useCurrentLocation(true), 250);
+    await loadSavedAddresses();
+    if (savedAddresses.length) {
+      setAddressMode('saved');
+      return;
+    }
+    setAddressMode('gps', { autoStarted: true });
+  }
+
+  async function loadSavedAddresses() {
+    try {
+      savedAddresses = await Store.listSavedAddresses();
+    } catch (error) {
+      savedAddresses = [];
+    }
+    renderSavedAddresses();
+  }
+
+  function renderSavedAddresses() {
+    const panel = document.getElementById('saved-address-panel');
+    if (!panel) return;
+    if (!savedAddresses.length) {
+      panel.innerHTML = '<div class="saved-address-empty">No saved address yet. Use GPS, enter an address, or choose a point on the map.</div>';
+      return;
+    }
+    panel.innerHTML = '<div class="saved-address-list">' + savedAddresses.map((address, index) => {
+      const selected = addressKey(address) === addressKey(draft) ? ' active' : '';
+      return '<button class="saved-address-card' + selected + '" type="button" data-address-index="' + index + '">' +
+        '<strong>' + escapeHtml(address.label || 'Saved address') + '</strong>' +
+        '<span>' + escapeHtml(address.addressText || address.locationLabel || '') + '</span>' +
+      '</button>';
+    }).join('') + '</div>';
+
+    panel.querySelectorAll('[data-address-index]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const address = savedAddresses[parseInt(button.dataset.addressIndex, 10)];
+        applyAddressSelection(address, 'saved');
+      });
+    });
+  }
+
+  function setAddressMode(mode, options) {
+    addressMode = mode || 'saved';
+    document.querySelectorAll('#address-mode-tabs [data-address-mode]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.addressMode === addressMode);
+    });
+
+    togglePanel('saved-address-panel', addressMode === 'saved');
+    togglePanel('gps-location-panel', addressMode === 'gps');
+    togglePanel('manual-location-panel', addressMode === 'manual');
+    togglePanel('map-picker-panel', addressMode === 'map');
+
+    if (addressMode === 'gps' && !draft.latitude && !draft.longitude) {
+      useCurrentLocation(!!(options && options.autoStarted));
+    }
+    if (addressMode === 'manual') {
+      window.setTimeout(() => {
+        const input = document.getElementById('manual-location-input');
+        if (input) input.focus();
+      }, 80);
+    }
+    if (addressMode === 'map') {
+      initAddressMap();
+    }
+  }
+
+  function togglePanel(id, visible) {
+    const panel = document.getElementById(id);
+    if (panel) panel.style.display = visible ? '' : 'none';
+  }
+
+  function addressKey(address) {
+    const text = String(address.addressText || address.locationLabel || address.location_label || address.serviceArea || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const latitude = address.latitude == null ? '' : Number(address.latitude).toFixed(4);
+    const longitude = address.longitude == null ? '' : Number(address.longitude).toFixed(4);
+    return text + '|' + latitude + '|' + longitude;
+  }
+
+  function applyAddressSelection(address, source) {
+    const normalized = Store.selectDraftAddress ? Store.selectDraftAddress(address) : address;
+    const label = normalized.locationLabel || normalized.addressText || normalized.label || '';
+    draft.locationLabel = label;
+    draft.serviceArea = label;
+    draft.latitude = normalized.latitude == null ? null : Number(normalized.latitude);
+    draft.longitude = normalized.longitude == null ? null : Number(normalized.longitude);
+    draft.addressSource = source || normalized.source || 'saved';
+    const manualInput = document.getElementById('manual-location-input');
+    if (manualInput) manualInput.value = normalized.addressText || label;
+    const detectedCard = document.getElementById('detected-location-card');
+    const detectedText = document.getElementById('detected-location-text');
+    if (detectedCard && detectedText && source === 'gps') {
+      detectedCard.style.display = '';
+      detectedText.textContent = label;
+    }
+    const mapCard = document.getElementById('map-location-card');
+    const mapText = document.getElementById('map-location-text');
+    if (mapCard && mapText && source === 'map') {
+      mapCard.style.display = '';
+      mapText.textContent = label;
+    }
+    renderSavedAddresses();
+    updateAvailabilityCard();
   }
 
   function bindChoiceRow(id, callback) {
@@ -277,23 +398,23 @@
     document.getElementById('location-helper-note').textContent = 'Allow location access so VoltFriq can route the nearest available electrician.';
 
     navigator.geolocation.getCurrentPosition(async (position) => {
-      draft.latitude = position.coords.latitude;
-      draft.longitude = position.coords.longitude;
-      const readableLocation = await reverseGeocode(position.coords.latitude, position.coords.longitude);
-      const fallbackLabel = 'GPS location (' + position.coords.latitude.toFixed(4) + ', ' + position.coords.longitude.toFixed(4) + ')';
-      const manualLocation = document.getElementById('manual-location-input').value.trim();
-      draft.locationLabel = manualLocation || readableLocation || fallbackLabel;
-      draft.serviceArea = manualLocation || readableLocation || draft.serviceArea || 'GPS location';
-      if (!manualLocation && readableLocation) {
-        document.getElementById('manual-location-input').value = readableLocation;
-      }
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      const readableLocation = await reverseGeocode(latitude, longitude);
+      const fallbackLabel = 'GPS location (' + latitude.toFixed(4) + ', ' + longitude.toFixed(4) + ')';
+      applyAddressSelection({
+        label: 'Current location',
+        addressText: readableLocation || fallbackLabel,
+        locationLabel: readableLocation || fallbackLabel,
+        latitude,
+        longitude
+      }, 'gps');
       if (detectedText) detectedText.textContent = draft.locationLabel;
       document.getElementById('location-helper-note').textContent = 'Confirm this location or edit the area before continuing.';
       if (button) {
         button.disabled = false;
         button.textContent = 'Refresh Current Location';
       }
-      updateAvailabilityCard();
     }, () => {
       if (detectedText) detectedText.textContent = 'Location access was blocked.';
       document.getElementById('location-helper-note').textContent = 'Enter your area manually to continue.';
@@ -323,6 +444,80 @@
     } catch (error) {
       return '';
     }
+  }
+
+  function initAddressMap() {
+    const mapElement = document.getElementById('address-map');
+    const mapButton = document.getElementById('btn-use-map-location');
+    if (!mapElement) return;
+    if (!window.L) {
+      mapElement.innerHTML = '<div class="saved-address-empty">Map is unavailable right now. Enter your address manually.</div>';
+      if (mapButton) mapButton.disabled = true;
+      return;
+    }
+
+    const startLat = draft.latitude || 6.5244;
+    const startLng = draft.longitude || 3.3792;
+    const startZoom = draft.latitude && draft.longitude ? 15 : 11;
+
+    if (!mapInstance) {
+      mapInstance = window.L.map(mapElement, {
+        zoomControl: true,
+        attributionControl: true
+      }).setView([startLat, startLng], startZoom);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(mapInstance);
+      mapInstance.on('click', (event) => setMapPoint(event.latlng.lat, event.latlng.lng));
+    } else {
+      mapInstance.setView([startLat, startLng], startZoom);
+    }
+
+    if (draft.latitude && draft.longitude) {
+      setMapPoint(draft.latitude, draft.longitude, draft.locationLabel);
+    }
+    window.setTimeout(() => mapInstance.invalidateSize(), 120);
+  }
+
+  async function setMapPoint(latitude, longitude, knownLabel) {
+    pendingMapLocation = {
+      label: 'Map location',
+      addressText: knownLabel || 'Map location (' + Number(latitude).toFixed(4) + ', ' + Number(longitude).toFixed(4) + ')',
+      locationLabel: knownLabel || 'Map location (' + Number(latitude).toFixed(4) + ', ' + Number(longitude).toFixed(4) + ')',
+      latitude,
+      longitude
+    };
+
+    if (mapInstance && window.L) {
+      if (!mapMarker) {
+        mapMarker = window.L.marker([latitude, longitude], { draggable: true }).addTo(mapInstance);
+        mapMarker.on('dragend', () => {
+          const point = mapMarker.getLatLng();
+          setMapPoint(point.lat, point.lng);
+        });
+      } else {
+        mapMarker.setLatLng([latitude, longitude]);
+      }
+    }
+
+    const mapCard = document.getElementById('map-location-card');
+    const mapText = document.getElementById('map-location-text');
+    if (mapCard) mapCard.style.display = '';
+    if (mapText) mapText.textContent = 'Finding address...';
+
+    const readableLocation = knownLabel || await reverseGeocode(latitude, longitude);
+    const fallbackLabel = 'Map location (' + Number(latitude).toFixed(4) + ', ' + Number(longitude).toFixed(4) + ')';
+    pendingMapLocation.addressText = readableLocation || fallbackLabel;
+    pendingMapLocation.locationLabel = readableLocation || fallbackLabel;
+    if (mapText) mapText.textContent = pendingMapLocation.locationLabel;
+    const mapButton = document.getElementById('btn-use-map-location');
+    if (mapButton) mapButton.disabled = false;
+  }
+
+  function applyMapLocation() {
+    if (!pendingMapLocation) return;
+    applyAddressSelection(pendingMapLocation, 'map');
   }
 
   function handlePhotoSelect(event) {
@@ -976,6 +1171,7 @@
     draft.locationLabel = '';
     draft.latitude = null;
     draft.longitude = null;
+    draft.addressSource = '';
     draft.issueCategory = '';
     draft.issueLabel = '';
     draft.issueKey = '';
@@ -993,6 +1189,13 @@
     document.getElementById('problem-desc').value = '';
     if (document.getElementById('guest-phone')) document.getElementById('guest-phone').value = '';
     if (document.getElementById('detected-location-card')) document.getElementById('detected-location-card').style.display = 'none';
+    if (document.getElementById('map-location-card')) document.getElementById('map-location-card').style.display = 'none';
+    if (document.getElementById('btn-use-map-location')) document.getElementById('btn-use-map-location').disabled = true;
+    pendingMapLocation = null;
+    if (mapMarker && mapInstance) {
+      mapInstance.removeLayer(mapMarker);
+      mapMarker = null;
+    }
     document.getElementById('auth-referral-code').value = '';
     document.getElementById('dispute-type').value = '';
     document.getElementById('dispute-details').value = '';

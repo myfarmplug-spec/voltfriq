@@ -7,10 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/shared.css?v=20260429-premiumhome" />
-  <link rel="stylesheet" href="css/customer.css?v=20260429-premiumhome" />
-  <link rel="stylesheet" href="css/chat.css?v=20260429-premiumhome" />
-  <link rel="stylesheet" href="css/home.css?v=20260429-premiumhome" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/shared.css?v=20260429-addresspicker" />
+  <link rel="stylesheet" href="css/customer.css?v=20260429-addresspicker" />
+  <link rel="stylesheet" href="css/chat.css?v=20260429-addresspicker" />
+  <link rel="stylesheet" href="css/home.css?v=20260429-addresspicker" />
 </head>
 <body>
   <div id="screen-welcome" class="screen active">
@@ -75,7 +76,7 @@
       <button class="btn-icon" onclick="goBack()" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
-      <div class="screen-header-title">Where are you?</div>
+      <div class="screen-header-title">Send VoltFriq To</div>
     </div>
     <div class="screen-body">
       <div class="flow-progress">
@@ -85,24 +86,46 @@
 
       <div class="flow-card card">
         <div class="flow-kicker">Location</div>
-        <h2>Where are you?</h2>
-        <p>Confirm your GPS location or enter your area.</p>
+        <h2>Where should we send the VoltFriq?</h2>
+        <p>Choose a saved address, GPS, map, or enter it yourself.</p>
       </div>
 
       <select class="form-select" id="service-area-select" style="display:none;">
         <option value="">Select a service area</option>
       </select>
 
-      <button class="btn-secondary btn-full" id="btn-use-location">Use Current Location</button>
-      <div class="detected-location-card" id="detected-location-card" style="display:none;">
-        <span class="detected-location-label">Detected location</span>
-        <strong id="detected-location-text">Finding your location...</strong>
+      <div class="address-mode-tabs" id="address-mode-tabs" role="tablist" aria-label="Choose location method">
+        <button class="address-mode active" type="button" data-address-mode="saved">Saved Address</button>
+        <button class="address-mode" type="button" data-address-mode="gps">Current Location</button>
+        <button class="address-mode" type="button" data-address-mode="manual">Enter Address</button>
+        <button class="address-mode" type="button" data-address-mode="map">Use Map</button>
       </div>
-      <div class="helper-note" id="location-helper-note">Location helps route the nearest available VoltFriq.</div>
 
-      <div class="form-group">
-        <label class="form-label">Area or city</label>
-        <input type="text" class="form-input" id="manual-location-input" placeholder="Enter your area, city, or estate" />
+      <div class="location-mode-panel saved-address-panel" id="saved-address-panel"></div>
+
+      <div class="location-mode-panel" id="gps-location-panel" style="display:none;">
+        <button class="btn-secondary btn-full" id="btn-use-location">Use Current Location</button>
+        <div class="detected-location-card" id="detected-location-card" style="display:none;">
+          <span class="detected-location-label">Detected location</span>
+          <strong id="detected-location-text">Finding your location...</strong>
+        </div>
+        <div class="helper-note" id="location-helper-note">Location helps route the nearest available VoltFriq.</div>
+      </div>
+
+      <div class="location-mode-panel" id="manual-location-panel" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Address or area</label>
+          <input type="text" class="form-input" id="manual-location-input" placeholder="Enter your estate, street, area, or city" />
+        </div>
+      </div>
+
+      <div class="location-mode-panel map-picker-panel" id="map-picker-panel" style="display:none;">
+        <div class="address-map" id="address-map"></div>
+        <div class="detected-location-card" id="map-location-card" style="display:none;">
+          <span class="detected-location-label">Map location</span>
+          <strong id="map-location-text">Tap the map to choose a location.</strong>
+        </div>
+        <button class="btn-secondary btn-full" id="btn-use-map-location" disabled>Use This Map Location</button>
       </div>
 
       <div class="flow-ready-line" id="availability-card">
@@ -289,7 +312,7 @@
         <button class="btn-primary btn-full" id="btn-auth-submit">Login</button>
       </div>
 
-      <a href="electrician.html" class="auth-elec-link">&#128736; Become a VoltFriq</a>
+      <a href="electrician.html?apply=1" class="auth-elec-link">&#128736; Become a VoltFriq</a>
     </div>
   </div>
 
@@ -680,11 +703,12 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="env.js?v=20260429-premiumhome"></script>
-  <script src="js/config.js?v=20260429-premiumhome"></script>
-  <script src="js/store.js?v=20260429-premiumhome"></script>
-  <script src="js/navigation.js?v=20260429-premiumhome"></script>
-  <script src="js/chat.js?v=20260429-premiumhome"></script>
-  <script src="js/customer.js?v=20260429-premiumhome"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="env.js?v=20260429-addresspicker"></script>
+  <script src="js/config.js?v=20260429-addresspicker"></script>
+  <script src="js/store.js?v=20260429-addresspicker"></script>
+  <script src="js/navigation.js?v=20260429-addresspicker"></script>
+  <script src="js/chat.js?v=20260429-addresspicker"></script>
+  <script src="js/customer.js?v=20260429-addresspicker"></script>
 </body>
 </html>

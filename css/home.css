@@ -36,6 +36,8 @@ body {
 #screen-welcome .welcome-bg {
   min-height: 100vh !important;
   width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
   background:
     radial-gradient(circle at 82% 20%, rgba(255, 184, 0, 0.1), transparent 32%),
     linear-gradient(180deg, #07111f 0%, #0a1628 58%, #050b15 100%) !important;
@@ -54,8 +56,8 @@ body {
 }
 
 #screen-welcome .header-inner {
-  min-height: 92px;
-  padding: 28px 22px 0 !important;
+  min-height: 104px;
+  padding: 30px 22px 0 !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -64,7 +66,7 @@ body {
 
 #screen-welcome .main {
   min-height: auto !important;
-  padding: 52px 22px 40px !important;
+  padding: 68px 22px 54px !important;
 }
 
 #screen-welcome .hero {
@@ -78,7 +80,7 @@ body {
 #screen-welcome .hero-left {
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 30px;
   min-width: 0;
   max-width: 720px;
   padding: 0 !important;
@@ -97,6 +99,7 @@ body {
   font-size: clamp(1.05rem, 2.2vw, 1.35rem) !important;
   line-height: 1.45 !important;
   color: rgba(255, 255, 255, 0.7) !important;
+  margin-bottom: 10px !important;
 }
 
 #screen-welcome .hero-actions {
@@ -105,6 +108,8 @@ body {
   gap: 14px !important;
   width: 100% !important;
   max-width: 420px;
+  margin-top: 8px !important;
+  margin-bottom: 18px !important;
 }
 
 #screen-welcome .hero-primary-btn,
@@ -118,14 +123,14 @@ body {
   color: rgba(255, 255, 255, 0.62);
   font-size: 13px;
   line-height: 1.7;
-  margin-top: 4px;
+  margin-top: 10px;
 }
 
 #screen-welcome .home-powered-footer {
   width: 100%;
   max-width: 1200px;
   margin: auto auto 0;
-  padding: 8px 22px max(30px, env(safe-area-inset-bottom));
+  padding: 14px 22px max(34px, env(safe-area-inset-bottom));
   color: rgba(255, 255, 255, 0.42);
   font-size: 12px;
   line-height: 1.6;

@@ -72,6 +72,7 @@ const Store = (() => {
   };
 
   const GUEST_ACCESS_KEY = 'voltfriq_guest_job_access';
+  const GUEST_ADDRESSES_KEY = 'voltfriq_guest_saved_addresses';
 
   function config() {
     return window.VOLTFRIQ_CONFIG || {};
@@ -107,6 +108,115 @@ const Store = (() => {
 
   function clearGuestAccess() {
     return saveGuestAccess(null);
+  }
+
+  function normalizeAddress(address) {
+    const raw = address || {};
+    const addressText = String(raw.addressText || raw.address_text || raw.locationLabel || raw.location_label || raw.serviceArea || raw.service_area || '').trim();
+    const label = String(raw.label || addressText || 'Saved address').trim();
+    const latitude = raw.latitude === '' || raw.latitude == null ? null : Number(raw.latitude);
+    const longitude = raw.longitude === '' || raw.longitude == null ? null : Number(raw.longitude);
+    return {
+      id: raw.id || null,
+      label: label || 'Saved address',
+      addressText,
+      locationLabel: String(raw.locationLabel || raw.location_label || addressText).trim(),
+      latitude: Number.isFinite(latitude) ? latitude : null,
+      longitude: Number.isFinite(longitude) ? longitude : null,
+      lastUsedAt: raw.lastUsedAt || raw.last_used_at || new Date().toISOString()
+    };
+  }
+
+  function addressKey(address) {
+    const normalized = normalizeAddress(address);
+    const text = normalized.addressText.toLowerCase().replace(/\s+/g, ' ').trim();
+    const lat = normalized.latitude == null ? '' : normalized.latitude.toFixed(4);
+    const lng = normalized.longitude == null ? '' : normalized.longitude.toFixed(4);
+    return text + '|' + lat + '|' + lng;
+  }
+
+  function loadGuestSavedAddresses() {
+    try {
+      const raw = window.localStorage.getItem(GUEST_ADDRESSES_KEY);
+      const rows = raw ? JSON.parse(raw) : [];
+      return Array.isArray(rows) ? rows.map(normalizeAddress).filter((address) => address.addressText) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveGuestSavedAddress(address) {
+    const normalized = normalizeAddress(address);
+    if (!normalized.addressText) return null;
+    const key = addressKey(normalized);
+    const next = loadGuestSavedAddresses()
+      .filter((item) => addressKey(item) !== key);
+    next.unshift(Object.assign({}, normalized, {
+      id: normalized.id || 'guest-' + Date.now(),
+      lastUsedAt: new Date().toISOString()
+    }));
+    const trimmed = next.slice(0, 6);
+    try {
+      window.localStorage.setItem(GUEST_ADDRESSES_KEY, JSON.stringify(trimmed));
+    } catch (error) {
+      // Guest address history is a convenience only.
+    }
+    return trimmed[0];
+  }
+
+  async function listSavedAddresses() {
+    const client = ensureClient();
+    if (!client || !state.profile || state.profile.role !== 'customer') {
+      return loadGuestSavedAddresses();
+    }
+    const result = await client
+      .from('customer_addresses')
+      .select('*')
+      .eq('profile_id', state.profile.id)
+      .order('last_used_at', { ascending: false })
+      .limit(8);
+    if (result.error) throw normalizeError(result.error, 'Could not load saved addresses.');
+    return (result.data || []).map(normalizeAddress);
+  }
+
+  async function saveCustomerAddress(address) {
+    const client = ensureClient();
+    const normalized = normalizeAddress(address);
+    if (!normalized.addressText) return null;
+
+    if (!client || !state.profile || state.profile.role !== 'customer') {
+      return saveGuestSavedAddress(normalized);
+    }
+
+    const existing = await client
+      .from('customer_addresses')
+      .select('id')
+      .eq('profile_id', state.profile.id)
+      .eq('address_text', normalized.addressText)
+      .limit(1)
+      .maybeSingle();
+    if (existing.error) throw normalizeError(existing.error, 'Could not check saved addresses.');
+
+    const payload = {
+      profile_id: state.profile.id,
+      label: normalized.label || 'Saved address',
+      address_text: normalized.addressText,
+      location_label: normalized.locationLabel || normalized.addressText,
+      latitude: normalized.latitude,
+      longitude: normalized.longitude,
+      last_used_at: new Date().toISOString()
+    };
+
+    const query = existing.data
+      ? client.from('customer_addresses').update(payload).eq('id', existing.data.id).select('*').single()
+      : client.from('customer_addresses').insert(payload).select('*').single();
+    const result = await query;
+    if (result.error) throw normalizeError(result.error, 'Could not save this address.');
+    return normalizeAddress(result.data);
+  }
+
+  function selectDraftAddress(address) {
+    return normalizeAddress(address);
   }
 
   function normalizeError(error, fallbackMessage) {
@@ -714,6 +824,13 @@ const Store = (() => {
       p_photo_paths: photoPaths
     });
     if (result.error) throw normalizeError(result.error, 'Could not create the booking.');
+    await saveCustomerAddress({
+      label: input.locationLabel || input.serviceArea || 'Saved address',
+      addressText: input.locationLabel || input.serviceArea,
+      locationLabel: input.locationLabel || input.serviceArea,
+      latitude: input.latitude || null,
+      longitude: input.longitude || null
+    }).catch(() => {});
     return getJob(result.data.id);
   }
 
@@ -747,6 +864,13 @@ const Store = (() => {
       throw new Error('Booking was created, but tracking access was not returned.');
     }
     saveGuestAccess({ jobId: jobRow.id, accessToken, phone });
+    await saveCustomerAddress({
+      label: input.locationLabel || input.serviceArea || 'Saved address',
+      addressText: input.locationLabel || input.serviceArea,
+      locationLabel: input.locationLabel || input.serviceArea,
+      latitude: input.latitude || null,
+      longitude: input.longitude || null
+    }).catch(() => {});
     const normalized = normalizeJob(jobRow);
     normalized.guestAccessToken = accessToken;
     return normalized;
@@ -1512,6 +1636,9 @@ const Store = (() => {
     getCurrentWallet,
     getGuestAccess,
     clearGuestAccess,
+    listSavedAddresses,
+    saveCustomerAddress,
+    selectDraftAddress,
     getRoleHome,
     getSettings,
     getStatusLabel,

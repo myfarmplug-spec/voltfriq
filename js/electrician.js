@@ -58,6 +58,8 @@ const ElecApp = (() => {
 
       if (boot.profile) {
         await resumeSession();
+      } else if (shouldStartApplication()) {
+        goTo('elec-reg-1');
       } else {
         goTo('elec-login');
       }
@@ -110,6 +112,11 @@ const ElecApp = (() => {
     document.querySelectorAll('.nav-item[data-nav]').forEach((button) => {
       button.addEventListener('click', () => handleNav(button.dataset.nav));
     });
+  }
+
+  function shouldStartApplication() {
+    const params = new URLSearchParams(window.location.search || '');
+    return params.get('apply') === '1' || window.location.hash === '#apply';
   }
 
   async function resumeSession() {

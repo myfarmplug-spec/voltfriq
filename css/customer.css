@@ -522,6 +522,107 @@
   line-height: 1.35;
 }
 
+.address-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.address-mode {
+  min-height: 52px;
+  padding: 12px;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 14px;
+  background: var(--white);
+  color: var(--dark);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.address-mode.active {
+  border-color: var(--yellow);
+  background: var(--yellow-light);
+  box-shadow: 0 0 0 3px rgba(255,184,0,0.16);
+}
+
+.location-mode-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.saved-address-panel {
+  min-height: 96px;
+}
+
+.saved-address-list {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-address-card {
+  width: 100%;
+  padding: 14px;
+  display: grid;
+  gap: 5px;
+  text-align: left;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 14px;
+  background: #FAFAFB;
+  color: var(--dark);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.saved-address-card strong {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.saved-address-card span {
+  color: var(--mid);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.saved-address-card.active,
+.saved-address-card:hover {
+  border-color: var(--yellow);
+  background: #FFF9E8;
+}
+
+.saved-address-empty {
+  padding: 16px;
+  border: 1.5px dashed #D8DCE5;
+  border-radius: 14px;
+  background: #FAFAFB;
+  color: var(--mid);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.map-picker-panel {
+  gap: 12px;
+}
+
+.address-map {
+  width: 100%;
+  height: 260px;
+  min-height: 260px;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #EEF2F7;
+}
+
+.address-map .leaflet-control-container {
+  font-family: inherit;
+}
+
 .issue-estimate-card {
   display: grid;
   gap: 6px;
@@ -1792,6 +1893,14 @@
     flex: 1;
   }
 
+  .address-mode-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .saved-address-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .issue-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1824,6 +1933,11 @@
 
   .trust-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .address-map {
+    height: 320px;
+    min-height: 320px;
   }
 }
 
