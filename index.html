@@ -3,35 +3,70 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VoltFriq Ocean - Customer Portal</title>
+  <title>VoltFriq - Customer Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/shared.css" />
-  <link rel="stylesheet" href="css/customer.css" />
-  <link rel="stylesheet" href="css/chat.css" />
+  <link rel="stylesheet" href="css/shared.css?v=20260429-premiumhome" />
+  <link rel="stylesheet" href="css/customer.css?v=20260429-premiumhome" />
+  <link rel="stylesheet" href="css/chat.css?v=20260429-premiumhome" />
+  <link rel="stylesheet" href="css/home.css?v=20260429-premiumhome" />
 </head>
 <body>
   <div id="screen-welcome" class="screen active">
-    <div class="welcome-bg">
-      <div class="welcome-top-bar">
-        <div class="welcome-logo">&#9889; voltfriq</div>
-        <div class="welcome-top-links">
-          <button class="btn-ghost welcome-link" id="btn-track-job">Track Job</button>
-          <button class="btn-ghost welcome-link welcome-login-link" id="btn-welcome-login">Login</button>
+    <div class="welcome-bg welcome-shell">
+      <header class="header site-header">
+        <div class="header-inner site-header-inner">
+          <div class="welcome-logo">&#9889; VoltFriq</div>
+          <div class="welcome-top-links">
+            <button class="btn-ghost welcome-link" id="btn-track-job">Track Job</button>
+            <button class="btn-ghost welcome-link welcome-login-link" id="btn-welcome-login">Login</button>
+          </div>
         </div>
-      </div>
-      <div class="welcome-hero">
-        <div class="welcome-glow"></div>
-        <div class="welcome-kicker">Transparent electrical help, built for mobile</div>
-        <h1 class="welcome-title">Search your area.<br/>See live VoltFriqs.<br/>Fix it clearly.</h1>
-        <p class="welcome-sub">Find the available electricians around you, explain the issue in a few taps, and track everything from assessment to receipt.</p>
-        <button class="btn-primary btn-large" id="btn-begin-area">&#128269; Search My Area</button>
-        <button class="btn-secondary welcome-outline-btn" id="btn-view-prices">&#128176; View Estimated Prices</button>
-      </div>
-      <div class="welcome-footer">
-        Dev: DotXan Tech &middot; Powered by Chapta Electrical Services LLC
-      </div>
+      </header>
+
+      <main class="main hero-shell">
+        <section class="hero">
+          <div class="hero-left hero-copy">
+            <h1 class="welcome-title">Book an electrician near you.</h1>
+            <p class="welcome-sub">Fast, verified, nearby help.</p>
+
+            <div class="hero-actions">
+              <button class="btn-primary btn-large hero-primary-btn" id="btn-begin-area">Find an Electrician</button>
+              <button class="btn-secondary welcome-outline-btn hero-secondary-btn" id="btn-view-prices">View Estimates</button>
+            </div>
+
+            <div class="welcome-trust-line">Verified &bull; Fast response &bull; Nearby &bull; Manual payment verification</div>
+          </div>
+
+          <div class="hero-right" aria-hidden="true">
+            <div class="home-visual-card">
+              <div class="home-visual-top">
+                <span class="home-live-dot"></span>
+                <span>Nearest available VoltFriq</span>
+              </div>
+              <div class="home-visual-main">
+                <div class="home-bolt">&#9889;</div>
+                <div>
+                  <strong>Verified electrician</strong>
+                  <span>Assigned after your request</span>
+                </div>
+              </div>
+              <div class="home-visual-status">
+                <div>
+                  <span>Issue</span>
+                  <strong>Socket / Switch</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>Ready to match</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+      <footer class="home-powered-footer">Powered by Nuchapta Electricals &amp; DotXan Tech.</footer>
     </div>
   </div>
 
@@ -40,32 +75,42 @@
       <button class="btn-icon" onclick="goBack()" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
-      <div class="screen-header-title">Search Your Area</div>
+      <div class="screen-header-title">Where are you?</div>
     </div>
     <div class="screen-body">
-      <div class="availability-hero card">
-        <div class="availability-hero-kicker">Step 1</div>
-        <h2>Pick where you need help</h2>
-        <p>We will show how many approved VoltFriqs are currently available in that service area before you describe the issue.</p>
+      <div class="flow-progress">
+        <span>Step 1 of 6</span>
+        <div class="flow-progress-bar"><span style="width:16.66%"></span></div>
       </div>
+
+      <div class="flow-card card">
+        <div class="flow-kicker">Location</div>
+        <h2>Where are you?</h2>
+        <p>Confirm your GPS location or enter your area.</p>
+      </div>
+
+      <select class="form-select" id="service-area-select" style="display:none;">
+        <option value="">Select a service area</option>
+      </select>
+
+      <button class="btn-secondary btn-full" id="btn-use-location">Use Current Location</button>
+      <div class="detected-location-card" id="detected-location-card" style="display:none;">
+        <span class="detected-location-label">Detected location</span>
+        <strong id="detected-location-text">Finding your location...</strong>
+      </div>
+      <div class="helper-note" id="location-helper-note">Location helps route the nearest available VoltFriq.</div>
 
       <div class="form-group">
-        <label class="form-label">Service Area</label>
-        <select class="form-select" id="service-area-select">
-          <option value="">Select a service area</option>
-        </select>
+        <label class="form-label">Area or city</label>
+        <input type="text" class="form-input" id="manual-location-input" placeholder="Enter your area, city, or estate" />
       </div>
 
-      <button class="btn-secondary btn-full" id="btn-use-location">&#128205; Use Current Location Helper</button>
-      <div class="helper-note" id="location-helper-note">We will map you to the closest service area available in this demo.</div>
-
-      <div class="availability-card card" id="availability-card">
-        <div class="availability-card-label">Available VoltFriqs</div>
-        <div class="availability-card-value" id="availability-count">0</div>
-        <div class="availability-card-meta" id="availability-meta">Choose a service area to see live availability.</div>
+      <div class="flow-ready-line" id="availability-card">
+        <span id="availability-count">Waiting</span>
+        <span id="availability-meta">Enter an area or use current location.</span>
       </div>
 
-      <button class="btn-primary btn-large" id="btn-area-continue" disabled>Continue to Issue Intake</button>
+      <button class="btn-primary btn-large" id="btn-area-continue" disabled>Continue</button>
     </div>
   </div>
 
@@ -74,57 +119,97 @@
       <button class="btn-icon" onclick="goBack()" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
-      <div class="screen-header-title">Tell Us The Problem</div>
+      <div class="screen-header-title">Issue</div>
     </div>
     <div class="screen-body">
-      <div class="summary-strip card">
-        <div>
-          <div class="summary-strip-label">Selected Area</div>
-          <div class="summary-strip-value" id="problem-area-label">--</div>
+      <div class="flow-progress">
+        <span>Step 2 of 6</span>
+        <div class="flow-progress-bar"><span style="width:33.33%"></span></div>
+      </div>
+
+      <div class="issue-picker-panel card">
+        <div class="issue-picker-head">
+          <div>
+            <div class="issue-picker-kicker">Issue Type</div>
+            <h2 class="issue-picker-title">What&apos;s the issue?</h2>
+          </div>
+          <p>Select one problem type.</p>
         </div>
-        <div class="summary-strip-pill" id="problem-availability-pill">0 available</div>
+        <div class="form-group">
+          <label class="form-label">Issue type</label>
+          <select class="form-select" id="problem-category">
+            <option value="">Select the issue</option>
+          </select>
+        </div>
+        <div class="issue-estimate-card" id="issue-estimate-card" style="display:none;">
+          <span>Estimated Workmanship Fee</span>
+          <strong id="issue-estimate-value">--</strong>
+          <small>Final cost may vary after inspection.</small>
+        </div>
+      </div>
+
+      <button class="btn-primary btn-large" id="btn-review-match" disabled>Continue</button>
+    </div>
+  </div>
+
+  <div id="screen-urgency" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Urgency</div>
+    </div>
+    <div class="screen-body">
+      <div class="flow-progress">
+        <span>Step 3 of 6</span>
+        <div class="flow-progress-bar"><span style="width:50%"></span></div>
+      </div>
+
+      <div class="flow-card card">
+        <div class="flow-kicker">Urgency</div>
+        <h2>How urgent?</h2>
+        <p>Pick when you need help.</p>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Issue Category</label>
-        <select class="form-select" id="problem-category">
-          <option value="">Select the main issue</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">&#9200; Urgency</label>
         <div class="urgency-selector" id="urgency-selector">
-          <button class="urgency-chip active" data-urgency="today">Today</button>
           <button class="urgency-chip" data-urgency="emergency">Emergency</button>
-          <button class="urgency-chip" data-urgency="this-week">This Week</button>
+          <button class="urgency-chip active" data-urgency="today">Today</button>
+          <button class="urgency-chip" data-urgency="scheduled">Scheduled</button>
         </div>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Do you want an assessment visit?</label>
-        <div class="choice-row" id="assessment-choice">
-          <button class="choice-pill active" data-value="yes">Yes, send a VoltFriq to assess</button>
-          <button class="choice-pill" data-value="no">No, start with a remote quote</button>
-        </div>
+      <button class="btn-primary btn-large" id="btn-urgency-continue">Continue</button>
+    </div>
+  </div>
+
+  <div id="screen-details" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Details</div>
+    </div>
+    <div class="screen-body">
+      <div class="flow-progress">
+        <span>Step 4 of 6</span>
+        <div class="flow-progress-bar"><span style="width:66.66%"></span></div>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Who will buy the materials?</label>
-        <div class="choice-row" id="material-choice">
-          <button class="choice-pill active" data-value="voltfriq-supplied">Voltfriq buys materials</button>
-          <button class="choice-pill" data-value="self-procured">I will buy materials</button>
-        </div>
+      <div class="flow-card card">
+        <div class="flow-kicker">Details</div>
+        <h2>Add details</h2>
+        <p>A short note or photo helps the VoltFriq prepare.</p>
       </div>
 
       <div class="form-group">
         <label class="form-label">Short note <span class="optional">(optional)</span></label>
-        <textarea class="form-input" id="problem-desc" rows="3" maxlength="220" placeholder="Share anything important like affected rooms, sounds, smells, or what you already tried."></textarea>
+        <textarea class="form-input" id="problem-desc" rows="4" maxlength="220" placeholder="Example: socket sparked in the kitchen"></textarea>
         <div class="char-count"><span id="desc-count">0</span>/220</div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">&#128247; Photos <span class="optional">(up to 3)</span></label>
+        <label class="form-label">Photos <span class="optional">(up to 3)</span></label>
         <div class="photo-upload-area" id="photo-upload-area">
           <input type="file" id="photo-input" accept="image/*" multiple style="display:none;" />
           <button class="btn-secondary photo-add-btn" id="photo-add-btn">+ Add Photos</button>
@@ -132,7 +217,37 @@
         </div>
       </div>
 
-      <button class="btn-primary btn-large" id="btn-review-match" disabled>Review Best VoltFriq</button>
+      <button class="btn-primary btn-large" id="btn-details-review">Continue</button>
+    </div>
+  </div>
+
+  <div id="screen-guest-contact" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Phone Number</div>
+    </div>
+    <div class="screen-body">
+      <div class="flow-progress">
+        <span>Step 5 of 6</span>
+        <div class="flow-progress-bar"><span style="width:83.33%"></span></div>
+      </div>
+
+      <div class="flow-card card">
+        <div class="flow-kicker">Contact</div>
+        <h2>Your phone number</h2>
+        <p>We use this for booking updates. No account is required.</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Mobile number</label>
+        <input type="tel" class="form-input" id="guest-phone" inputmode="tel" autocomplete="tel" placeholder="0800 000 0000" />
+      </div>
+
+      <div class="guest-location-confirm card" id="guest-location-confirm"></div>
+
+      <button class="btn-primary btn-large" id="btn-guest-continue" disabled>Review Booking</button>
     </div>
   </div>
 
@@ -146,7 +261,7 @@
     <div class="screen-body auth-body">
       <div class="auth-icon">&#128274;</div>
       <h2 class="auth-heading">Save your job and continue</h2>
-      <p class="auth-sub">We will keep your specialist recommendation, quote, receipt, and service history in one place.</p>
+      <p class="auth-sub">Your account keeps your jobs, payment proofs, receipts, and ratings in one secure place.</p>
 
       <div class="auth-tabs tabs">
         <button class="tab active" id="tab-login" data-tab="login">Login</button>
@@ -158,9 +273,13 @@
           <label class="form-label">Full Name</label>
           <input type="text" class="form-input" id="auth-name" placeholder="Your full name" />
         </div>
+        <div class="form-group" id="auth-referral-group" style="display:none;">
+          <label class="form-label">Referral Code <span class="optional">(optional)</span></label>
+          <input type="text" class="form-input" id="auth-referral-code" placeholder="Enter a VoltFriq referral code" />
+        </div>
         <div class="form-group">
-          <label class="form-label">Phone or Email</label>
-          <input type="text" class="form-input" id="auth-contact" placeholder="08012345678 or email@example.com" />
+          <label class="form-label">Email Address</label>
+          <input type="text" class="form-input" id="auth-contact" placeholder="email@example.com" />
         </div>
         <div class="form-group">
           <label class="form-label">Password</label>
@@ -170,8 +289,6 @@
         <button class="btn-primary btn-full" id="btn-auth-submit">Login</button>
       </div>
 
-      <div class="auth-divider"><span>or</span></div>
-      <button class="btn-secondary btn-full" id="btn-guest">Continue as Guest</button>
       <a href="electrician.html" class="auth-elec-link">&#128736; Become a VoltFriq</a>
     </div>
   </div>
@@ -181,9 +298,14 @@
       <button class="btn-icon" onclick="goBack()" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
-      <div class="screen-header-title">Recommended VoltFriq</div>
+      <div class="screen-header-title">Review Booking</div>
     </div>
     <div class="screen-body">
+      <div class="flow-progress">
+        <span>Step 6 of 6</span>
+          <div class="flow-progress-bar"><span style="width:100%"></span></div>
+      </div>
+
       <div class="match-summary-card card" id="match-summary-card"></div>
 
       <div class="match-electrician-card card" id="match-electrician-card">
@@ -204,8 +326,8 @@
 
       <div class="transparency-card card" id="transparency-card"></div>
 
-      <button class="btn-primary btn-large" id="btn-continue-match">Continue With This VoltFriq</button>
-      <button class="btn-secondary btn-full" id="btn-change-specialist">Change Specialist</button>
+      <button class="btn-primary btn-large" id="btn-continue-match">Submit Booking</button>
+      <button class="btn-secondary btn-full" id="btn-change-specialist" style="display:none;">Change Specialist</button>
     </div>
   </div>
 
@@ -233,7 +355,12 @@
         <button class="btn-secondary btn-copy" id="fee-copy-btn">&#128203; Copy Account Number</button>
       </div>
 
-      <button class="btn-primary btn-large" id="btn-fee-paid">I Have Paid For Assessment</button>
+      <div class="form-group">
+        <label class="form-label">Upload Payment Proof <span class="optional">(optional)</span></label>
+        <input type="file" class="form-input" id="assessment-receipt-upload" accept="image/*,application/pdf" />
+      </div>
+
+      <button class="btn-primary btn-large" id="btn-fee-paid">Submit Assessment Payment Proof</button>
     </div>
   </div>
 
@@ -255,6 +382,8 @@
             <span class="badge badge-blue">&#128188; <span id="assigned-jobs">--</span> jobs</span>
             <span class="badge badge-green">&#128205; <span id="assigned-distance">--</span> km</span>
           </div>
+          <div class="issue-summary-cats" id="assigned-badges"></div>
+          <div class="helper-note" id="assigned-trust-note">Verified Pro</div>
         </div>
       </div>
 
@@ -270,8 +399,19 @@
         <div class="status-lines" id="status-lines"></div>
       </div>
 
+      <div class="issue-summary card">
+        <div class="issue-summary-title">Notifications</div>
+        <div class="mini-meta-list" id="customer-notifications-list"></div>
+      </div>
+
+      <div class="issue-summary card">
+        <div class="issue-summary-title">Wallet &amp; Referral</div>
+        <div class="mini-meta-list" id="wallet-referral-summary"></div>
+      </div>
+
       <button class="btn-primary btn-large" id="btn-open-chat">&#128172; Open Chat</button>
       <button class="btn-secondary btn-full" id="btn-view-quote" style="display:none;">&#128196; View Quote</button>
+      <button class="btn-ghost" id="btn-report-issue-assigned">Report an Issue</button>
     </div>
   </div>
 
@@ -318,7 +458,7 @@
       </div>
 
       <div class="quot-actions">
-        <button class="btn-primary btn-full" id="btn-accept-quote">&#10003; Accept Quote</button>
+        <button class="btn-primary btn-full" id="btn-accept-quote">&#10003; Proceed To Pay</button>
         <button class="btn-secondary btn-full" id="btn-negotiate-quote">&#128172; Ask A Question</button>
         <button class="btn-ghost" id="btn-decline-quote">Decline</button>
       </div>
@@ -339,6 +479,16 @@
         <div class="payment-note" id="payment-note">--</div>
       </div>
 
+      <div class="issue-summary card">
+        <div class="issue-summary-title">Payment Method</div>
+        <div class="urgency-selector" id="payment-method-selector">
+          <button class="urgency-chip active" data-method="bank_transfer">Bank Transfer</button>
+          <button class="urgency-chip" data-method="paystack" disabled>Paystack</button>
+          <button class="urgency-chip" data-method="flutterwave" disabled>Flutterwave</button>
+        </div>
+        <div class="helper-note">Bank transfer is primary. Any automated gateway still stays behind manual admin verification.</div>
+      </div>
+
       <div class="snapshot-card card" id="payment-snapshot"></div>
 
       <div class="bank-card card" id="pay-bank-card">
@@ -350,11 +500,16 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">Upload Receipt <span class="optional">(optional)</span></label>
-        <input type="file" class="form-input" id="receipt-upload" accept="image/*" />
+        <label class="form-label">Payment Reference <span class="optional">(optional)</span></label>
+        <input type="text" class="form-input" id="payment-reference" placeholder="Transfer reference or narration" />
       </div>
 
-      <button class="btn-primary btn-large" id="btn-payment-paid">I Have Paid</button>
+      <div class="form-group">
+        <label class="form-label">Upload Receipt</label>
+        <input type="file" class="form-input" id="receipt-upload" accept="image/*,application/pdf" />
+      </div>
+
+      <button class="btn-primary btn-large" id="btn-payment-paid">Submit Payment Proof</button>
     </div>
   </div>
 
@@ -386,6 +541,7 @@
       </label>
 
       <button class="btn-primary btn-large" id="btn-confirm-complete" disabled>&#10003; Confirm &amp; Release</button>
+      <button class="btn-ghost" id="btn-report-issue-confirm">Report an Issue</button>
     </div>
   </div>
 
@@ -406,6 +562,14 @@
       <div class="form-group" style="width:100%;">
         <textarea class="form-input" id="rating-comment" rows="3" maxlength="200" placeholder="Optional feedback for transparency and quality control"></textarea>
         <div class="char-count"><span id="rating-count">0</span>/200</div>
+      </div>
+
+      <div class="issue-summary-cats rating-tags" id="rating-tags">
+        <button class="chip" data-rating-tag="on_time">On time</button>
+        <button class="chip" data-rating-tag="clean_work">Clean work</button>
+        <button class="chip" data-rating-tag="explained_clearly">Explained clearly</button>
+        <button class="chip" data-rating-tag="overcharged">Overcharged</button>
+        <button class="chip" data-rating-tag="poor_quality">Poor quality</button>
       </div>
 
       <div class="warranty-card card">
@@ -445,7 +609,41 @@
         <button class="tab active" data-filter="active">Active</button>
         <button class="tab" data-filter="completed">Completed</button>
       </div>
+      <div class="issue-summary card">
+        <div class="issue-summary-title">Referral &amp; Wallet</div>
+        <div class="mini-meta-list" id="history-wallet-referral"></div>
+      </div>
       <div class="history-list" id="history-list"></div>
+    </div>
+  </div>
+
+  <div id="screen-report-issue" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Report An Issue</div>
+    </div>
+    <div class="screen-body">
+      <div class="issue-summary card">
+        <div class="issue-summary-title">Tell VoltFriq what went wrong</div>
+        <div class="helper-note">Admin can refund, penalize, or reassign manually after reviewing your report.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Issue Type</label>
+        <select class="form-select" id="dispute-type">
+          <option value="">Select an issue</option>
+          <option value="Overcharged">Overcharged</option>
+          <option value="Work not completed">Work not completed</option>
+          <option value="Poor quality">Poor quality</option>
+          <option value="Electrician didn’t show up">Electrician didn’t show up</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Details <span class="optional">(optional)</span></label>
+        <textarea class="form-input" id="dispute-details" rows="4" maxlength="240" placeholder="Share what happened so admin can intervene quickly."></textarea>
+      </div>
+      <button class="btn-primary btn-large" id="btn-submit-dispute">Submit Issue Report</button>
     </div>
   </div>
 
@@ -454,10 +652,10 @@
       <button class="btn-icon" id="btn-prices-back" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
-      <div class="screen-header-title">Estimated Workmanship Prices</div>
+      <div class="screen-header-title">Estimated Workmanship Fees</div>
     </div>
     <div class="screen-body" style="padding:16px">
-      <p style="font-size:13px;color:var(--mid);margin-bottom:16px;line-height:1.5">These are estimated workmanship fees without materials. Final pricing depends on assessment, billing mode, and whether materials are supplied by VoltFriq or by you.</p>
+      <p style="font-size:13px;color:var(--mid);margin-bottom:16px;line-height:1.5">These are estimated workmanship fees without materials. Final cost may vary after inspection.</p>
       <div id="customer-price-list"></div>
       <div style="margin-top:20px;text-align:center">
         <button class="btn-primary btn-full" id="btn-prices-find">Search My Area</button>
@@ -481,9 +679,12 @@
     </div>
   </div>
 
-  <script src="js/store.js"></script>
-  <script src="js/navigation.js"></script>
-  <script src="js/chat.js"></script>
-  <script src="js/customer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="env.js?v=20260429-premiumhome"></script>
+  <script src="js/config.js?v=20260429-premiumhome"></script>
+  <script src="js/store.js?v=20260429-premiumhome"></script>
+  <script src="js/navigation.js?v=20260429-premiumhome"></script>
+  <script src="js/chat.js?v=20260429-premiumhome"></script>
+  <script src="js/customer.js?v=20260429-premiumhome"></script>
 </body>
 </html>

@@ -1,0 +1,262 @@
+/* VoltFriq homepage hard overrides.
+   Loaded last so the public landing screen cannot inherit phone-frame styles. */
+
+body {
+  background:
+    radial-gradient(circle at 84% 18%, rgba(255, 184, 0, 0.08), transparent 30%),
+    linear-gradient(180deg, #050b15 0%, #07111f 58%, #030712 100%);
+}
+
+#screen-welcome.screen {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  transform: translateX(105%) !important;
+  overflow-y: auto !important;
+}
+
+#screen-welcome.screen.active {
+  transform: translateX(0) !important;
+}
+
+#screen-welcome.screen.prev {
+  transform: translateX(-30%) !important;
+}
+
+#screen-welcome .welcome-bg {
+  min-height: 100vh !important;
+  width: 100% !important;
+  background:
+    radial-gradient(circle at 82% 20%, rgba(255, 184, 0, 0.1), transparent 32%),
+    linear-gradient(180deg, #07111f 0%, #0a1628 58%, #050b15 100%) !important;
+  color: var(--white);
+}
+
+#screen-welcome .header,
+#screen-welcome .main {
+  width: 100%;
+}
+
+#screen-welcome .header-inner,
+#screen-welcome .main {
+  max-width: 1200px !important;
+  margin: 0 auto !important;
+}
+
+#screen-welcome .header-inner {
+  min-height: 92px;
+  padding: 28px 22px 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+#screen-welcome .main {
+  min-height: auto !important;
+  padding: 52px 22px 40px !important;
+}
+
+#screen-welcome .hero {
+  min-height: auto;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 34px !important;
+  align-items: center !important;
+}
+
+#screen-welcome .hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  min-width: 0;
+  max-width: 720px;
+  padding: 0 !important;
+}
+
+#screen-welcome .welcome-title {
+  max-width: 700px !important;
+  font-size: clamp(2.7rem, 10vw, 5.1rem) !important;
+  line-height: 1.02 !important;
+  letter-spacing: 0 !important;
+  color: var(--white);
+}
+
+#screen-welcome .welcome-sub {
+  max-width: 440px !important;
+  font-size: clamp(1.05rem, 2.2vw, 1.35rem) !important;
+  line-height: 1.45 !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+#screen-welcome .hero-actions {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  width: 100% !important;
+  max-width: 420px;
+}
+
+#screen-welcome .hero-primary-btn,
+#screen-welcome .hero-secondary-btn {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+#screen-welcome .welcome-trust-line {
+  max-width: 520px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  line-height: 1.7;
+  margin-top: 4px;
+}
+
+#screen-welcome .home-powered-footer {
+  width: 100%;
+  max-width: 1200px;
+  margin: auto auto 0;
+  padding: 8px 22px max(30px, env(safe-area-inset-bottom));
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+#screen-welcome .hero-right {
+  display: none !important;
+  min-width: 0;
+}
+
+#screen-welcome .home-visual-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 22px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.24);
+}
+
+#screen-welcome .home-visual-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+#screen-welcome .home-live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--green);
+  flex-shrink: 0;
+}
+
+#screen-welcome .home-visual-main {
+  margin-top: 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(5, 11, 21, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#screen-welcome .home-bolt {
+  width: 58px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 16px;
+  background: rgba(255, 184, 0, 0.13);
+  color: var(--yellow);
+  font-size: 30px;
+}
+
+#screen-welcome .home-visual-main strong,
+#screen-welcome .home-visual-status strong {
+  display: block;
+  color: var(--white);
+  font-weight: 900;
+}
+
+#screen-welcome .home-visual-main span,
+#screen-welcome .home-visual-status span {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 13px;
+}
+
+#screen-welcome .home-visual-status {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+#screen-welcome .home-visual-status > div {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+@media (min-width: 768px) {
+  #screen-welcome .hero-actions {
+    flex-direction: row !important;
+    max-width: none;
+    width: auto !important;
+  }
+
+  #screen-welcome .hero-primary-btn,
+  #screen-welcome .hero-secondary-btn {
+    width: auto !important;
+    min-width: 220px !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  #screen-welcome .header-inner {
+    min-height: 86px;
+    padding-top: 28px !important;
+  }
+
+  #screen-welcome .main {
+    min-height: calc(100vh - 86px) !important;
+    padding-top: 56px !important;
+    padding-bottom: 52px !important;
+  }
+
+  #screen-welcome .hero {
+    min-height: calc(100vh - 190px);
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.85fr) !important;
+    gap: 64px !important;
+  }
+
+  #screen-welcome .hero-right {
+    display: flex !important;
+    justify-content: flex-end;
+    align-items: center;
+  }
+
+  #screen-welcome .home-powered-footer {
+    padding: 0 20px 32px;
+    text-align: left;
+  }
+}

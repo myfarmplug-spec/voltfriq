@@ -37,11 +37,6 @@
       </div>
 
       <button class="btn-ghost elec-apply-link" id="btn-apply">Apply to become an Electrician</button>
-
-      <div class="elec-demo-note">
-        <strong>Demo credentials:</strong><br/>
-        james@email.com / demo123
-      </div>
     </div>
   </div>
 
@@ -100,8 +95,39 @@
     </div>
 
     <div class="elec-reg-body">
-      <div class="progress-bar"><div class="progress-fill" style="width:66.6%"></div></div>
-      <div class="progress-label">Step 2 of 3 — Expertise &amp; Requirements</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:40%"></div></div>
+      <div class="progress-label">Step 2 of 5 — Work Areas</div>
+      <div class="elec-reg-note">Choose the areas where you can comfortably accept jobs. You can update this later from your profile.</div>
+
+      <div class="form-group">
+        <label class="form-label">Availability Status</label>
+        <select class="form-select" id="reg-availability-status">
+          <option value="available">Available for jobs</option>
+          <option value="offline">Offline for now</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Service Areas</label>
+        <div class="skills-grid" id="reg-service-areas"></div>
+      </div>
+
+      <button class="btn-primary btn-full" id="btn-reg-next-2">Next</button>
+    </div>
+  </div>
+
+  <!-- ─── SCREEN: Registration Step 3 ────────────────────────────── -->
+  <div id="screen-elec-reg-3" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <span class="screen-header-title">Apply as Electrician</span>
+    </div>
+
+    <div class="elec-reg-body">
+      <div class="progress-bar"><div class="progress-fill" style="width:60%"></div></div>
+      <div class="progress-label">Step 3 of 5 — Skills &amp; Experience</div>
+      <div class="elec-reg-note">Pick only the jobs you know how to handle well. Better matching means better ratings.</div>
 
       <div class="form-group">
         <label class="form-label">Years of Experience</label>
@@ -123,21 +149,59 @@
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Certifications</label>
-        <textarea class="form-input" id="reg-certifications" rows="3" placeholder="List your certifications, training, or qualifications..."></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Service Areas</label>
-        <div class="skills-grid" id="reg-service-areas"></div>
-      </div>
-      <div class="form-group">
         <label class="form-label">Areas of Expertise</label>
         <div class="skills-grid" id="reg-skills-grid"></div>
       </div>
       <div class="form-group">
+        <label class="form-label">Certifications <span class="optional">(optional)</span></label>
+        <textarea class="form-input" id="reg-certifications" rows="3" placeholder="List training, license numbers, or electrical qualifications..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Quick safety questions</label>
+        <div id="onboarding-question-list"></div>
+      </div>
+
+      <button class="btn-primary btn-full" id="btn-reg-next-3">Next</button>
+    </div>
+  </div>
+
+  <!-- ─── SCREEN: Registration Step 4 ────────────────────────────── -->
+  <div id="screen-elec-reg-4" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <span class="screen-header-title">Apply as Electrician</span>
+    </div>
+
+    <div class="elec-reg-body">
+      <div class="progress-bar"><div class="progress-fill" style="width:80%"></div></div>
+      <div class="progress-label">Step 4 of 5 — Documents</div>
+      <div class="elec-reg-note">Upload clear photos or PDFs. If a file is not ready, submit what you have and admin can follow up.</div>
+
+      <div class="form-group">
         <label class="form-label">Required Documents</label>
         <div id="reg-document-fields"></div>
       </div>
+
+      <button class="btn-primary btn-full" id="btn-reg-next-4">Next</button>
+    </div>
+  </div>
+
+  <!-- ─── SCREEN: Registration Step 5 ────────────────────────────── -->
+  <div id="screen-elec-reg-5" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <span class="screen-header-title">Apply as Electrician</span>
+    </div>
+
+    <div class="elec-reg-body">
+      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+      <div class="progress-label">Step 5 of 5 — Payout Details</div>
+
       <div class="form-group">
         <label class="form-label">Payout Bank Name</label>
         <input type="text" class="form-input" id="reg-payout-bank" placeholder="e.g. Access Bank" />
@@ -151,47 +215,9 @@
         <input type="text" class="form-input" id="reg-payout-account-name" placeholder="Account holder name" />
       </div>
 
-      <button class="btn-primary btn-full" id="btn-reg-next-2">Next</button>
-    </div>
-  </div>
-
-  <!-- ─── SCREEN: Registration Step 3 ────────────────────────────── -->
-  <div id="screen-elec-reg-3" class="screen">
-    <div class="screen-header">
-      <button class="btn-icon" onclick="goBack()" aria-label="Back">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-      </button>
-      <span class="screen-header-title">Apply as Electrician</span>
-    </div>
-
-    <div class="elec-reg-body">
-      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
-      <div class="progress-label">Step 3 of 3 — Onboarding</div>
-
-      <div class="elec-onboarding-card">
-        <div class="elec-onboarding-badge" id="onboarding-mode-badge">Virtual onboarding</div>
-        <h3 class="elec-section-title" style="margin-bottom:8px">Complete your VoltFriq onboarding</h3>
-        <p class="elec-onboarding-note" id="onboarding-note">Admin onboarding details will appear here.</p>
-      </div>
-
-      <div class="elec-video-card" id="onboarding-video-card">
-        <div class="elec-video-title">Training Video</div>
-        <a class="btn-secondary btn-full" id="onboarding-video-link" href="#" target="_blank" rel="noreferrer">Open onboarding video</a>
-      </div>
-
-      <div class="elec-live-card" id="onboarding-live-card" style="display:none;">
-        <div class="elec-video-title">Live onboarding status</div>
-        <div class="elec-onboarding-note" id="onboarding-live-note">Admin live onboarding notes will appear here.</div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Generated questions</label>
-        <div id="onboarding-question-list"></div>
-      </div>
-
       <label class="confirm-check-label" style="margin-bottom:18px;">
         <input type="checkbox" id="reg-onboarding-confirm" />
-        <span>I understand the transparency, safety, and reporting rules required to become a VoltFriq.</span>
+        <span>I understand VoltFriq safety, honest pricing, customer care, and reporting rules.</span>
       </label>
 
       <button class="btn-primary btn-full" id="btn-submit-application">Submit Application</button>
@@ -216,6 +242,30 @@
     </div>
   </div>
 
+  <!-- ─── SCREEN: Suspension Appeal ──────────────────────────────── -->
+  <div id="screen-elec-appeal" class="screen">
+    <div class="elec-pending-wrap">
+      <div class="elec-pending-anim">
+        <div class="pending-ring r1"></div>
+        <div class="pending-ring r2"></div>
+        <div class="pending-icon">⚠</div>
+      </div>
+      <h2 class="elec-pending-title">Account Temporarily Suspended</h2>
+      <p class="elec-pending-sub" id="appeal-reason">Your account needs admin review before you can receive jobs.</p>
+      <div class="elec-appeal-card" id="appeal-trust-summary"></div>
+      <div class="form-group" style="width:100%;max-width:520px;">
+        <label class="form-label">Appeal note</label>
+        <textarea class="form-input" id="appeal-note" rows="4" placeholder="Explain what happened and how you will prevent it next time."></textarea>
+      </div>
+      <div class="form-group" style="width:100%;max-width:520px;">
+        <label class="form-label">Supporting file <span class="optional">(optional)</span></label>
+        <input type="file" class="form-input" id="appeal-file" accept="image/*,application/pdf" />
+      </div>
+      <button class="btn-primary btn-full" id="btn-submit-appeal" style="max-width:520px;">Submit Appeal</button>
+      <button class="btn-secondary" id="btn-appeal-logout" style="margin-top:14px">Logout</button>
+    </div>
+  </div>
+
   <!-- ─── SCREEN: Dashboard ───────────────────────────────────────── -->
   <div id="screen-elec-dashboard" class="screen">
     <div class="elec-top-bar">
@@ -223,7 +273,7 @@
         <div class="elec-top-avatar" id="dash-avatar">👷</div>
         <div>
           <div class="elec-top-name" id="dash-name">James</div>
-          <div class="elec-top-status"><span class="dot-live"></span> Online</div>
+          <div class="elec-top-status"><span class="dot-live"></span> <span id="dash-live-status">Available for jobs</span></div>
         </div>
       </div>
       <button class="btn-icon elec-notif-btn" id="btn-notifications" aria-label="Notifications">
@@ -232,30 +282,46 @@
       </button>
     </div>
 
-    <div class="elec-dash-scroll">
+      <div class="elec-dash-scroll">
+      <div class="elec-trust-panel" id="dash-trust-panel"></div>
+
       <div class="elec-dash-stats" id="dash-stats">
         <div class="stat-card">
           <div class="stat-value" id="stat-jobs-month">0</div>
-          <div class="stat-label">Jobs this month</div>
+          <div class="stat-label">Assigned jobs</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-earnings">₦0</div>
-          <div class="stat-label">Earnings</div>
+          <div class="stat-label">Tracked earnings</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-rating">--</div>
           <div class="stat-label">Avg rating</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-payouts">₦0</div>
+          <div class="stat-label">Pending payouts</div>
+        </div>
       </div>
 
       <div class="elec-section">
         <h3 class="elec-section-title">Active Jobs</h3>
-        <div id="dash-active-jobs"></div>
+        <div id="dash-progress-jobs"></div>
       </div>
 
       <div class="elec-section">
         <h3 class="elec-section-title">New Assignments</h3>
         <div id="dash-new-assignments"></div>
+      </div>
+
+      <div class="elec-section">
+        <h3 class="elec-section-title">Accepted Jobs</h3>
+        <div id="dash-accepted-jobs"></div>
+      </div>
+
+      <div class="elec-section">
+        <h3 class="elec-section-title">Completed Jobs</h3>
+        <div id="dash-completed-jobs"></div>
       </div>
     </div>
 
@@ -315,10 +381,17 @@
           <span class="elec-job-label">Payout</span>
           <span class="elec-job-value" id="jd-payout">--</span>
         </div>
+        <div class="elec-job-row">
+          <span class="elec-job-label">Distance</span>
+          <span class="elec-job-value" id="jd-distance">--</span>
+        </div>
         <div class="elec-job-tags" id="jd-categories"></div>
         <div class="elec-job-desc" id="jd-description"></div>
         <div id="jd-urgency"></div>
+        <div class="elec-job-photo-grid" id="jd-photos"></div>
       </div>
+
+      <div class="elec-job-card" id="jd-customer-trust-card"></div>
 
       <div class="elec-job-card" id="jd-timer-card" style="display:none;">
         <div class="elec-job-row">
@@ -463,6 +536,26 @@
 
       <div class="elec-confirm-summary" id="confirm-payout-summary"></div>
 
+      <div class="elec-confirm-summary" id="customer-review-card">
+        <div class="elec-section-title" style="margin-bottom:10px;">Rate this customer</div>
+        <div class="elec-customer-stars" id="customer-star-rating">
+          <span class="star" data-star="1">&#9734;</span>
+          <span class="star" data-star="2">&#9734;</span>
+          <span class="star" data-star="3">&#9734;</span>
+          <span class="star" data-star="4">&#9734;</span>
+          <span class="star" data-star="5">&#9734;</span>
+        </div>
+        <div class="issue-summary-cats rating-tags" id="customer-review-tags">
+          <button class="chip" data-customer-tag="respectful">Respectful</button>
+          <button class="chip" data-customer-tag="paid_on_time">Paid on time</button>
+          <button class="chip" data-customer-tag="clear_access">Clear access</button>
+          <button class="chip" data-customer-tag="no_show">Did not show</button>
+          <button class="chip" data-customer-tag="unsafe_behavior">Unsafe behavior</button>
+        </div>
+        <textarea class="form-input" id="customer-review-comment" rows="3" maxlength="220" placeholder="Private note for VoltFriq trust and admin review"></textarea>
+        <button class="btn-secondary btn-full" id="btn-submit-customer-review" style="margin-top:10px;">Submit Customer Review</button>
+      </div>
+
       <button class="btn-primary btn-full btn-success" id="btn-confirm-work">
         I confirm work is completed
       </button>
@@ -495,6 +588,20 @@
           <button class="btn-add-item" id="btn-add-skill">+ Add Skill</button>
         </div>
         <div id="prof-skills"></div>
+      </div>
+
+      <div class="elec-section">
+        <h3 class="elec-section-title">Availability</h3>
+        <div class="elec-info-card">
+          <div class="form-group" style="margin-bottom:0;padding-top:12px;">
+            <label class="form-label">Current status</label>
+            <select class="form-select" id="prof-availability-status">
+              <option value="available">Available for jobs</option>
+              <option value="offline">Offline</option>
+            </select>
+          </div>
+          <button class="btn-primary btn-full" id="btn-save-availability" style="margin:12px 0 8px;">Save Availability</button>
+        </div>
       </div>
 
       <div class="elec-section">
@@ -567,9 +674,12 @@
     </div>
   </div>
 
-  <script src="js/store.js"></script>
-  <script src="js/navigation.js"></script>
-  <script src="js/chat.js"></script>
-  <script src="js/electrician.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="env.js?v=20260429-guestgps"></script>
+  <script src="js/config.js?v=20260429-guestgps"></script>
+  <script src="js/store.js?v=20260429-guestgps"></script>
+  <script src="js/navigation.js?v=20260429-guestgps"></script>
+  <script src="js/chat.js?v=20260429-guestgps"></script>
+  <script src="js/electrician.js?v=20260429-guestgps"></script>
 </body>
 </html>

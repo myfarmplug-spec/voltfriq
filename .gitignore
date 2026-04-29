@@ -1,2 +1,6 @@
 .DS_Store
 .claude/
+.env
+.env.local
+.env.*.local
+env.js

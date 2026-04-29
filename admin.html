@@ -32,25 +32,28 @@
         <button class="btn-primary btn-full" id="btn-admin-login">Login</button>
         <div class="admin-login-error" id="admin-login-error">Invalid email or password</div>
       </div>
-      <div class="admin-login-demo">
-        Demo credentials:<br />
-        <code>admin@voltfriq.com</code> / <code>admin123</code>
-      </div>
     </div>
   </div>
 
   <!-- ═══ SCREEN: DASHBOARD ═══════════════════════════════════════ -->
   <div id="screen-admin-dashboard" class="screen">
     <div class="admin-body">
-      <div class="admin-screen-title">Dashboard <small>Welcome back, Admin</small></div>
+      <div class="admin-screen-title">Operations Dashboard <small>Manual control stays available across matching, payments, and payouts.</small></div>
 
       <div class="admin-stats" id="admin-stats">
         <!-- JS fills -->
       </div>
 
       <div class="admin-section">
-        <div class="admin-section-title">Pending Actions <span class="count-badge" id="pending-count">0</span></div>
+        <div class="admin-section-title">Alerts <span class="count-badge" id="pending-count">0</span></div>
         <div class="admin-pending-cards" id="admin-pending-actions">
+          <!-- JS fills -->
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-title">Control Queue</div>
+        <div class="admin-dual-cards" id="admin-control-queue">
           <!-- JS fills -->
         </div>
       </div>
@@ -67,14 +70,15 @@
   <!-- ═══ SCREEN: REQUESTS ════════════════════════════════════════ -->
   <div id="screen-admin-requests" class="screen">
     <div class="admin-body">
-      <div class="admin-screen-title">Customer Requests</div>
+      <div class="admin-screen-title">Dispatch Control</div>
       <div class="admin-filter-tabs" id="requests-filter-tabs">
-        <button class="admin-filter-tab active" data-filter="all">All</button>
-        <button class="admin-filter-tab" data-filter="pending">New</button>
-        <button class="admin-filter-tab" data-filter="fee-pending">Assigned</button>
-        <button class="admin-filter-tab" data-filter="in-progress">In Progress</button>
+        <button class="admin-filter-tab active" data-filter="all">All queue</button>
+        <button class="admin-filter-tab" data-filter="matching">Matching</button>
+        <button class="admin-filter-tab" data-filter="manual">Manual needed</button>
+        <button class="admin-filter-tab" data-filter="timeout">Timeout</button>
+        <button class="admin-filter-tab" data-filter="rejected">Rejected</button>
       </div>
-      <div class="admin-card-list" id="requests-list">
+      <div class="admin-card-list admin-list-table" id="requests-list">
         <!-- JS fills -->
       </div>
     </div>
@@ -100,10 +104,11 @@
       <div class="admin-filter-tabs" id="elec-filter-tabs">
         <button class="admin-filter-tab active" data-filter="all">All</button>
         <button class="admin-filter-tab" data-filter="pending">Pending</button>
-        <button class="admin-filter-tab" data-filter="active">Active</button>
+        <button class="admin-filter-tab" data-filter="approved">Approved</button>
+        <button class="admin-filter-tab" data-filter="rejected">Rejected</button>
         <button class="admin-filter-tab" data-filter="suspended">Suspended</button>
       </div>
-      <div class="admin-card-list" id="elec-list">
+      <div class="admin-card-list admin-list-table" id="elec-list">
         <!-- JS fills -->
       </div>
     </div>
@@ -128,15 +133,16 @@
       <div class="admin-screen-title">All Jobs</div>
       <div class="admin-filter-tabs" id="jobs-filter-tabs">
         <button class="admin-filter-tab active" data-filter="all">All</button>
-        <button class="admin-filter-tab" data-filter="pending">Pending</button>
-        <button class="admin-filter-tab" data-filter="fee-pending">Fee Pending</button>
-        <button class="admin-filter-tab" data-filter="assessment">Assessment</button>
-        <button class="admin-filter-tab" data-filter="quoted">Quoted</button>
-        <button class="admin-filter-tab" data-filter="payment">Payment</button>
-        <button class="admin-filter-tab" data-filter="in-progress">In Progress</button>
+        <button class="admin-filter-tab" data-filter="matching">Matching</button>
+        <button class="admin-filter-tab" data-filter="assigned">Assigned</button>
+        <button class="admin-filter-tab" data-filter="accepted">Accepted</button>
+        <button class="admin-filter-tab" data-filter="payment_pending_verification">Payment verification</button>
+        <button class="admin-filter-tab" data-filter="payment_confirmed">Payment confirmed</button>
+        <button class="admin-filter-tab" data-filter="in_progress">In progress</button>
         <button class="admin-filter-tab" data-filter="completed">Completed</button>
+        <button class="admin-filter-tab" data-filter="cancelled">Cancelled</button>
       </div>
-      <div class="admin-card-list" id="jobs-list">
+      <div class="admin-card-list admin-list-table" id="jobs-list">
         <!-- JS fills -->
       </div>
     </div>
@@ -168,11 +174,51 @@
   <!-- ═══ SCREEN: FINANCE ═════════════════════════════════════════ -->
   <div id="screen-admin-finance" class="screen">
     <div class="admin-body">
-      <div class="admin-screen-title">Finance</div>
+      <div class="admin-screen-title">Payments &amp; Payouts</div>
       <div id="finance-summary"></div>
       <div class="admin-section">
-        <div class="admin-section-title">Transactions</div>
+        <div class="admin-section-title">Verification Queue</div>
         <div class="admin-tx-list" id="finance-tx-list">
+          <!-- JS fills -->
+        </div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-section-title">Payout Queue</div>
+        <div class="admin-card-list admin-list-table" id="finance-payout-list">
+          <!-- JS fills -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-admin-disputes" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">Disputes</div>
+      <div class="admin-card-list" id="disputes-list">
+        <!-- JS fills -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN: TRUST ═══════════════════════════════════════════ -->
+  <div id="screen-admin-trust" class="screen">
+    <div class="admin-body">
+      <div class="admin-screen-title">Trust &amp; Appeals <small>Review suspensions, watchlist cases, and behavior history.</small></div>
+      <div class="admin-section">
+        <div class="admin-section-title">Suspension Appeals</div>
+        <div class="admin-card-list admin-list-table" id="appeals-list">
+          <!-- JS fills -->
+        </div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-section-title">Watchlist</div>
+        <div class="admin-card-list admin-list-table" id="watchlist-list">
+          <!-- JS fills -->
+        </div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-section-title">Poor Performance</div>
+        <div class="admin-card-list admin-list-table" id="quality-list">
           <!-- JS fills -->
         </div>
       </div>
@@ -233,8 +279,8 @@
       <span class="admin-nav-label">Dashboard</span>
     </button>
     <button class="admin-nav-item" data-screen="admin-requests">
-      <span class="admin-nav-icon">📋</span>
-      <span class="admin-nav-label">Requests</span>
+      <span class="admin-nav-icon">🧭</span>
+      <span class="admin-nav-label">Dispatch</span>
     </button>
     <button class="admin-nav-item" data-screen="admin-jobs">
       <span class="admin-nav-icon">⚡</span>
@@ -244,15 +290,22 @@
       <span class="admin-nav-icon">👷</span>
       <span class="admin-nav-label">Electricians</span>
     </button>
-    <button class="admin-nav-item" data-screen="admin-settings">
-      <span class="admin-nav-icon">⚙️</span>
-      <span class="admin-nav-label">Settings</span>
+    <button class="admin-nav-item" data-screen="admin-finance">
+      <span class="admin-nav-icon">💳</span>
+      <span class="admin-nav-label">Finance</span>
+    </button>
+    <button class="admin-nav-item" data-screen="admin-trust">
+      <span class="admin-nav-icon">★</span>
+      <span class="admin-nav-label">Trust</span>
     </button>
   </nav>
 
-  <script src="js/store.js"></script>
-  <script src="js/navigation.js"></script>
-  <script src="js/chat.js"></script>
-  <script src="js/admin.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="env.js?v=20260429-guestgps"></script>
+  <script src="js/config.js?v=20260429-guestgps"></script>
+  <script src="js/store.js?v=20260429-guestgps"></script>
+  <script src="js/navigation.js?v=20260429-guestgps"></script>
+  <script src="js/chat.js?v=20260429-guestgps"></script>
+  <script src="js/admin.js?v=20260429-guestgps"></script>
 </body>
 </html>

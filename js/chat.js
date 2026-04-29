@@ -1,189 +1,181 @@
-/* ─── VOLTFRIQ OCEAN — CHAT ENGINE ────────────────────────────────── */
+/* ─── VOLTFRIQ — REALTIME JOB CHAT ─────────────────────────────── */
 
 const Chat = (() => {
-  let _pollTimer = null;
-  let _currentJobId = null;
-  let _senderRole = null;
-  let _senderName = null;
-  let _container = null;
-  let _lastCount = 0;
+  let currentJobId = null;
+  let senderRole = null;
+  let senderName = null;
+  let container = null;
+  let messageSubscription = null;
 
-  function init(containerId, jobId, senderRole, senderName) {
-    _currentJobId = jobId;
-    _senderRole = senderRole;
-    _senderName = senderName;
-    _container = document.getElementById(containerId);
-    if (!_container) return;
+  async function init(containerId, jobId, nextSenderRole, nextSenderName) {
+    currentJobId = jobId;
+    senderRole = nextSenderRole;
+    senderName = nextSenderName;
+    container = document.getElementById(containerId);
+    if (!container) return;
 
-    _container.innerHTML = `
-      <div class="chat-messages" id="chat-messages-${jobId}"></div>
-      <div class="chat-input-bar">
-        <input type="text" class="chat-text-input" id="chat-input-${jobId}" placeholder="Type a message…" />
-        <button class="chat-send-btn" id="chat-send-${jobId}">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-        </button>
-      </div>
-    `;
+    container.innerHTML =
+      '<div class="chat-messages" id="chat-messages-' + jobId + '"></div>' +
+      '<div class="chat-input-bar">' +
+        '<input type="text" class="chat-text-input" id="chat-input-' + jobId + '" placeholder="Type a message..." />' +
+        '<button class="chat-send-btn" id="chat-send-' + jobId + '">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>' +
+        '</button>' +
+      '</div>';
 
-    document.getElementById(`chat-send-${jobId}`).addEventListener('click', () => sendText());
-    document.getElementById(`chat-input-${jobId}`).addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') sendText();
+    document.getElementById('chat-send-' + jobId).addEventListener('click', sendText);
+    document.getElementById('chat-input-' + jobId).addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        sendText();
+      }
     });
 
-    render();
-    startPoll();
+    await render();
+    if (messageSubscription) messageSubscription.unsubscribe();
+    messageSubscription = Store.subscribeToMessages(jobId, render);
   }
 
-  function sendText() {
-    const input = document.getElementById(`chat-input-${_currentJobId}`);
+  async function sendText() {
+    if (!currentJobId) return;
+    const input = document.getElementById('chat-input-' + currentJobId);
     if (!input) return;
     const text = input.value.trim();
     if (!text) return;
-    Store.addChatMessage(_currentJobId, {
-      sender: _senderRole,
-      senderName: _senderName,
-      type: 'text',
-      content: text
-    });
+
+    await Store.addJobMessage(currentJobId, senderRole, { text: text, sender_name: senderName }, 'text');
     input.value = '';
-    render();
+    await render();
   }
 
-  function sendSystemMessage(jobId, content) {
-    Store.addChatMessage(jobId, {
-      sender: 'system',
-      senderName: 'System',
-      type: 'status',
-      content: content
-    });
-    if (_currentJobId === jobId) render();
+  async function sendSystemMessage(jobId, content) {
+    await Store.addJobMessage(jobId, 'admin', { text: content, sender_name: 'VoltFriq' }, 'status');
+    if (jobId === currentJobId) await render();
   }
 
-  function sendAssessment(jobId, senderName, assessment) {
-    Store.addChatMessage(jobId, {
-      sender: 'electrician',
-      senderName: senderName,
-      type: 'assessment',
-      content: assessment
-    });
-    if (_currentJobId === jobId) render();
+  async function sendAssessment(jobId, sender, assessment) {
+    await Store.addJobMessage(jobId, 'electrician', {
+      findings: assessment.findings || '',
+      measurements: assessment.measurements || '',
+      sender_name: sender
+    }, 'assessment');
+    if (jobId === currentJobId) await render();
   }
 
-  function sendQuotation(jobId, senderName, quotation) {
-    Store.addChatMessage(jobId, {
-      sender: 'electrician',
-      senderName: senderName,
-      type: 'quotation',
-      content: quotation
-    });
-    if (_currentJobId === jobId) render();
+  async function sendQuotation(jobId, sender, quotation) {
+    await Store.addJobMessage(jobId, 'electrician', {
+      items: quotation.items || [],
+      total: quotation.total || 0,
+      sender_name: sender
+    }, 'quotation');
+    if (jobId === currentJobId) await render();
   }
 
-  function sendReceipt(jobId, receipt) {
-    Store.addChatMessage(jobId, {
-      sender: 'system',
-      senderName: 'System',
-      type: 'receipt',
-      content: receipt
-    });
-    if (_currentJobId === jobId) render();
+  async function sendReceipt(jobId, receipt) {
+    await Store.addJobMessage(jobId, 'admin', receipt || {}, 'receipt');
+    if (jobId === currentJobId) await render();
   }
 
-  function render() {
-    if (!_currentJobId || !_container) return;
-    const messagesEl = document.getElementById(`chat-messages-${_currentJobId}`);
+  async function render() {
+    if (!currentJobId || !container) return;
+    const messagesEl = document.getElementById('chat-messages-' + currentJobId);
     if (!messagesEl) return;
 
-    const messages = Store.getChat(_currentJobId);
-    _lastCount = messages.length;
-
-    messagesEl.innerHTML = messages.map(msg => {
-      const isSelf = msg.sender === _senderRole;
-      const alignClass = msg.sender === 'system' ? 'chat-msg-system' : (isSelf ? 'chat-msg-self' : 'chat-msg-other');
-
-      if (msg.type === 'status') {
-        return `<div class="chat-msg chat-msg-system"><div class="chat-system-text">${msg.content}</div></div>`;
-      }
-
-      if (msg.type === 'assessment') {
-        const a = msg.content;
-        return `
-          <div class="chat-msg ${alignClass}">
-            <div class="chat-bubble chat-card-bubble">
-              <div class="chat-card-header">📋 Assessment Report</div>
-              <div class="chat-card-body">
-                <div class="chat-card-row"><strong>Findings:</strong> ${a.findings}</div>
-                ${a.measurements ? `<div class="chat-card-row"><strong>Measurements:</strong> ${a.measurements}</div>` : ''}
-              </div>
-              <div class="chat-sender">${msg.senderName} · ${timeAgo(msg.timestamp)}</div>
-            </div>
-          </div>`;
-      }
-
-      if (msg.type === 'quotation') {
-        const q = msg.content;
-        const items = (q.items || []).map(i => `<div class="chat-q-item"><span>${i.description}</span><span>${fmt(i.amount)}</span></div>`).join('');
-        const materials = (q.materials || []).map(m => `<div class="chat-q-item"><span>${m.name} (x${m.quantity})</span><span>${fmt(m.unitPrice * m.quantity)}</span></div>`).join('');
-        return `
-          <div class="chat-msg ${alignClass}">
-            <div class="chat-bubble chat-card-bubble">
-              <div class="chat-card-header">💰 Quotation</div>
-              <div class="chat-card-body">
-                ${items ? `<div class="chat-q-section"><div class="chat-q-label">Labour</div>${items}</div>` : ''}
-                ${materials ? `<div class="chat-q-section"><div class="chat-q-label">Materials <span class="chat-q-note">(supplied by VoltFriq)</span></div>${materials}</div>` : ''}
-                <div class="chat-q-total"><strong>Total:</strong> <strong>${fmt(q.total)}</strong></div>
-              </div>
-              <div class="chat-sender">${msg.senderName} · ${timeAgo(msg.timestamp)}</div>
-            </div>
-          </div>`;
-      }
-
-      if (msg.type === 'receipt') {
-        const r = msg.content;
-        return `
-          <div class="chat-msg chat-msg-system">
-            <div class="chat-bubble chat-card-bubble chat-receipt">
-              <div class="chat-card-header">✅ Payment Receipt</div>
-              <div class="chat-card-body">
-                <div class="chat-card-row">Amount: ${fmt(r.amount)}</div>
-                <div class="chat-card-row">Reference: ${r.reference || 'N/A'}</div>
-                <div class="chat-card-row">Date: ${fmtDate(r.date)}</div>
-              </div>
-            </div>
-          </div>`;
-      }
-
-      // Text message
-      return `
-        <div class="chat-msg ${alignClass}">
-          <div class="chat-bubble">
-            <div class="chat-text">${msg.content}</div>
-            <div class="chat-sender">${msg.senderName} · ${timeAgo(msg.timestamp)}</div>
-          </div>
-        </div>`;
-    }).join('');
-
+    const messages = await Store.getJobMessages(currentJobId);
+    messagesEl.innerHTML = messages.map((message) => renderMessage(message)).join('');
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function startPoll() {
-    stopPoll();
-    _pollTimer = setInterval(() => {
-      if (!_currentJobId) return;
-      const messages = Store.getChat(_currentJobId);
-      if (messages.length !== _lastCount) render();
-    }, 2000);
+  function renderMessage(message) {
+    const self = senderRole && message.sender_role === senderRole;
+    const alignClass = message.message_type === 'status'
+      ? 'chat-msg-system'
+      : (self ? 'chat-msg-self' : 'chat-msg-other');
+    const content = message.content || {};
+    const displayName = content.sender_name || (message.sender && message.sender.full_name) || 'VoltFriq';
+    const sentAt = timeAgo(new Date(message.created_at).getTime());
+
+    if (message.message_type === 'status') {
+      return '<div class="chat-msg chat-msg-system"><div class="chat-system-text">' + escapeHtml(content.text || '') + '</div></div>';
+    }
+
+    if (message.message_type === 'assessment') {
+      return '<div class="chat-msg ' + alignClass + '">' +
+        '<div class="chat-bubble chat-card-bubble">' +
+          '<div class="chat-card-header">Assessment Report</div>' +
+          '<div class="chat-card-body">' +
+            '<div class="chat-card-row"><strong>Findings:</strong> ' + escapeHtml(content.findings || '') + '</div>' +
+            (content.measurements ? '<div class="chat-card-row"><strong>Measurements:</strong> ' + escapeHtml(content.measurements) + '</div>' : '') +
+          '</div>' +
+          '<div class="chat-sender">' + escapeHtml(displayName) + ' · ' + sentAt + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    if (message.message_type === 'quotation') {
+      const items = (content.items || []).map((item) => {
+        return '<div class="chat-q-item"><span>' + escapeHtml(item.description || '') + '</span><span>' + Store.formatCurrency(item.lineTotal || item.amount || 0) + '</span></div>';
+      }).join('');
+      return '<div class="chat-msg ' + alignClass + '">' +
+        '<div class="chat-bubble chat-card-bubble">' +
+          '<div class="chat-card-header">Quotation</div>' +
+          '<div class="chat-card-body">' +
+            '<div class="chat-q-section"><div class="chat-q-label">Line items</div>' + items + '</div>' +
+            '<div class="chat-q-total"><strong>Total:</strong> <strong>' + Store.formatCurrency(content.total || 0) + '</strong></div>' +
+          '</div>' +
+          '<div class="chat-sender">' + escapeHtml(displayName) + ' · ' + sentAt + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    if (message.message_type === 'receipt') {
+      return '<div class="chat-msg chat-msg-system">' +
+        '<div class="chat-bubble chat-card-bubble chat-receipt">' +
+          '<div class="chat-card-header">Payment Receipt</div>' +
+          '<div class="chat-card-body">' +
+            '<div class="chat-card-row">Amount: ' + Store.formatCurrency(content.amount || 0) + '</div>' +
+            '<div class="chat-card-row">Reference: ' + escapeHtml(content.reference || 'N/A') + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    return '<div class="chat-msg ' + alignClass + '">' +
+      '<div class="chat-bubble">' +
+        '<div class="chat-text">' + escapeHtml(content.text || '') + '</div>' +
+        '<div class="chat-sender">' + escapeHtml(displayName) + ' · ' + sentAt + '</div>' +
+      '</div>' +
+    '</div>';
   }
 
-  function stopPoll() {
-    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function destroy() {
-    stopPoll();
-    _currentJobId = null;
-    _container = null;
+    if (messageSubscription) {
+      messageSubscription.unsubscribe();
+      messageSubscription = null;
+    }
+    currentJobId = null;
+    senderRole = null;
+    senderName = null;
+    container = null;
   }
 
-  return { init, render, sendText, sendSystemMessage, sendAssessment, sendQuotation, sendReceipt, destroy };
+  return {
+    init,
+    render,
+    sendText,
+    sendSystemMessage,
+    sendAssessment,
+    sendQuotation,
+    sendReceipt,
+    destroy
+  };
 })();
