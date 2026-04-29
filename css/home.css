@@ -138,7 +138,9 @@ body {
 }
 
 #screen-welcome .hero-right {
-  display: none !important;
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
   min-width: 0;
 }
 
@@ -150,6 +152,28 @@ body {
   background: rgba(255, 255, 255, 0.055);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.24);
+}
+
+#screen-welcome .home-image-card {
+  width: min(100%, 330px);
+  max-width: 330px;
+  height: 248px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #07111f;
+  border: 1px solid rgba(255, 184, 0, 0.18);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.28),
+    0 0 42px rgba(255, 184, 0, 0.08);
+}
+
+#screen-welcome .home-image-card img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 18%;
 }
 
 #screen-welcome .home-visual-top {
@@ -258,6 +282,18 @@ body {
     display: flex !important;
     justify-content: flex-end;
     align-items: center;
+  }
+
+  #screen-welcome .home-image-card {
+    width: 100%;
+    max-width: 460px;
+    height: min(64vh, 620px);
+    min-height: 500px;
+    border-radius: 30px;
+  }
+
+  #screen-welcome .home-image-card img {
+    object-position: center center;
   }
 
   #screen-welcome .home-powered-footer {
