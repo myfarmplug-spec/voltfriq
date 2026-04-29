@@ -1,19 +1,16 @@
-/* VoltFriq homepage hard overrides.
-   Loaded last so the public landing screen cannot inherit phone-frame styles. */
+/* VoltFriq homepage overrides.
+   Loaded last so the public landing screen can diverge from the in-app flow screens. */
 
 body {
   background:
-    radial-gradient(circle at 84% 18%, rgba(255, 184, 0, 0.08), transparent 30%),
-    linear-gradient(180deg, #050b15 0%, #07111f 58%, #030712 100%);
+    radial-gradient(circle at 78% 16%, rgba(255, 184, 0, 0.16), transparent 26%),
+    radial-gradient(circle at 15% 18%, rgba(17, 76, 163, 0.18), transparent 28%),
+    linear-gradient(180deg, #040b16 0%, #07101d 44%, #02070f 100%);
 }
 
 #screen-welcome.screen {
   position: fixed !important;
   inset: 0 !important;
-  top: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  left: 0 !important;
   width: 100% !important;
   height: 100% !important;
   max-width: none !important;
@@ -39,8 +36,9 @@ body {
   display: flex !important;
   flex-direction: column !important;
   background:
-    radial-gradient(circle at 82% 20%, rgba(255, 184, 0, 0.1), transparent 32%),
-    linear-gradient(180deg, #07111f 0%, #0a1628 58%, #050b15 100%) !important;
+    radial-gradient(circle at 74% 24%, rgba(255, 184, 0, 0.12), transparent 24%),
+    radial-gradient(circle at 84% 36%, rgba(255, 184, 0, 0.08), transparent 34%),
+    linear-gradient(135deg, #04101d 0%, #091323 52%, #040913 100%) !important;
   color: var(--white);
 }
 
@@ -50,123 +48,193 @@ body {
 }
 
 #screen-welcome .header-inner,
-#screen-welcome .main {
-  max-width: 1200px !important;
+#screen-welcome .main,
+#screen-welcome .home-powered-footer {
+  max-width: 1280px !important;
   margin: 0 auto !important;
 }
 
 #screen-welcome .header-inner {
-  min-height: 104px;
-  padding: 30px 22px 0 !important;
+  min-height: 96px;
+  padding: 26px 22px 0 !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
 
+#screen-welcome .welcome-logo {
+  font-size: clamp(2rem, 3vw, 2.9rem);
+  font-weight: 900;
+  letter-spacing: 0;
+  color: var(--yellow);
+}
+
+#screen-welcome .welcome-top-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#screen-welcome .welcome-link {
+  min-height: 50px;
+  padding: 0 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+#screen-welcome .welcome-login-link {
+  background: rgba(255, 184, 0, 0.18);
+  border-color: rgba(255, 184, 0, 0.12);
+  color: var(--yellow);
+}
+
 #screen-welcome .main {
   min-height: auto !important;
-  padding: 34px 22px 54px !important;
+  padding: 22px 22px 42px !important;
 }
 
 #screen-welcome .hero {
-  min-height: auto;
   display: grid !important;
   grid-template-columns: 1fr !important;
-  gap: 34px !important;
-  align-items: center !important;
+  grid-template-areas:
+    "copy"
+    "image"
+    "cta";
+  gap: 28px !important;
+  align-items: start !important;
 }
 
-#screen-welcome .hero-left {
+#screen-welcome .hero-copy-main,
+#screen-welcome .hero-cta-block {
   display: flex;
   flex-direction: column;
-  gap: 30px;
   min-width: 0;
-  max-width: 720px;
-  padding: 0 !important;
+}
+
+#screen-welcome .hero-copy-main {
+  grid-area: copy;
+  gap: 22px;
+}
+
+#screen-welcome .hero-cta-block {
+  grid-area: cta;
+  gap: 18px;
 }
 
 #screen-welcome .welcome-title {
-  max-width: 700px !important;
-  font-size: clamp(2.7rem, 10vw, 5.1rem) !important;
-  line-height: 1.02 !important;
+  margin: 0;
+  max-width: 760px !important;
+  font-size: clamp(3rem, 14vw, 5.3rem) !important;
+  font-weight: 900 !important;
+  line-height: 0.96 !important;
   letter-spacing: 0 !important;
   color: var(--white);
 }
 
+#screen-welcome .title-line {
+  display: block;
+}
+
+#screen-welcome .title-highlight {
+  color: var(--yellow);
+  text-shadow: 0 0 24px rgba(255, 184, 0, 0.18);
+}
+
 #screen-welcome .welcome-sub {
-  max-width: 440px !important;
-  font-size: clamp(1.05rem, 2.2vw, 1.35rem) !important;
+  max-width: 460px !important;
+  margin: 0 !important;
+  font-size: clamp(1.05rem, 2vw, 1.45rem) !important;
   line-height: 1.45 !important;
-  color: rgba(255, 255, 255, 0.7) !important;
-  margin-bottom: 10px !important;
-}
-
-#screen-welcome .hero-actions {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 14px !important;
-  width: 100% !important;
-  max-width: 420px;
-  margin-top: 8px !important;
-  margin-bottom: 18px !important;
-}
-
-#screen-welcome .hero-primary-btn,
-#screen-welcome .hero-secondary-btn {
-  width: 100% !important;
-  min-width: 0 !important;
-}
-
-#screen-welcome .welcome-trust-line {
-  max-width: 520px;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 13px;
-  line-height: 1.7;
-  margin-top: 10px;
-}
-
-#screen-welcome .home-powered-footer {
-  width: 100%;
-  max-width: 1200px;
-  margin: auto auto 0;
-  padding: 14px 22px max(34px, env(safe-area-inset-bottom));
-  color: rgba(255, 255, 255, 0.42);
-  font-size: 12px;
-  line-height: 1.6;
-  text-align: left;
+  color: rgba(255, 255, 255, 0.72) !important;
 }
 
 #screen-welcome .hero-right {
+  grid-area: image;
   display: flex !important;
   justify-content: center;
   align-items: center;
-  order: -1;
   min-width: 0;
 }
 
-#screen-welcome .home-visual-card {
-  width: 100%;
-  max-width: 440px;
-  padding: 22px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.24);
+#screen-welcome .hero-visual-stage {
+  position: relative;
+  width: min(100%, 560px);
+  min-height: 360px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 10px 0 8px;
 }
 
-#screen-welcome .home-image-card {
-  width: min(100%, 330px);
-  max-width: 330px;
-  height: 248px;
-  padding: 0;
-  overflow: hidden;
-  border-radius: 24px;
-  background: #07111f;
+#screen-welcome .hero-visual-stage::before {
+  content: "\26A1";
+  position: absolute;
+  inset: 12px auto auto 55%;
+  transform: translateX(-50%);
+  font-size: clamp(10rem, 22vw, 19rem);
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 4px rgba(255, 184, 0, 0.9);
+  text-shadow: 0 0 34px rgba(255, 184, 0, 0.18);
+  opacity: 0.95;
+  z-index: 0;
+  pointer-events: none;
+}
+
+#screen-welcome .hero-orbit {
+  position: absolute;
+  border-radius: 999px;
   border: 1px solid rgba(255, 184, 0, 0.18);
-  box-shadow:
-    0 28px 70px rgba(0, 0, 0, 0.28),
-    0 0 42px rgba(255, 184, 0, 0.08);
+  pointer-events: none;
+}
+
+#screen-welcome .hero-orbit-one {
+  width: min(92%, 520px);
+  height: min(92%, 520px);
+  top: 8px;
+  left: 24px;
+}
+
+#screen-welcome .hero-orbit-two {
+  width: min(74%, 420px);
+  height: min(74%, 420px);
+  top: 56px;
+  left: 70px;
+}
+
+#screen-welcome .hero-dot-grid {
+  position: absolute;
+  width: 150px;
+  height: 220px;
+  top: 44px;
+  right: 4px;
+  background-image: radial-gradient(rgba(255, 184, 0, 0.25) 1.6px, transparent 1.6px);
+  background-size: 28px 28px;
+  opacity: 0.52;
+  pointer-events: none;
+}
+
+#screen-welcome .image-wrapper,
+#screen-welcome .home-image-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 392px);
+  max-width: 392px;
+  height: 294px;
+  overflow: hidden;
+  border-radius: 28px;
+  background: radial-gradient(circle at 72% 40%, rgba(255, 184, 0, 0.16), transparent 60%);
+}
+
+#screen-welcome .image-wrapper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(0, 0, 0, 0) 56%, rgba(4, 11, 22, 0.94) 100%);
+  pointer-events: none;
 }
 
 #screen-welcome .home-image-card img {
@@ -174,90 +242,130 @@ body {
   height: 100%;
   display: block;
   object-fit: cover;
-  object-position: center 18%;
+  object-position: center 20%;
+  filter:
+    drop-shadow(0 0 48px rgba(255, 184, 0, 0.18))
+    brightness(1.05)
+    contrast(1.04);
+  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 1) 60%, rgba(0, 0, 0, 0) 100%);
+  -webkit-mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 1) 60%, rgba(0, 0, 0, 0) 100%);
 }
 
-#screen-welcome .home-visual-top {
+#screen-welcome .hero-status-card {
+  display: none;
+}
+
+#screen-welcome .hero-actions {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+#screen-welcome .hero-primary-btn {
+  width: 100% !important;
+  min-height: 58px;
+  padding: 0 24px;
+  border-radius: 18px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 13px;
+  justify-content: center;
+  gap: 14px;
+  font-size: 1.15rem;
   font-weight: 800;
+  box-shadow:
+    0 18px 34px rgba(255, 184, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
-#screen-welcome .home-live-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: var(--green);
-  flex-shrink: 0;
+#screen-welcome .hero-primary-icon {
+  font-size: 1.5rem;
+  line-height: 1;
 }
 
-#screen-welcome .home-visual-main {
-  margin-top: 28px;
+#screen-welcome .hero-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+
+#screen-welcome .hero-trust-item {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 18px;
-  border-radius: 16px;
-  background: rgba(5, 11, 21, 0.58);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.98rem;
+  line-height: 1.35;
 }
 
-#screen-welcome .home-bolt {
-  width: 58px;
-  height: 58px;
-  display: flex;
+#screen-welcome .hero-trust-icon,
+#screen-welcome .hero-assurance-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: 16px;
-  background: rgba(255, 184, 0, 0.13);
   color: var(--yellow);
-  font-size: 30px;
 }
 
-#screen-welcome .home-visual-main strong,
-#screen-welcome .home-visual-status strong {
-  display: block;
-  color: var(--white);
-  font-weight: 900;
+#screen-welcome .hero-trust-icon svg,
+#screen-welcome .hero-assurance-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
-#screen-welcome .home-visual-main span,
-#screen-welcome .home-visual-status span {
-  display: block;
-  margin-top: 5px;
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 13px;
+#screen-welcome .hero-assurance-bar {
+  display: none;
 }
 
-#screen-welcome .home-visual-status {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 14px;
-}
-
-#screen-welcome .home-visual-status > div {
-  padding: 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.075);
+#screen-welcome .home-powered-footer {
+  width: 100%;
+  padding: 12px 22px max(26px, env(safe-area-inset-bottom));
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
 }
 
 @media (min-width: 768px) {
+  #screen-welcome .header-inner {
+    padding-left: 30px !important;
+    padding-right: 30px !important;
+  }
+
+  #screen-welcome .main {
+    padding-left: 30px !important;
+    padding-right: 30px !important;
+    padding-bottom: 48px !important;
+  }
+
   #screen-welcome .hero-actions {
-    flex-direction: row !important;
-    max-width: none;
     width: auto !important;
   }
 
-  #screen-welcome .hero-primary-btn,
-  #screen-welcome .hero-secondary-btn {
+  #screen-welcome .hero-primary-btn {
     width: auto !important;
-    min-width: 220px !important;
+    min-width: 280px !important;
+    justify-content: space-between;
+  }
+
+  #screen-welcome .hero-trust-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  #screen-welcome .hero-visual-stage {
+    width: min(100%, 660px);
+    min-height: 480px;
+  }
+
+  #screen-welcome .image-wrapper,
+  #screen-welcome .home-image-card {
+    width: min(100%, 460px);
+    max-width: 460px;
+    height: 420px;
   }
 }
 
@@ -265,41 +373,200 @@ body {
   #screen-welcome .header-inner {
     min-height: 86px;
     padding-top: 28px !important;
+    padding-left: 40px !important;
+    padding-right: 40px !important;
   }
 
   #screen-welcome .main {
     min-height: calc(100vh - 86px) !important;
-    padding-top: 56px !important;
-    padding-bottom: 52px !important;
+    padding: 50px 40px 40px !important;
   }
 
   #screen-welcome .hero {
-    min-height: calc(100vh - 190px);
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.85fr) !important;
-    gap: 64px !important;
+    min-height: calc(100vh - 176px);
+    grid-template-columns: minmax(0, 0.96fr) minmax(420px, 1.04fr) !important;
+    grid-template-areas:
+      "copy image"
+      "cta image"
+      "assurance assurance";
+    gap: 30px 36px !important;
+    align-items: center !important;
+  }
+
+  #screen-welcome .hero-copy-main {
+    grid-area: copy;
+    max-width: 540px;
+    gap: 28px;
+    padding-top: 40px;
+  }
+
+  #screen-welcome .welcome-title {
+    font-size: clamp(5.2rem, 7vw, 7.6rem) !important;
+    max-width: 620px !important;
+  }
+
+  #screen-welcome .welcome-sub {
+    font-size: 1.3rem !important;
   }
 
   #screen-welcome .hero-right {
-    display: flex !important;
+    grid-area: image;
     justify-content: flex-end;
-    align-items: center;
-    order: 0;
   }
 
+  #screen-welcome .hero-cta-block {
+    grid-area: cta;
+    max-width: 560px;
+    align-self: start;
+  }
+
+  #screen-welcome .hero-visual-stage {
+    width: min(100%, 720px);
+    min-height: 760px;
+    padding: 0;
+  }
+
+  #screen-welcome .hero-visual-stage::before {
+    inset: 34px auto auto 56%;
+    font-size: 24rem;
+    -webkit-text-stroke: 5px rgba(255, 184, 0, 0.86);
+  }
+
+  #screen-welcome .hero-orbit-one {
+    width: 620px;
+    height: 620px;
+    top: 0;
+    left: 38px;
+  }
+
+  #screen-welcome .hero-orbit-two {
+    width: 500px;
+    height: 500px;
+    top: 66px;
+    left: 108px;
+  }
+
+  #screen-welcome .hero-dot-grid {
+    width: 206px;
+    height: 290px;
+    top: 76px;
+    right: 10px;
+  }
+
+  #screen-welcome .image-wrapper,
   #screen-welcome .home-image-card {
-    width: 100%;
-    max-width: 460px;
-    height: min(64vh, 620px);
-    min-height: 500px;
-    border-radius: 30px;
+    width: min(100%, 580px);
+    max-width: 580px;
+    height: 720px;
+    border-radius: 32px;
   }
 
   #screen-welcome .home-image-card img {
     object-position: center center;
   }
 
+  #screen-welcome .hero-status-card {
+    position: absolute;
+    top: 210px;
+    right: -4px;
+    z-index: 2;
+    width: 210px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 22px 22px 20px;
+    border-radius: 22px;
+    background: rgba(5, 13, 25, 0.84);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 22px 50px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(16px);
+  }
+
+  #screen-welcome .hero-status-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--yellow);
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  #screen-welcome .status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    background: var(--yellow);
+    box-shadow: 0 0 16px rgba(255, 184, 0, 0.4);
+  }
+
+  #screen-welcome .hero-status-distance {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--white);
+  }
+
+  #screen-welcome .hero-status-away {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.84);
+  }
+
+  #screen-welcome .hero-status-available {
+    margin-top: 4px;
+    font-size: 1.05rem;
+    color: #81e667;
+  }
+
+  #screen-welcome .hero-actions {
+    margin-top: 8px !important;
+  }
+
+  #screen-welcome .hero-trust-grid {
+    margin-top: 16px;
+    gap: 0;
+  }
+
+  #screen-welcome .hero-trust-item {
+    padding: 0 28px 0 0;
+    min-height: 92px;
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  #screen-welcome .hero-trust-item:last-child {
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  #screen-welcome .hero-assurance-bar {
+    grid-area: assurance;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    margin-top: -14px;
+    padding: 26px 22px;
+    border-radius: 26px;
+    background: rgba(7, 15, 28, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 44px rgba(0, 0, 0, 0.22);
+  }
+
+  #screen-welcome .hero-assurance-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+    padding: 8px 18px;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 1.18rem;
+    line-height: 1.35;
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  #screen-welcome .hero-assurance-item:last-child {
+    border-right: 0;
+  }
+
   #screen-welcome .home-powered-footer {
-    padding: 0 20px 32px;
-    text-align: left;
+    padding: 0 40px 26px;
   }
 }
