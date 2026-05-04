@@ -63,6 +63,11 @@ body.mobile-menu-open {
   min-width: 0;
 }
 
+.brand-lockup.logo-is-missing {
+  width: 0;
+  overflow: hidden;
+}
+
 .brand-logo {
   display: block;
   width: 166px;
@@ -145,24 +150,19 @@ body.mobile-menu-open {
   position: fixed;
   inset: 0;
   z-index: 70;
-  background: rgba(3, 8, 18, 0.72);
-  backdrop-filter: blur(12px);
+  background: rgba(3, 8, 18, 0.92);
   display: flex;
-  justify-content: flex-end;
+  justify-content: stretch;
 }
 
 .mobile-menu-panel {
-  width: min(100%, 360px);
+  width: 100%;
   min-height: 100%;
-  padding: 20px 18px calc(24px + env(safe-area-inset-bottom));
+  padding: 18px 18px calc(28px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  background:
-    linear-gradient(180deg, rgba(7, 18, 33, 0.98), rgba(4, 10, 19, 0.99)),
-    radial-gradient(circle at top right, rgba(255, 184, 0, 0.12), transparent 34%);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: -24px 0 48px rgba(0, 0, 0, 0.34);
+  gap: 18px;
+  background: linear-gradient(180deg, rgba(7, 18, 33, 0.995), rgba(4, 10, 19, 0.995));
 }
 
 .mobile-menu-head {
@@ -181,25 +181,10 @@ body.mobile-menu-open {
   flex-shrink: 0;
 }
 
-.mobile-menu-links {
-  display: grid;
-  gap: 10px;
-}
-
-.mobile-menu-link {
-  padding: 14px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.92);
-  text-decoration: none;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
 .mobile-menu-actions {
   display: grid;
   gap: 12px;
+  margin-top: 6px;
 }
 
 .mobile-menu-apply {
@@ -319,6 +304,10 @@ body.mobile-menu-open {
   text-decoration: none;
   font-size: 0.98rem;
   font-weight: 800;
+}
+
+.hero-mobile-links .hero-mobile-link:nth-child(3) {
+  display: none;
 }
 
 .hero-primary-btn {

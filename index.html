@@ -32,7 +32,7 @@
       <header class="site-header">
         <div class="site-header-inner">
           <a class="brand-lockup" href="#screen-welcome" aria-label="VoltFriq home">
-            <img class="brand-logo" src="/assets/voltfriq-logo.png" alt="VoltFriq logo" />
+            <img class="brand-logo" src="/assets/voltfriq-logo.png" alt="VoltFriq logo" onerror="this.style.display='none';this.parentElement.classList.add('logo-is-missing');" />
           </a>
 
           <nav class="site-nav" aria-label="Primary">
@@ -62,24 +62,16 @@
         <aside class="mobile-menu-panel" id="mobile-menu-panel" aria-label="Mobile navigation">
           <div class="mobile-menu-head">
             <a class="brand-lockup mobile-menu-brand" href="#screen-welcome" aria-label="VoltFriq home">
-              <img class="brand-logo" src="/assets/voltfriq-logo.png" alt="VoltFriq logo" />
+              <img class="brand-logo" src="/assets/voltfriq-logo.png" alt="VoltFriq logo" onerror="this.style.display='none';this.parentElement.classList.add('logo-is-missing');" />
             </a>
             <button class="btn-icon mobile-menu-close" id="btn-mobile-menu-close" aria-label="Close navigation menu">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
             </button>
           </div>
-          <nav class="mobile-menu-links" aria-label="Mobile primary">
-            <a class="mobile-menu-link" href="#screen-welcome" data-mobile-anchor="home">Home</a>
-            <a class="mobile-menu-link" href="#landing-trust" data-mobile-anchor="services">Services</a>
-            <a class="mobile-menu-link" href="#landing-why" data-mobile-anchor="how-it-works">How It Works</a>
-            <a class="mobile-menu-link" href="#landing-stats" data-mobile-anchor="about">About Us</a>
-            <a class="mobile-menu-link" href="#landing-footer" data-mobile-anchor="contact">Contact</a>
-          </nav>
           <div class="mobile-menu-actions">
             <button class="btn-primary btn-full" id="btn-begin-area-mobile">Book an Electrician</button>
             <button class="btn-secondary btn-full" id="btn-mobile-track">Track Job</button>
             <button class="btn-secondary btn-full" id="btn-mobile-login">Sign In</button>
-            <button class="btn-secondary btn-full" id="btn-mobile-signup">Create Account</button>
             <button class="btn-secondary btn-full" id="btn-mobile-dashboard" style="display:none;">Dashboard</button>
             <a href="/electricians/apply" class="mobile-menu-apply" id="link-mobile-apply">Apply as a VoltFriq</a>
           </div>
@@ -112,7 +104,6 @@
               <div class="hero-mobile-links">
                 <button class="btn-secondary hero-mobile-link" id="btn-mobile-track-inline">Track Job</button>
                 <button class="btn-secondary hero-mobile-link" id="btn-mobile-login-inline">Sign In</button>
-                <button class="btn-secondary hero-mobile-link" id="btn-mobile-signup-inline">Create Account</button>
                 <button class="btn-secondary hero-mobile-link" id="btn-mobile-dashboard-inline" style="display:none;">Dashboard</button>
                 <a href="/electricians/apply" class="hero-mobile-apply">Apply as a VoltFriq</a>
               </div>
@@ -443,7 +434,7 @@
       <button class="btn-icon" onclick="goBack()" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
-      <div class="screen-header-title">Login To Continue</div>
+      <div class="screen-header-title" id="customer-auth-title">Login To Continue</div>
     </div>
     <div class="screen-body auth-body">
       <div class="auth-icon">&#128274;</div>
@@ -934,7 +925,7 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/vendor/supabase.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/env.js?v=20260503-ia3"></script>
   <script src="/js/config.js?v=20260503-ia3"></script>

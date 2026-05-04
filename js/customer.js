@@ -1601,27 +1601,33 @@
   function applyAuthScreenContext() {
     const heading = document.getElementById('auth-heading');
     const sub = document.getElementById('auth-sub');
+    const title = document.getElementById('customer-auth-title');
     if (!heading || !sub) return;
     if (authMode === 'reset') {
+      if (title) title.textContent = 'Reset Password';
       heading.textContent = 'Choose your new password';
       sub.textContent = 'Use a fresh password with at least 8 characters. Once saved, you can sign in again immediately.';
       return;
     }
     if (authScreenIntent === 'tracking') {
+      if (title) title.textContent = 'Sign In';
       heading.textContent = 'Login to track your jobs';
       sub.textContent = 'Sign in to see previous bookings, payment proofs, receipts, and live status updates.';
       return;
     }
     if (authScreenIntent === 'dashboard') {
+      if (title) title.textContent = authMode === 'register' ? 'Create Account' : 'Sign In';
       heading.textContent = authMode === 'register' ? 'Create your customer dashboard' : 'Sign in to your customer dashboard';
       sub.textContent = 'Manage active jobs, history, saved addresses, and account details in one place.';
       return;
     }
     if (authScreenIntent === 'claim-guest') {
+      if (title) title.textContent = 'Create Account';
       heading.textContent = 'Create your customer dashboard';
       sub.textContent = 'Create an account for future dashboards, faster repeat bookings, and easier tracking across devices.';
       return;
     }
+    if (title) title.textContent = authMode === 'register' ? 'Create Account' : 'Sign In';
     heading.textContent = 'Save your job and continue';
     sub.textContent = 'Your account keeps your jobs, payment proofs, receipts, and ratings in one secure place.';
   }

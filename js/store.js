@@ -271,6 +271,14 @@ const Store = (() => {
     return state.client;
   }
 
+  function requireClient() {
+    const client = ensureClient();
+    if (!client) {
+      throw new Error('VoltFriq could not start its secure connection. Refresh and try again.');
+    }
+    return client;
+  }
+
   function isConfigured() {
     return !!ensureClient();
   }
@@ -451,7 +459,7 @@ const Store = (() => {
   }
 
   async function signUpCustomer(payload) {
-    const client = ensureClient();
+    const client = requireClient();
     const signUp = await client.auth.signUp({
       email: payload.email,
       password: payload.password,
@@ -496,7 +504,7 @@ const Store = (() => {
   }
 
   async function signUpElectrician(payload) {
-    const client = ensureClient();
+    const client = requireClient();
     const signUp = await client.auth.signUp({
       email: payload.email,
       password: payload.password,
@@ -634,7 +642,7 @@ const Store = (() => {
   }
 
   async function signIn(email, password) {
-    const client = ensureClient();
+    const client = requireClient();
     const result = await client.auth.signInWithPassword({ email, password });
     if (result.error) throw normalizeError(result.error, 'Login failed.');
     await hydrateSession();
@@ -642,7 +650,7 @@ const Store = (() => {
   }
 
   async function requestPasswordReset(email, redirectTo) {
-    const client = ensureClient();
+    const client = requireClient();
     const result = await client.auth.resetPasswordForEmail(email, {
       redirectTo: redirectTo || (window.location.origin + '/login?reset=1')
     });
@@ -651,7 +659,7 @@ const Store = (() => {
   }
 
   async function updatePassword(nextPassword) {
-    const client = ensureClient();
+    const client = requireClient();
     if (!nextPassword || nextPassword.length < 8) {
       throw new Error('Enter a new password with at least 8 characters.');
     }
