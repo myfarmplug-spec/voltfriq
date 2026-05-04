@@ -13,19 +13,79 @@ const ElecApp = (() => {
   let materialItems = [];
   let customerReviewValue = 0;
   let selectedCustomerTags = [];
+  let selectedExpertise = [];
+  let certificationEntries = [];
+  let documentUploads = {};
+  let validationAnswers = {};
+  let pendingElectricianRoute = null;
   const ISSUE_LABELS = {
-    'Light fitting': 'Light issue',
-    'Socket repair': 'Socket/switch issue',
+    'Light fitting': 'Light fitting',
+    'Socket repair': 'Socket repair',
     'Wiring issue': 'Wiring',
-    Inverter: 'Inverter/solar',
-    Generator: 'Generator connection',
-    'Tripped breaker': 'Breaker/fuse',
-    'General Installation': 'Full inspection',
+    Inverter: 'Inverter',
+    Generator: 'Generator',
+    'Tripped breaker': 'Tripped breaker',
+    'General Installation': 'Installation',
+    Inspection: 'Inspection',
+    Solar: 'Solar',
     Other: 'Other'
   };
+  const DEFAULT_SKILL_OPTIONS = Object.keys(ISSUE_LABELS);
+  const VALIDATION_PASS_THRESHOLD = 60;
+  const ELECTRICIAN_ROUTE_TITLES = {
+    'elec-login': 'VoltFriq | Electrician Login',
+    'elec-reg-1': 'VoltFriq | Electrician Apply',
+    'elec-reg-2': 'VoltFriq | Electrician Apply | Work Areas',
+    'elec-reg-3': 'VoltFriq | Electrician Apply | Expertise',
+    'elec-reg-4': 'VoltFriq | Electrician Apply | Documents',
+    'elec-reg-5': 'VoltFriq | Electrician Apply | Payout Setup',
+    'elec-pending': 'VoltFriq | Application Pending',
+    'elec-appeal': 'VoltFriq | Appeal Review',
+    'elec-dashboard': 'VoltFriq | Electrician Dashboard',
+    'elec-job-detail': 'VoltFriq | Job Detail',
+    'elec-assessment': 'VoltFriq | Prepare Quote',
+    'elec-confirm': 'VoltFriq | Confirm Work',
+    'elec-chat': 'VoltFriq | Job Chat',
+    'elec-history': 'VoltFriq | Work History',
+    'elec-profile': 'VoltFriq | Profile'
+  };
+  const SAFETY_QUESTIONS = [
+    {
+      id: 'safe_start',
+      prompt: 'How do you make a customer feel safe before starting work?',
+      options: [
+        { id: 'explain', label: 'Explain the work clearly', correct: true },
+        { id: 'start_fast', label: 'Start immediately', correct: false },
+        { id: 'power_off', label: 'Turn off main power first', correct: true },
+        { id: 'ignore', label: 'Ignore customer concerns', correct: false }
+      ]
+    },
+    {
+      id: 'onsite_assessment',
+      prompt: 'When should you stop remote diagnosis and request an on-site assessment?',
+      options: [
+        { id: 'unclear_fault', label: 'When the fault is unclear or unsafe', correct: true },
+        { id: 'burn_marks', label: 'When there are burn marks or overheating signs', correct: true },
+        { id: 'always_remote', label: 'Keep guessing remotely until it works', correct: false },
+        { id: 'skip_visit', label: 'Skip assessment to save time', correct: false }
+      ]
+    },
+    {
+      id: 'documenting_work',
+      prompt: 'How should you document findings, materials, and completed work?',
+      options: [
+        { id: 'clear_notes', label: 'Write clear notes and list materials used', correct: true },
+        { id: 'photos', label: 'Add photos or readings where helpful', correct: true },
+        { id: 'memory_only', label: 'Keep it in memory only', correct: false },
+        { id: 'no_customer_update', label: 'Avoid explaining the final work to the customer', correct: false }
+      ]
+    }
+  ];
 
   async function init() {
+    configureElectricianRoutes();
     bindEvents();
+    pendingElectricianRoute = getCurrentRouteState();
     try {
       const boot = await Store.init();
       if (!boot.configured) {
@@ -34,11 +94,11 @@ const ElecApp = (() => {
       }
 
       if (boot.profile && boot.profile.role === 'customer') {
-        window.location.href = 'index.html';
+        window.location.href = Store.getRoleHome('customer');
         return;
       }
       if (boot.profile && boot.profile.role === 'admin') {
-        window.location.href = 'admin.html';
+        window.location.href = Store.getRoleHome('admin');
         return;
       }
 
@@ -57,15 +117,118 @@ const ElecApp = (() => {
       });
 
       if (boot.profile) {
-        await resumeSession();
-      } else if (shouldStartApplication()) {
-        goTo('elec-reg-1');
+        await resumeSession(pendingElectricianRoute);
       } else {
-        goTo('elec-login');
+        await handleElectricianRouteActivation({
+          screen: (pendingElectricianRoute && pendingElectricianRoute.screen) || (shouldStartApplication() ? 'elec-reg-1' : 'elec-login'),
+          data: pendingElectricianRoute ? pendingElectricianRoute.data : null,
+          source: 'initial'
+        });
       }
     } catch (error) {
       showError(error.message || 'Could not start the electrician portal.');
     }
+  }
+
+  function configureElectricianRoutes() {
+    configureRoutes({
+      defaultScreen: 'elec-login',
+      pathParser: parseElectricianRoute,
+      pathResolver: resolveElectricianPath,
+      titleResolver: resolveElectricianTitle,
+      onRouteActivated: async (route) => {
+        await handleElectricianRouteActivation(route);
+      }
+    });
+  }
+
+  function parseElectricianRoute(pathname) {
+    const path = normalizeElectricianPath(pathname);
+    if (path === '/electricians' || path === '/electricians/login' || path === '/electrician.html') return { screen: 'elec-login' };
+    if (path === '/electricians/apply') return { screen: 'elec-reg-1' };
+    if (path === '/electricians/pending') return { screen: 'elec-pending' };
+    if (path === '/electricians/dashboard') return { screen: 'elec-dashboard' };
+    if (path === '/electricians/history') return { screen: 'elec-history' };
+    if (path === '/electricians/profile') return { screen: 'elec-profile' };
+    if (path.indexOf('/electricians/jobs/') === 0) return { screen: 'elec-job-detail', data: { ticket: decodeURIComponent(path.split('/').pop() || '') } };
+    return { screen: 'elec-login' };
+  }
+
+  function resolveElectricianPath(screen, routeData) {
+    if (screen === 'elec-login') return '/electricians/login';
+    if (['elec-reg-1', 'elec-reg-2', 'elec-reg-3', 'elec-reg-4', 'elec-reg-5'].includes(screen)) return '/electricians/apply';
+    if (screen === 'elec-pending' || screen === 'elec-appeal') return '/electricians/pending';
+    if (screen === 'elec-dashboard') return '/electricians/dashboard';
+    if (screen === 'elec-history') return '/electricians/history';
+    if (screen === 'elec-profile') return '/electricians/profile';
+    if (['elec-job-detail', 'elec-assessment', 'elec-confirm', 'elec-chat'].includes(screen)) {
+      const ticket = routeData && routeData.ticket ? routeData.ticket : (currentJob && currentJob.ticket);
+      return ticket ? '/electricians/jobs/' + encodeURIComponent(ticket) : '/electricians/dashboard';
+    }
+    return '/electricians/login';
+  }
+
+  function resolveElectricianTitle(screen, routeData) {
+    if (['elec-job-detail', 'elec-assessment', 'elec-confirm', 'elec-chat'].includes(screen) && routeData && routeData.ticket) {
+      return 'VoltFriq | Job ' + routeData.ticket;
+    }
+    return ELECTRICIAN_ROUTE_TITLES[screen] || 'VoltFriq | Electrician Portal';
+  }
+
+  async function handleElectricianRouteActivation(route) {
+    if (!route || !route.screen) return;
+    const electrician = Store.getCurrentElectrician();
+    const profile = Store.getCurrentProfile();
+
+    if (!profile) {
+      if (route.screen === 'elec-reg-1') {
+        goTo('elec-reg-1', { replace: route.source !== 'popstate' });
+        return;
+      }
+      goTo('elec-login', { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (!electrician) {
+      goTo('elec-login', { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (electrician.status === 'pending' || electrician.status === 'rejected') {
+      goTo('elec-pending', { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (electrician.status === 'suspended') {
+      await renderAppealScreen(electrician);
+      goTo('elec-appeal', { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (route.screen === 'elec-job-detail' && route.data && route.data.ticket) {
+      const job = await openJobByTicket(route.data.ticket);
+      if (job) return;
+    }
+
+    if (route.screen === 'elec-history') {
+      renderHistory();
+      goTo('elec-history', { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (route.screen === 'elec-profile') {
+      renderProfile();
+      goTo('elec-profile', { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (route.screen === 'elec-pending') {
+      goTo('elec-dashboard', { replace: true });
+      return;
+    }
+
+    await loadDashboard();
+    goTo('elec-dashboard', { replace: route.source !== 'popstate' });
   }
 
   function bindEvents() {
@@ -80,6 +243,7 @@ const ElecApp = (() => {
     document.getElementById('btn-reg-next-3').addEventListener('click', nextRegistrationStepThree);
     document.getElementById('btn-reg-next-4').addEventListener('click', nextRegistrationStepFour);
     document.getElementById('btn-submit-application').addEventListener('click', submitApplication);
+    document.getElementById('btn-add-certification').addEventListener('click', addCertificationEntry);
     document.getElementById('btn-pending-back').addEventListener('click', handleLogout);
     document.getElementById('btn-appeal-logout').addEventListener('click', handleLogout);
     document.getElementById('btn-submit-appeal').addEventListener('click', submitAppeal);
@@ -108,6 +272,7 @@ const ElecApp = (() => {
     document.getElementById('btn-close-skill-modal').addEventListener('click', closeAddSkillModal);
     document.getElementById('btn-save-new-skill').addEventListener('click', saveSelectedSkills);
     document.getElementById('btn-save-availability').addEventListener('click', saveAvailability);
+    document.getElementById('reg-expertise-search').addEventListener('input', renderExpertiseOptions);
 
     document.querySelectorAll('.nav-item[data-nav]').forEach((button) => {
       button.addEventListener('click', () => handleNav(button.dataset.nav));
@@ -119,21 +284,21 @@ const ElecApp = (() => {
     return params.get('apply') === '1' || window.location.hash === '#apply';
   }
 
-  async function resumeSession() {
+  async function resumeSession(route) {
     const electrician = Store.getCurrentElectrician();
     if (!electrician) {
-      goTo('elec-login');
+      goTo('elec-login', { replace: true });
       return;
     }
 
     if (electrician.status === 'pending') {
       document.getElementById('pending-ref-id').textContent = electrician.id.slice(0, 8).toUpperCase();
-      goTo('elec-pending');
+      goTo('elec-pending', { replace: true });
       return;
     }
     if (electrician.status === 'suspended') {
       await renderAppealScreen(electrician);
-      goTo('elec-appeal');
+      goTo('elec-appeal', { replace: true });
       return;
     }
     if (electrician.status === 'rejected') {
@@ -141,12 +306,12 @@ const ElecApp = (() => {
       document.querySelector('.elec-pending-title').textContent = 'Application Needs Review';
       document.querySelector('.elec-pending-sub').textContent = 'Your onboarding has not been approved yet. VoltFriq support will contact you.';
       document.querySelector('.elec-pending-note').textContent = 'Contact VoltFriq support if you need help with your application or account status.';
-      goTo('elec-pending');
+      goTo('elec-pending', { replace: true });
       return;
     }
 
     await loadDashboard();
-    goTo('elec-dashboard');
+    await handleElectricianRouteActivation(route || { screen: 'elec-dashboard', data: null, source: 'resume' });
   }
 
   async function handleLogin() {
@@ -158,28 +323,41 @@ const ElecApp = (() => {
       if ((Store.getCurrentProfile() || {}).role !== 'electrician') {
         throw new Error('This account is not registered as a VoltFriq.');
       }
-      await resumeSession();
+      await resumeSession(pendingElectricianRoute);
     });
   }
 
   function renderRegistrationOptions() {
     const settings = Store.getSettings();
-    document.getElementById('reg-service-areas').innerHTML = (settings.service_areas || []).map((area) => chipMarkup('area', area)).join('');
-    document.getElementById('reg-skills-grid').innerHTML = (settings.issue_categories || []).map((skill) => chipMarkup('skill', skill)).join('');
+    const selectedAreas = activeChipValues('#reg-service-areas .chip.active', 'area');
+    const serviceAreas = getRegistrationServiceAreas(settings);
+    const usingFallbackArea = !(Array.isArray(settings.service_areas) && settings.service_areas.filter(Boolean).length);
 
-    document.getElementById('reg-service-areas').addEventListener('click', toggleChip);
-    document.getElementById('reg-skills-grid').addEventListener('click', toggleChip);
+    document.getElementById('reg-service-areas').innerHTML = serviceAreas.length
+      ? serviceAreas.map((area) => {
+          const shouldActivate = selectedAreas.includes(area) || (usingFallbackArea && serviceAreas.length === 1);
+          return chipMarkup('area', area, shouldActivate);
+        }).join('')
+      : '<div class="expertise-empty">Enter your main location in Step 1 to continue.</div>';
 
-    document.getElementById('reg-photo').addEventListener('click', () => {
+    document.getElementById('reg-service-areas').onclick = toggleChip;
+
+    document.getElementById('reg-photo').onclick = () => {
       const input = document.getElementById('reg-photo-input') || createHiddenFileInput('reg-photo-input');
       input.click();
-    });
+    };
 
-    createHiddenFileInput('reg-photo-input').addEventListener('change', (event) => {
+    createHiddenFileInput('reg-photo-input').onchange = (event) => {
       pendingProfilePhoto = event.target.files && event.target.files[0] ? event.target.files[0] : null;
       document.getElementById('reg-photo').innerHTML = '<span class="photo-icon">✓</span><span>' + (pendingProfilePhoto ? pendingProfilePhoto.name : 'Tap to upload photo') + '</span>';
-    });
+    };
 
+    if (!selectedExpertise.length) {
+      selectedExpertise = [];
+    }
+    renderExpertiseSelected();
+    renderExpertiseOptions();
+    renderCertificationList();
     renderDocumentFields();
     renderOnboardingQuestions();
   }
@@ -195,34 +373,247 @@ const ElecApp = (() => {
     return input;
   }
 
-  function renderDocumentFields() {
-    const container = document.getElementById('reg-document-fields');
-    container.innerHTML = [
-      documentFieldMarkup('government_id', 'Government ID'),
-      documentFieldMarkup('certification', 'Trade license or certification'),
-      documentFieldMarkup('bank_proof', 'Bank detail proof')
-    ].join('');
-
-    container.querySelectorAll('input[type="file"]').forEach((field) => {
-      field.addEventListener('change', () => {
-        const name = field.files && field.files[0] ? field.files[0].name : 'Choose file';
-        field.nextElementSibling.textContent = name;
-      });
+  function renderExpertiseSelected() {
+    const container = document.getElementById('reg-selected-expertise');
+    container.innerHTML = selectedExpertise.length
+      ? selectedExpertise.map((skill) => '<button class="expertise-chip" type="button" data-remove-expertise="' + escapeHtml(skill) + '">' + escapeHtml(humanizeIssue(skill)) + '<span aria-hidden="true">&times;</span></button>').join('')
+      : '<div class="expertise-empty">Select one or more expertise areas.</div>';
+    container.querySelectorAll('[data-remove-expertise]').forEach((button) => {
+      button.onclick = () => {
+        selectedExpertise = selectedExpertise.filter((skill) => skill !== button.dataset.removeExpertise);
+        renderExpertiseSelected();
+        renderExpertiseOptions();
+      };
     });
   }
 
-  function renderOnboardingQuestions() {
-    const questions = [
-      'How do you make a customer feel safe before starting electrical work?',
-      'When do you stop a remote diagnosis and request an on-site assessment?',
-      'How do you document findings, materials, and completed work clearly?'
-    ];
-    document.getElementById('onboarding-question-list').innerHTML = questions.map((question, index) => {
-      return '<div class="elec-question-card">' +
-        '<div class="elec-question-title">' + question + '</div>' +
-        '<textarea class="form-input" rows="3" data-onboarding-question="' + index + '" placeholder="Type your answer here"></textarea>' +
+  function renderExpertiseOptions() {
+    const query = document.getElementById('reg-expertise-search').value.trim().toLowerCase();
+    const options = getRegistrationSkillOptions(Store.getSettings())
+      .filter((skill) => !selectedExpertise.includes(skill))
+      .filter((skill) => !query || humanizeIssue(skill).toLowerCase().indexOf(query) !== -1 || skill.toLowerCase().indexOf(query) !== -1);
+    const container = document.getElementById('reg-expertise-options');
+    container.innerHTML = options.length
+      ? options.map((skill) => '<button class="expertise-option" type="button" data-expertise-option="' + escapeHtml(skill) + '">' + escapeHtml(humanizeIssue(skill)) + '</button>').join('')
+      : '<div class="expertise-no-match">No matching expertise found.</div>';
+    container.querySelectorAll('[data-expertise-option]').forEach((button) => {
+      button.onclick = () => {
+        selectedExpertise = selectedExpertise.concat([button.dataset.expertiseOption]);
+        document.getElementById('reg-expertise-search').value = '';
+        renderExpertiseSelected();
+        renderExpertiseOptions();
+      };
+    });
+  }
+
+  function addCertificationEntry() {
+    certificationEntries.push({ id: 'cert-' + Date.now(), title: '', licenseNumber: '', issuer: '' });
+    renderCertificationList();
+  }
+
+  function renderCertificationList() {
+    const container = document.getElementById('reg-certification-list');
+    if (!certificationEntries.length) {
+      container.innerHTML = '<div class="certification-empty">Add only the certifications you actually hold.</div>';
+      return;
+    }
+    container.innerHTML = certificationEntries.map((entry, index) => {
+      return '<div class="certification-card">' +
+        '<div class="certification-grid">' +
+          '<input class="form-input" data-cert-title="' + index + '" placeholder="Certification title" value="' + escapeAttribute(entry.title) + '" />' +
+          '<input class="form-input" data-cert-license="' + index + '" placeholder="License number (optional)" value="' + escapeAttribute(entry.licenseNumber) + '" />' +
+          '<input class="form-input" data-cert-issuer="' + index + '" placeholder="Issuer" value="' + escapeAttribute(entry.issuer) + '" />' +
+        '</div>' +
+        '<button class="btn-ghost certification-remove" type="button" data-cert-remove="' + index + '">Remove</button>' +
       '</div>';
     }).join('');
+    container.querySelectorAll('[data-cert-title], [data-cert-license], [data-cert-issuer]').forEach((field) => {
+      field.oninput = () => syncCertificationEntries();
+    });
+    container.querySelectorAll('[data-cert-remove]').forEach((button) => {
+      button.onclick = () => {
+        certificationEntries.splice(Number(button.dataset.certRemove), 1);
+        renderCertificationList();
+      };
+    });
+  }
+
+  function syncCertificationEntries() {
+    certificationEntries = certificationEntries.map((entry, index) => ({
+      id: entry.id,
+      title: (document.querySelector('[data-cert-title="' + index + '"]') || {}).value || '',
+      licenseNumber: (document.querySelector('[data-cert-license="' + index + '"]') || {}).value || '',
+      issuer: (document.querySelector('[data-cert-issuer="' + index + '"]') || {}).value || ''
+    }));
+  }
+
+  function renderDocumentFields() {
+    const container = document.getElementById('reg-document-fields');
+    container.innerHTML =
+      '<div class="document-group">' +
+        '<div class="document-group-title">Government ID <span class="document-group-meta">Required</span></div>' +
+        renderDocumentCard('government_id', 'Government ID', true) +
+      '</div>' +
+      '<div class="document-group">' +
+        '<div class="document-group-title">Proof of Address <span class="document-group-meta">One required</span></div>' +
+        renderDocumentCard('bank_proof', 'Bank detail proof', false) +
+        '<div class="document-group-or">OR</div>' +
+        renderDocumentCard('utility_bill', 'Light bill', false) +
+      '</div>' +
+      '<div class="document-group">' +
+        '<div class="document-group-title">Trade License <span class="document-group-meta">Optional</span></div>' +
+        renderDocumentCard('certification', 'Trade license / certification', false) +
+      '</div>';
+    bindDocumentInputs();
+    renderDocumentCards();
+  }
+
+  function renderOnboardingQuestions() {
+    document.getElementById('onboarding-question-list').innerHTML = SAFETY_QUESTIONS.map((question) => {
+      const chosen = validationAnswers[question.id] || [];
+      return '<div class="elec-question-card">' +
+        '<div class="elec-question-title">' + question.prompt + '</div>' +
+        '<div class="validation-options">' + question.options.map((option) => {
+          const active = chosen.includes(option.id) ? ' active' : '';
+          return '<button class="validation-option' + active + '" type="button" data-question-id="' + question.id + '" data-option-id="' + option.id + '">' + option.label + '</button>';
+        }).join('') + '</div>' +
+        '<div class="validation-question-feedback">' + questionFeedback(question.id) + '</div>' +
+      '</div>';
+    }).join('');
+    document.querySelectorAll('[data-question-id]').forEach((button) => {
+      button.onclick = () => toggleValidationAnswer(button.dataset.questionId, button.dataset.optionId);
+    });
+    renderValidationFeedback();
+  }
+
+  function toggleValidationAnswer(questionId, optionId) {
+    const current = validationAnswers[questionId] || [];
+    validationAnswers[questionId] = current.includes(optionId)
+      ? current.filter((value) => value !== optionId)
+      : current.concat([optionId]);
+    renderOnboardingQuestions();
+  }
+
+  function questionFeedback(questionId) {
+    const question = SAFETY_QUESTIONS.find((item) => item.id === questionId);
+    const selected = validationAnswers[questionId] || [];
+    if (!question || !selected.length) return 'Select all answers that apply.';
+    const score = scoreQuestion(question, selected);
+    if (score === 1) return 'Correct';
+    if (score > 0) return 'Partially correct';
+    return 'Incorrect';
+  }
+
+  function renderValidationFeedback() {
+    const feedback = document.getElementById('validation-feedback');
+    if (!allValidationQuestionsAnswered()) {
+      feedback.className = 'validation-feedback';
+      feedback.textContent = 'Answer each question to complete validation.';
+      return;
+    }
+    const result = computeValidationResult();
+    feedback.className = 'validation-feedback ' + (result.percentage >= VALIDATION_PASS_THRESHOLD ? 'is-good' : 'is-review');
+    feedback.textContent = result.percentage >= VALIDATION_PASS_THRESHOLD
+      ? 'Good understanding of safety practices'
+      : 'Needs review';
+  }
+
+  function allValidationQuestionsAnswered() {
+    return SAFETY_QUESTIONS.every((question) => (validationAnswers[question.id] || []).length);
+  }
+
+  function computeValidationResult() {
+    const answers = SAFETY_QUESTIONS.map((question) => {
+      const selected = validationAnswers[question.id] || [];
+      const score = scoreQuestion(question, selected);
+      return {
+        question: question.prompt,
+        selected,
+        score
+      };
+    });
+    const percentage = Math.round((answers.reduce((sum, item) => sum + item.score, 0) / SAFETY_QUESTIONS.length) * 100);
+    return { percentage, answers };
+  }
+
+  function scoreQuestion(question, selected) {
+    const correct = question.options.filter((option) => option.correct).map((option) => option.id);
+    const wrongSelections = selected.filter((id) => correct.indexOf(id) === -1);
+    const correctSelections = selected.filter((id) => correct.indexOf(id) !== -1);
+    if (!selected.length) return 0;
+    if (!wrongSelections.length && correctSelections.length === correct.length) return 1;
+    if (!wrongSelections.length && correctSelections.length) return 0.5;
+    if (wrongSelections.length && correctSelections.length) return 0.25;
+    return 0;
+  }
+
+  function renderDocumentCard(type, label, required) {
+    return '<div class="doc-field-card" data-doc-card="' + type + '">' +
+      '<div class="doc-field-top"><div class="doc-field-label">' + label + (required ? ' <span class="optional">(Required)</span>' : '') + '</div><button class="btn-ghost doc-remove-btn" type="button" data-doc-remove="' + type + '">Remove</button></div>' +
+      '<div class="doc-field-help">Images and PDF accepted.</div>' +
+      '<div class="doc-field-body" data-doc-body="' + type + '"></div>' +
+      '<input class="doc-upload" id="doc-upload-' + type + '" data-document-type="' + type + '" type="file" accept="image/*,application/pdf" style="display:none" />' +
+      '<div class="doc-field-actions"><button class="btn-secondary btn-full" type="button" data-doc-trigger="' + type + '">Upload</button></div>' +
+    '</div>';
+  }
+
+  function bindDocumentInputs() {
+    document.querySelectorAll('[data-doc-trigger]').forEach((button) => {
+      button.onclick = () => document.getElementById('doc-upload-' + button.dataset.docTrigger).click();
+    });
+    document.querySelectorAll('#reg-document-fields .doc-upload').forEach((field) => {
+      field.onchange = (event) => {
+        const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+        if (!file) return;
+        const previewUrl = file.type.indexOf('image/') === 0 ? URL.createObjectURL(file) : null;
+        documentUploads[field.dataset.documentType] = { file, previewUrl, progress: 100, status: 'ready' };
+        renderDocumentCards();
+      };
+    });
+    document.querySelectorAll('[data-doc-remove]').forEach((button) => {
+      button.onclick = () => {
+        removeDocumentUpload(button.dataset.docRemove);
+      };
+    });
+  }
+
+  function renderDocumentCards() {
+    Object.keys({
+      government_id: true,
+      bank_proof: true,
+      utility_bill: true,
+      certification: true
+    }).forEach((type) => {
+      const body = document.querySelector('[data-doc-body="' + type + '"]');
+      if (!body) return;
+      const item = documentUploads[type];
+      if (!item) {
+        body.innerHTML = '<div class="doc-empty-state">No file selected yet.</div>';
+        return;
+      }
+      body.innerHTML =
+        (item.previewUrl ? '<img class="doc-preview-image" src="' + item.previewUrl + '" alt="' + type + ' preview" />' : '<div class="doc-preview-file">PDF</div>') +
+        '<div class="doc-file-meta"><strong>' + escapeHtml(item.file.name) + '</strong><span>' + escapeHtml(item.status === 'uploading' ? 'Uploading...' : item.status === 'uploaded' ? 'Uploaded' : 'Ready to upload') + '</span></div>' +
+        '<div class="doc-progress"><span style="width:' + Number(item.progress || 0) + '%"></span></div>';
+    });
+  }
+
+  function removeDocumentUpload(type) {
+    const item = documentUploads[type];
+    if (item && item.previewUrl) {
+      URL.revokeObjectURL(item.previewUrl);
+    }
+    delete documentUploads[type];
+    const input = document.getElementById('doc-upload-' + type);
+    if (input) input.value = '';
+    renderDocumentCards();
+  }
+
+  function handleDocumentUploadProgress(type, progress) {
+    if (!documentUploads[type]) return;
+    documentUploads[type].progress = progress.progress || 0;
+    documentUploads[type].status = progress.status || 'ready';
+    renderDocumentCards();
   }
 
   function nextRegistrationStepOne() {
@@ -232,35 +623,41 @@ const ElecApp = (() => {
       showError('Complete your personal details before continuing.');
       return;
     }
+    renderRegistrationOptions();
     goTo('elec-reg-2');
   }
 
-  function nextRegistrationStepTwo() {
+  async function nextRegistrationStepTwo() {
     const serviceAreas = activeChipValues('#reg-service-areas .chip.active', 'area');
     if (!serviceAreas.length) {
       showError('Choose at least one service area before continuing.');
       return;
     }
+    await Store.loadExpertiseCategories();
+    renderExpertiseOptions();
     goTo('elec-reg-3');
   }
 
   function nextRegistrationStepThree() {
     const experience = document.getElementById('reg-experience').value;
-    const skills = activeChipValues('#reg-skills-grid .chip.active', 'skill');
-    if (!experience || !skills.length) {
+    syncCertificationEntries();
+    if (!experience || !selectedExpertise.length) {
       showError('Add your experience and skill set before continuing.');
       return;
     }
-    const answers = Array.from(document.querySelectorAll('[data-onboarding-question]')).map((field) => field.value.trim());
-    if (answers.some((answer) => !answer)) {
-      showError('Answer the short safety questions before continuing.');
+    if (!allValidationQuestionsAnswered()) {
+      showError('Answer every safety validation question before continuing.');
       return;
     }
-    selectedSkills = skills.slice();
+    selectedSkills = selectedExpertise.slice();
     goTo('elec-reg-4');
   }
 
   function nextRegistrationStepFour() {
+    if (!documentUploads.government_id || !(documentUploads.bank_proof || documentUploads.utility_bill)) {
+      showError('Upload Government ID and at least one proof of address before continuing.');
+      return;
+    }
     goTo('elec-reg-5');
   }
 
@@ -270,19 +667,24 @@ const ElecApp = (() => {
         throw new Error('Confirm the onboarding rules before submitting your application.');
       }
 
-      const answers = Array.from(document.querySelectorAll('[data-onboarding-question]')).map((field) => field.value.trim());
-      if (answers.some((answer) => !answer)) {
-        throw new Error('Answer every onboarding question before submitting.');
+      if (!allValidationQuestionsAnswered()) {
+        throw new Error('Answer every safety validation question before submitting.');
       }
 
-      const documents = Array.from(document.querySelectorAll('#reg-document-fields .doc-upload')).map((field) => ({
-        type: field.dataset.documentType,
-        file: field.files && field.files[0] ? field.files[0] : null
+      syncCertificationEntries();
+      const documents = Object.keys(documentUploads).map((type) => ({
+        type,
+        file: documentUploads[type].file
       })).filter((documentItem) => documentItem.file);
+      if (!documentUploads.government_id || !(documentUploads.bank_proof || documentUploads.utility_bill)) {
+        throw new Error('Upload Government ID and at least one proof of address before submitting.');
+      }
 
       if (!document.getElementById('reg-payout-bank').value.trim() || !document.getElementById('reg-payout-account-number').value.trim() || !document.getElementById('reg-payout-account-name').value.trim()) {
         throw new Error('Add payout bank details before submitting.');
       }
+
+      const validation = computeValidationResult();
 
       await Store.signUpElectrician({
         fullName: document.getElementById('reg-name').value.trim(),
@@ -293,12 +695,22 @@ const ElecApp = (() => {
         yearsExperience: parseInt(document.getElementById('reg-experience').value, 10) || 0,
         availabilityStatus: document.getElementById('reg-availability-status').value || 'available',
         serviceAreas: activeChipValues('#reg-service-areas .chip.active', 'area'),
-        skills: activeChipValues('#reg-skills-grid .chip.active', 'skill'),
+        skills: selectedExpertise.slice(),
         bankName: document.getElementById('reg-payout-bank').value.trim(),
         bankAccountNumber: document.getElementById('reg-payout-account-number').value.trim(),
         bankAccountName: document.getElementById('reg-payout-account-name').value.trim(),
         profilePhoto: pendingProfilePhoto,
-        documents: documents
+        documents: documents,
+        certifications: certificationEntries.filter((item) => item.title.trim()).map((item) => ({
+          title: item.title.trim(),
+          licenseNumber: item.licenseNumber.trim(),
+          issuer: item.issuer.trim()
+        })),
+        onboardingValidationScore: validation.percentage,
+        onboardingReviewStatus: validation.percentage >= VALIDATION_PASS_THRESHOLD ? 'passed' : 'needs_review',
+        onboardingFeedback: validation.percentage >= VALIDATION_PASS_THRESHOLD ? 'Good understanding of safety practices' : 'Needs review',
+        onboardingAnswers: validation.answers,
+        onDocumentUploadProgress: handleDocumentUploadProgress
       });
 
       document.getElementById('pending-ref-id').textContent = (Store.getCurrentElectrician() || { id: 'pending' }).id.slice(0, 8).toUpperCase();
@@ -421,7 +833,18 @@ const ElecApp = (() => {
     currentJob = await Store.getJob(jobId);
     bindJobSubscription(jobId);
     renderJobDetail();
-    goTo('elec-job-detail');
+    goTo('elec-job-detail', {
+      routeData: { ticket: currentJob.ticket }
+    });
+    return currentJob;
+  }
+
+  async function openJobByTicket(ticket) {
+    const cleanTicket = String(ticket || '').trim().toUpperCase();
+    const jobs = currentJobs.length ? currentJobs : await Store.listElectricianJobs();
+    const match = jobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
+    if (!match) return null;
+    return openJob(match.id);
   }
 
   function bindJobSubscription(jobId) {
@@ -576,7 +999,9 @@ const ElecApp = (() => {
     document.getElementById('material-items').innerHTML = '';
     document.getElementById('quote-total').textContent = Store.formatCurrency(0);
     addLineItem('labor');
-    goTo('elec-assessment');
+    goTo('elec-assessment', {
+      routeData: { ticket: currentJob ? currentJob.ticket : null }
+    });
   }
 
   function addLineItem(type) {
@@ -657,7 +1082,9 @@ const ElecApp = (() => {
 
   function openConfirmScreen() {
     renderConfirmScreen();
-    goTo('elec-confirm');
+    goTo('elec-confirm', {
+      routeData: { ticket: currentJob ? currentJob.ticket : null }
+    });
   }
 
   function renderConfirmScreen() {
@@ -785,14 +1212,18 @@ const ElecApp = (() => {
     if (!currentJob) return;
     chatOpen = true;
     document.getElementById('chat-header-title').textContent = 'Chat — ' + currentJob.ticket;
-    goTo('elec-chat');
+    goTo('elec-chat', {
+      routeData: { ticket: currentJob.ticket }
+    });
     await Chat.init('elec-chat-container', currentJob.id, 'electrician', (Store.getCurrentProfile() || {}).full_name || 'VoltFriq');
   }
 
   function closeChat() {
     chatOpen = false;
     if (currentJob) {
-      goTo('elec-job-detail');
+      goTo('elec-job-detail', {
+        routeData: { ticket: currentJob.ticket }
+      });
       return;
     }
     goTo('elec-dashboard');
@@ -864,7 +1295,7 @@ const ElecApp = (() => {
 
   async function handleLogout() {
     await Store.signOut();
-    window.location.href = 'electrician.html';
+    window.location.href = '/electricians/login';
   }
 
   async function renderAppealScreen(electrician) {
@@ -893,8 +1324,23 @@ const ElecApp = (() => {
     });
   }
 
-  function chipMarkup(type, label) {
-    return '<button class="chip" data-' + type + '="' + label + '">' + label + '</button>';
+  function getRegistrationServiceAreas(settings) {
+    const configured = Array.isArray(settings.service_areas) ? settings.service_areas.filter(Boolean) : [];
+    if (configured.length) return configured;
+    const fallbackLocation = document.getElementById('reg-location') ? document.getElementById('reg-location').value.trim() : '';
+    return fallbackLocation ? [fallbackLocation] : [];
+  }
+
+  function getRegistrationSkillOptions(settings) {
+    const configured = Store.getExpertiseCategories ? Store.getExpertiseCategories().filter(Boolean) : [];
+    if (configured.length) return configured;
+    const fallbackSettings = Array.isArray(settings.issue_categories) ? settings.issue_categories.filter(Boolean) : [];
+    if (fallbackSettings.length) return fallbackSettings;
+    return DEFAULT_SKILL_OPTIONS;
+  }
+
+  function chipMarkup(type, label, active = false) {
+    return '<button class="chip' + (active ? ' active' : '') + '" data-' + type + '="' + label + '">' + label + '</button>';
   }
 
   function toggleChip(event) {
@@ -1012,19 +1458,53 @@ const ElecApp = (() => {
       .replace(/'/g, '&#39;');
   }
 
+  function escapeAttribute(value) {
+    return escapeHtml(value).replace(/`/g, '&#96;');
+  }
+
   function showError(message) {
-    const error = document.getElementById('login-error');
-    error.textContent = message;
-    error.style.display = 'block';
+    const loginError = document.getElementById('login-error');
+    if (currentScreen === 'elec-login' && loginError) {
+      loginError.textContent = message;
+      loginError.style.display = 'block';
+      return;
+    }
+    const screen = document.querySelector('.screen.active') || document.getElementById('screen-elec-login');
+    if (!screen) return;
+    let banner = screen.querySelector('.elec-inline-error');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.className = 'elec-inline-error';
+      const target = screen.querySelector('.elec-reg-body, .elec-job-scroll, .elec-dash-scroll, .elec-pending-wrap, .elec-login-content, .elec-confirm-scroll, .elec-profile-scroll, .elec-history-scroll, .elec-appeal-wrap') || screen;
+      target.insertBefore(banner, target.firstChild);
+    }
+    banner.textContent = message;
+    banner.style.display = 'block';
+    if (typeof banner.scrollIntoView === 'function') {
+      banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   function clearError() {
     const error = document.getElementById('login-error');
-    error.textContent = '';
-    error.style.display = 'none';
+    if (error) {
+      error.textContent = '';
+      error.style.display = 'none';
+    }
+    document.querySelectorAll('.elec-inline-error').forEach((banner) => {
+      banner.textContent = '';
+      banner.style.display = 'none';
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);
+
+  function normalizeElectricianPath(pathname) {
+    const raw = String(pathname || '/electricians/login').trim();
+    if (!raw) return '/electricians/login';
+    const cleaned = raw.replace(/\/+$/, '');
+    return cleaned || '/electricians/login';
+  }
 
   return {
     openChat,

@@ -124,3 +124,83 @@
   transition: background 0.15s;
 }
 .chat-send-btn:hover { background: var(--yellow-dark); }
+
+/* Full-app dark theme unification */
+.chat-messages {
+  background: transparent;
+}
+
+.chat-msg-other .chat-bubble {
+  background: linear-gradient(180deg, rgba(12, 24, 41, 0.96) 0%, rgba(8, 17, 31, 0.98) 100%);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+.chat-system-text {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+}
+
+.chat-sender,
+.chat-msg-self .chat-sender {
+  color: var(--text-tertiary);
+}
+
+.chat-card-bubble {
+  background: linear-gradient(180deg, rgba(12, 24, 41, 0.98) 0%, rgba(8, 17, 31, 0.98) 100%) !important;
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.chat-card-header {
+  border-bottom-color: var(--border-subtle);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.chat-card-row,
+.chat-q-item {
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.chat-q-label,
+.chat-q-note {
+  color: var(--text-secondary);
+}
+
+.chat-q-total {
+  border-top-color: var(--border-strong);
+}
+
+.chat-receipt .chat-card-header {
+  background: rgba(38, 194, 129, 0.14);
+  color: #9ff0c8;
+}
+
+.chat-card-bubble .chat-sender {
+  border-top-color: var(--border-subtle);
+}
+
+.chat-input-bar {
+  border-top-color: var(--border-subtle);
+  background: rgba(5, 11, 21, 0.96);
+  backdrop-filter: blur(14px);
+}
+
+.chat-text-input {
+  border-color: var(--border-subtle);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-primary);
+}
+
+.chat-text-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.chat-text-input:focus {
+  border-color: rgba(255, 184, 0, 0.55);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: var(--focus-ring);
+}

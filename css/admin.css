@@ -258,6 +258,178 @@
   border-bottom: 1px solid #F3F4F6;
 }
 .admin-file-row:last-child { border-bottom: none; }
+
+.admin-brand-logo {
+  width: min(260px, 72vw);
+  height: auto;
+  display: block;
+}
+
+.admin-login-note {
+  max-width: 420px;
+  margin: 0 auto 18px;
+  color: rgba(220, 230, 245, 0.7);
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+/* Premium dark-shell overrides */
+.admin-body,
+.admin-detail-body {
+  background: linear-gradient(180deg, #07111f 0%, #091423 100%);
+  color: #f8fbff;
+}
+
+.admin-screen-title,
+.admin-section-title,
+.admin-info-card-title,
+.admin-job-card-name,
+.admin-queue-title,
+.admin-pending-label,
+.admin-stat-value,
+.admin-queue-count,
+.admin-job-card-amount,
+.admin-info-value,
+.admin-feed-text,
+.admin-file-name,
+.admin-finance-total,
+.admin-finance-metric-value,
+.price-item-service {
+  color: #f8fbff;
+}
+
+.admin-screen-title small,
+.admin-queue-copy,
+.admin-pending-count,
+.admin-job-card-row,
+.admin-feed-time,
+.admin-info-label,
+.admin-file-meta,
+.admin-empty-inline,
+.admin-login-subtitle,
+.admin-dispatch-group-copy {
+  color: rgba(214, 225, 240, 0.7);
+}
+
+.admin-login-card,
+.admin-stat,
+.admin-pending-card,
+.admin-queue-card,
+.admin-job-card,
+.admin-info-card,
+.admin-finance-summary,
+.admin-material-card,
+.admin-chat-list-item,
+.price-item,
+.price-add-form,
+.admin-tx-item {
+  background: linear-gradient(180deg, rgba(11, 23, 39, 0.98) 0%, rgba(7, 15, 27, 0.98) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.22);
+  color: #f8fbff;
+}
+
+.admin-filter-tabs {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-filter-tab {
+  color: rgba(214, 225, 240, 0.7);
+}
+
+.admin-filter-tab.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fbff;
+  box-shadow: none;
+}
+
+.admin-pending-card:hover,
+.admin-queue-card:hover,
+.admin-job-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 184, 0, 0.3);
+}
+
+.admin-info-row,
+.admin-file-row,
+.admin-job-card-bottom,
+.admin-feed-item,
+.price-item {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.admin-elec-option {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.admin-elec-option + .admin-elec-option {
+  margin-top: 10px;
+}
+
+.admin-elec-option.selected,
+.admin-elec-option:hover {
+  border-color: rgba(255, 184, 0, 0.4);
+  background: rgba(255, 184, 0, 0.12);
+}
+
+.admin-elec-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(255, 184, 0, 0.12);
+  color: var(--yellow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.admin-elec-name,
+.admin-dispatch-group-title,
+.admin-assign-title {
+  color: #f8fbff;
+  font-weight: 800;
+}
+
+.admin-elec-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  color: rgba(214, 225, 240, 0.72);
+  font-size: 12px;
+}
+
+.admin-elec-meta span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-dispatch-group + .admin-dispatch-group {
+  margin-top: 16px;
+}
+
+.admin-dispatch-group-title {
+  margin-bottom: 6px;
+}
+
+.admin-assign-copy {
+  margin-bottom: 14px;
+  color: rgba(214, 225, 240, 0.72);
+  line-height: 1.55;
+}
 .admin-file-name {
   font-size: 13px;
   font-weight: 700;
@@ -637,6 +809,10 @@
   gap: 0;
 }
 
+.expertise-inline-input {
+  min-width: 0;
+}
+
 /* ─── RESPONSIVE — TABLET 640px+ ──────────────────────────────── */
 @media (min-width: 640px) {
   .admin-body { padding: 20px 24px 100px; }
@@ -698,4 +874,135 @@
   .admin-photo-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+
+/* Full-app dark theme unification */
+.admin-body,
+.admin-detail-body {
+  color: var(--text-primary);
+}
+
+.admin-screen-title small,
+.admin-feed-time,
+.admin-feed-text,
+.admin-job-card-id,
+.admin-job-card-row,
+.admin-empty-inline,
+.admin-file-meta,
+.admin-elec-meta,
+.admin-elec-card-meta,
+.admin-timeline-time,
+.admin-dispute-copy,
+.admin-tx-date,
+.admin-settings-section-title,
+.admin-chat-list-preview,
+.admin-chat-list-time,
+.price-item-description,
+.price-item-num {
+  color: var(--text-secondary);
+}
+
+.admin-stat,
+.admin-pending-card,
+.admin-queue-card,
+.admin-job-card,
+.admin-info-card,
+.admin-elec-option,
+.admin-elec-card,
+.admin-chat-wrap,
+.admin-material-card,
+.price-item,
+.price-add-form {
+  background: linear-gradient(180deg, rgba(12, 24, 41, 0.96) 0%, rgba(8, 17, 31, 0.98) 100%);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-pending-card:hover,
+.admin-queue-card:hover,
+.admin-job-card:hover,
+.admin-elec-option:hover,
+.admin-elec-option.selected,
+.admin-elec-card:hover,
+.admin-chat-list-item:hover {
+  border-color: rgba(255, 184, 0, 0.45);
+  background: rgba(255, 184, 0, 0.08);
+}
+
+.admin-filter-tabs,
+.admin-skill-item,
+.admin-cat-chip,
+.admin-photo-box,
+.admin-chat-header {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.admin-filter-tab {
+  color: var(--text-secondary);
+}
+
+.admin-filter-tab.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.admin-feed-item,
+.admin-job-card-bottom,
+.admin-info-row,
+.admin-file-row,
+.admin-material-item,
+.admin-tx-item,
+.admin-chat-list-item,
+.admin-timeline-item::before {
+  border-color: var(--border-subtle);
+}
+
+.admin-stat-value,
+.admin-queue-count,
+.admin-job-card-amount,
+.admin-info-value,
+.admin-material-job,
+.admin-tx-amount,
+.price-item-service {
+  color: var(--text-primary);
+}
+
+.admin-assign-section {
+  background: rgba(255, 184, 0, 0.1);
+  border-color: rgba(255, 184, 0, 0.28);
+}
+
+.admin-assign-title,
+.admin-assign-copy {
+  color: #ffd978;
+}
+
+.admin-skill-tag {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
+.admin-bottom-nav {
+  background: rgba(5, 11, 21, 0.96);
+  border-top-color: var(--border-subtle);
+  backdrop-filter: blur(14px);
+}
+
+.admin-nav-item {
+  color: var(--text-tertiary);
+}
+
+.admin-photo-thumb,
+.admin-material-status-select {
+  border-color: var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+
+.price-item-amount {
+  color: #ffd978;
 }

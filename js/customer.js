@@ -17,6 +17,9 @@
   let mapInstance = null;
   let mapMarker = null;
   let pendingMapLocation = null;
+  let authScreenIntent = 'default';
+  let pendingCustomerRoute = null;
+  let currentTrackedTicket = null;
 
   const ISSUE_OPTIONS = [
     { issue_type: 'Socket / Switch', value: 'Socket repair', description: 'Faulty socket, switch, or new socket point.', estimated_fee_min: 5000, estimated_fee_max: 8000 },
@@ -47,9 +50,35 @@
     matches: []
   };
 
+  const CUSTOMER_DRAFT_KEY = 'voltfriq_customer_draft_v1';
+
+  const CUSTOMER_ROUTE_TITLES = {
+    welcome: 'VoltFriq | Port Harcourt Electricians',
+    'service-area': 'VoltFriq | Book | Location',
+    problem: 'VoltFriq | Book | Issue',
+    urgency: 'VoltFriq | Book | Urgency',
+    details: 'VoltFriq | Book | Details',
+    'guest-contact': 'VoltFriq | Book | Contact',
+    'customer-auth': 'VoltFriq | Customer Access',
+    match: 'VoltFriq | Review Booking',
+    'appearance-fee': 'VoltFriq | Assessment Fee',
+    assigned: 'VoltFriq | Job Tracking',
+    quotation: 'VoltFriq | Quote Review',
+    payment: 'VoltFriq | Payment Setup',
+    'confirm-work': 'VoltFriq | Confirm Completion',
+    rating: 'VoltFriq | Rate Your VoltFriq',
+    done: 'VoltFriq | Job Complete',
+    dashboard: 'VoltFriq | Dashboard',
+    history: 'VoltFriq | Dashboard | History',
+    'report-issue': 'VoltFriq | Report an Issue',
+    prices: 'VoltFriq | Pricing Guide',
+    chat: 'VoltFriq | Job Chat'
+  };
+
   document.addEventListener('DOMContentLoaded', init);
 
   async function init() {
+    configureCustomerRoutes();
     bindEvents();
     try {
       const boot = await Store.init();
@@ -66,13 +95,11 @@
       if (document.getElementById('btn-guest')) {
         document.getElementById('btn-guest').style.display = 'none';
       }
+      hydrateDraftState();
       renderSettings();
-
-      if (Store.getCurrentProfile() || Store.getGuestAccess()) {
-        await resumeLatestJob();
-      } else {
-        goTo('welcome');
-      }
+      refreshWelcomeActions();
+      pendingCustomerRoute = getCurrentRouteState();
+      await applyInitialCustomerRoute(pendingCustomerRoute);
     } catch (error) {
       showError(error);
     }
@@ -80,6 +107,31 @@
 
   function bindEvents() {
     on('btn-begin-area', 'click', startBooking);
+    on('btn-begin-area-nav', 'click', startBooking);
+    on('btn-begin-area-mobile', 'click', startBooking);
+    on('btn-welcome-signup', 'click', () => openCustomerAuthScreen('dashboard', 'register'));
+    on('btn-mobile-signup-inline', 'click', () => openCustomerAuthScreen('dashboard', 'register'));
+    on('btn-mobile-signup', 'click', () => {
+      closeMobileMenu();
+      openCustomerAuthScreen('dashboard', 'register');
+    });
+    on('btn-open-dashboard', 'click', openDashboard);
+    on('btn-open-dashboard-hero', 'click', openDashboard);
+    on('btn-mobile-dashboard-inline', 'click', openDashboard);
+    on('btn-mobile-dashboard', 'click', async () => {
+      closeMobileMenu();
+      await openDashboard();
+    });
+    on('btn-dashboard-new-booking', 'click', startBooking);
+    on('btn-dashboard-history', 'click', () => showHistory(true));
+    on('btn-dashboard-signout', 'click', handleCustomerSignOut);
+    on('btn-dashboard-track', 'click', async () => {
+      if (currentJob) {
+        await openTrackedJob(currentJob.id);
+        return;
+      }
+      await resumeLatestJob();
+    });
     on('btn-view-prices', 'click', () => {
       renderPriceList();
       goTo('prices');
@@ -87,20 +139,26 @@
     on('btn-prices-back', 'click', goBack);
     on('btn-prices-find', 'click', startBooking);
 
-    on('btn-welcome-login', 'click', () => {
-      setAuthMode('login');
-      goTo('customer-auth');
+    on('btn-welcome-login', 'click', handleWelcomeLogin);
+    on('btn-mobile-login-inline', 'click', handleWelcomeLogin);
+    on('btn-mobile-login', 'click', handleWelcomeLogin);
+    on('btn-track-job', 'click', handleTrackJobEntry);
+    on('btn-mobile-track-inline', 'click', handleTrackJobEntry);
+    on('btn-mobile-track', 'click', handleTrackJobEntry);
+    on('btn-mobile-menu', 'click', () => toggleMobileMenu(true));
+    on('btn-mobile-menu-close', 'click', closeMobileMenu);
+    on('mobile-menu-backdrop', 'click', (event) => {
+      if (event.target && event.target.id === 'mobile-menu-backdrop') {
+        closeMobileMenu();
+      }
     });
-    on('btn-track-job', 'click', async () => {
-      if (currentJob) {
-        await openTrackedJob(currentJob.id);
-        return;
+    document.querySelectorAll('[data-mobile-anchor]').forEach((link) => {
+      link.addEventListener('click', closeMobileMenu);
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeMobileMenu();
       }
-      if (Store.getGuestAccess()) {
-        await resumeLatestJob();
-        return;
-      }
-      await showHistory();
     });
 
     on('service-area-select', 'change', () => {
@@ -108,6 +166,7 @@
       if (!document.getElementById('manual-location-input').value.trim()) {
         draft.locationLabel = draft.serviceArea;
       }
+      persistDraftState();
       updateAvailabilityCard();
     });
     const addressTabs = document.getElementById('address-mode-tabs');
@@ -127,11 +186,16 @@
         draft.latitude = null;
         draft.longitude = null;
       }
+      persistDraftState();
       updateAvailabilityCard();
     });
     on('btn-use-location', 'click', () => useCurrentLocation(false));
     on('btn-use-map-location', 'click', applyMapLocation);
     on('btn-area-continue', 'click', () => {
+      if (!hasDraftLocation()) {
+        showError('Choose a location before continuing.');
+        return;
+      }
       goTo('problem');
     });
 
@@ -139,6 +203,7 @@
     on('problem-desc', 'input', () => {
       draft.note = document.getElementById('problem-desc').value.trim();
       document.getElementById('desc-count').textContent = draft.note.length;
+      persistDraftState();
     });
 
     document.getElementById('urgency-selector').addEventListener('click', (event) => {
@@ -147,25 +212,33 @@
       document.querySelectorAll('#urgency-selector .urgency-chip').forEach((item) => item.classList.remove('active'));
       chip.classList.add('active');
       draft.urgency = chip.dataset.urgency;
+      persistDraftState();
     });
 
     on('photo-add-btn', 'click', () => document.getElementById('photo-input').click());
     on('photo-input', 'change', handlePhotoSelect);
-    on('btn-review-match', 'click', () => goTo('urgency'));
+    on('btn-review-match', 'click', () => {
+      if (!draft.issueCategory) {
+        showError('Select the issue before continuing.');
+        return;
+      }
+      goTo('urgency');
+    });
     on('btn-urgency-continue', 'click', () => goTo('details'));
     on('btn-details-review', 'click', handleDetailsContinue);
     on('guest-phone', 'input', () => {
       draft.guestPhone = normalizePhoneInput(document.getElementById('guest-phone').value);
+      persistDraftState();
       updateGuestContactButton();
     });
-    on('btn-guest-continue', 'click', previewMatch);
+    on('btn-guest-continue', 'click', () => previewMatch('btn-guest-continue'));
+    on('btn-guest-create-account', 'click', () => openCustomerAuthScreen('claim-guest', 'register'));
 
     on('tab-login', 'click', () => setAuthMode('login'));
     on('tab-register', 'click', () => setAuthMode('register'));
     on('btn-auth-submit', 'click', handleAuthSubmit);
 
     on('btn-continue-match', 'click', continueFromMatch);
-    on('btn-change-specialist', 'click', openSpecialistSheet);
     on('btn-close-sheet', 'click', closeSpecialistSheet);
     on('btn-select-specialist', 'click', applySpecialistSelection);
 
@@ -247,6 +320,241 @@
     });
   }
 
+  async function handleWelcomeLogin() {
+    closeMobileMenu();
+    if (Store.getCurrentProfile()) {
+      await openDashboard();
+      return;
+    }
+    openCustomerAuthScreen('dashboard', 'login');
+  }
+
+  async function handleTrackJobEntry() {
+    closeMobileMenu();
+    if (currentJob) {
+      await openTrackedJob(currentJob.id);
+      return;
+    }
+    if (Store.getGuestAccess()) {
+      await resumeLatestJob();
+      return;
+    }
+    if (Store.getCurrentProfile()) {
+      await openDashboard();
+      return;
+    }
+    openCustomerAuthScreen('tracking', 'login');
+  }
+
+  function toggleMobileMenu(forceOpen) {
+    const backdrop = document.getElementById('mobile-menu-backdrop');
+    const toggle = document.getElementById('btn-mobile-menu');
+    if (!backdrop || !toggle) return;
+    const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : backdrop.hidden;
+    backdrop.hidden = !shouldOpen;
+    toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    document.body.classList.toggle('mobile-menu-open', shouldOpen);
+  }
+
+  function closeMobileMenu() {
+    toggleMobileMenu(false);
+  }
+
+  function configureCustomerRoutes() {
+    configureRoutes({
+      defaultScreen: 'welcome',
+      pathParser: parseCustomerRoute,
+      pathResolver: resolveCustomerPath,
+      titleResolver: resolveCustomerTitle,
+      onRouteActivated: async (route) => {
+        await handleCustomerRouteActivation(route);
+      }
+    });
+  }
+
+  function parseCustomerRoute(pathname) {
+    const path = normalizePath(pathname);
+    if (path === '/' || path === '/index.html') return { screen: 'welcome' };
+    if (path === '/login') return { screen: 'customer-auth', data: { mode: 'login', intent: 'dashboard' } };
+    if (path === '/signup') return { screen: 'customer-auth', data: { mode: 'register', intent: 'dashboard' } };
+    if (path === '/dashboard') return { screen: 'dashboard' };
+    if (path === '/dashboard/history') return { screen: 'history' };
+    if (path === '/track') return { screen: 'assigned' };
+    if (path.indexOf('/track/') === 0) return { screen: 'assigned', data: { ticket: decodeURIComponent(path.split('/').pop() || '') } };
+    if (path.indexOf('/book/') === 0) {
+      const step = path.split('/')[2] || 'location';
+      const map = {
+        location: 'service-area',
+        issue: 'problem',
+        urgency: 'urgency',
+        details: 'details',
+        contact: 'guest-contact',
+        review: 'match'
+      };
+      return { screen: map[step] || 'service-area' };
+    }
+    if (path === '/pricing') return { screen: 'prices' };
+    if (path === '/report-issue') return { screen: 'report-issue' };
+    return { screen: 'welcome' };
+  }
+
+  function resolveCustomerPath(screen, routeData) {
+    if (screen === 'welcome') return '/';
+    if (screen === 'service-area') return '/book/location';
+    if (screen === 'problem') return '/book/issue';
+    if (screen === 'urgency') return '/book/urgency';
+    if (screen === 'details') return '/book/details';
+    if (screen === 'guest-contact') return '/book/contact';
+    if (screen === 'customer-auth') return authMode === 'register' ? '/signup' : '/login';
+    if (screen === 'match') return '/book/review';
+    if (screen === 'dashboard') return '/dashboard';
+    if (screen === 'history') return '/dashboard/history';
+    if (screen === 'assigned') {
+      const ticket = routeData && routeData.ticket ? routeData.ticket : currentTrackedTicket;
+      return ticket ? '/track/' + encodeURIComponent(ticket) : '/track';
+    }
+    if (screen === 'prices') return '/pricing';
+    if (screen === 'report-issue') return '/report-issue';
+    return null;
+  }
+
+  function resolveCustomerTitle(screen, routeData) {
+    if (screen === 'assigned') {
+      const ticket = routeData && routeData.ticket ? routeData.ticket : currentTrackedTicket;
+      return ticket ? 'VoltFriq | Track ' + ticket : CUSTOMER_ROUTE_TITLES.assigned;
+    }
+    if (screen === 'customer-auth' && authMode === 'register') {
+      return 'VoltFriq | Create Account';
+    }
+    return CUSTOMER_ROUTE_TITLES[screen] || 'VoltFriq | Customer Portal';
+  }
+
+  async function applyInitialCustomerRoute(route) {
+    const target = route && route.screen ? route : { screen: 'welcome', data: null };
+    await handleCustomerRouteActivation({
+      screen: target.screen,
+      data: target.data || null,
+      source: 'initial'
+    });
+  }
+
+  async function handleCustomerRouteActivation(route) {
+    if (!route || !route.screen) return;
+
+    if (route.screen === 'welcome') {
+      goTo('welcome', { replace: route.source !== 'popstate', routeData: route.data || null });
+      return;
+    }
+
+    if (route.screen === 'customer-auth') {
+      openCustomerAuthScreen((route.data && route.data.intent) || 'default', (route.data && route.data.mode) || 'login', { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (route.screen === 'dashboard') {
+      await openDashboard({ replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (route.screen === 'history') {
+      await showHistory(true, { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (route.screen === 'assigned') {
+      if (route.data && route.data.ticket) {
+        const job = await openTrackedJobByTicket(route.data.ticket, { replace: route.source !== 'popstate' });
+        if (job) return;
+      }
+      await resumeLatestJob({ replace: route.source !== 'popstate', preferTracking: true });
+      return;
+    }
+
+    if (route.screen === 'prices') {
+      renderPriceList();
+      goTo('prices', { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    if (route.screen === 'report-issue') {
+      if (!currentJob) {
+        await resumeLatestJob({ replace: true, preferTracking: true });
+      }
+      if (currentJob) {
+        goTo('report-issue', { replace: route.source !== 'popstate' });
+      }
+      return;
+    }
+
+    await openBookingRoute(route.screen, { replace: route.source !== 'popstate' });
+  }
+
+  async function openBookingRoute(targetScreen, options) {
+    hydrateDraftState();
+    await loadSavedAddresses();
+
+    if (!hasDraftLocation()) {
+      goTo('service-area', { replace: options && options.replace });
+      if (targetScreen !== 'service-area') {
+        persistDraftState();
+      }
+      return;
+    }
+
+    if (targetScreen === 'service-area') {
+      goTo('service-area', { replace: options && options.replace });
+      return;
+    }
+
+    if (!draft.issueCategory) {
+      goTo('problem', { replace: options && options.replace });
+      return;
+    }
+
+    if (targetScreen === 'problem') {
+      goTo('problem', { replace: options && options.replace });
+      return;
+    }
+
+    if (targetScreen === 'urgency') {
+      goTo('urgency', { replace: options && options.replace });
+      return;
+    }
+
+    if (targetScreen === 'details') {
+      goTo('details', { replace: options && options.replace });
+      return;
+    }
+
+    if (targetScreen === 'guest-contact') {
+      if (Store.getCurrentProfile()) {
+        previewMatch('btn-details-review');
+        return;
+      }
+      renderGuestContact();
+      goTo('guest-contact', { replace: options && options.replace });
+      return;
+    }
+
+    if (targetScreen === 'match') {
+      if (!Store.getCurrentProfile() && !isValidPhone(draft.guestPhone)) {
+        renderGuestContact();
+        goTo('guest-contact', { replace: options && options.replace });
+        return;
+      }
+      renderMatch();
+      goTo('match', { replace: options && options.replace });
+      return;
+    }
+  }
+
+  function normalizePath(pathname) {
+    const raw = String(pathname || '/').trim();
+    if (!raw) return '/';
+    const cleaned = raw.replace(/\/+$/, '');
+    return cleaned || '/';
+  }
+
   function showConfigurationMessage() {
     document.getElementById('availability-meta').textContent = 'Add your Supabase URL and anon key in js/config.js to enable live booking.';
     document.getElementById('auth-error').style.display = 'block';
@@ -262,6 +570,7 @@
   }
 
   async function startBooking() {
+    closeMobileMenu();
     resetDraft();
     goTo('service-area');
     await loadSavedAddresses();
@@ -364,6 +673,7 @@
       mapText.textContent = label;
     }
     renderSavedAddresses();
+    persistDraftState();
     updateAvailabilityCard();
   }
 
@@ -529,6 +839,7 @@
       showError(new Error('Only image uploads under 5MB are allowed.'));
     }
     renderPhotoPreviews();
+    persistDraftState();
     event.target.value = '';
   }
 
@@ -545,6 +856,7 @@
       button.addEventListener('click', () => {
         uploadedFiles.splice(parseInt(button.dataset.index, 10), 1);
         renderPhotoPreviews();
+        persistDraftState();
       });
     });
   }
@@ -567,6 +879,11 @@
       ? 'Location saved.'
       : 'Enter an area or use current location.';
     document.getElementById('btn-area-continue').disabled = !hasLocation;
+    persistDraftState();
+  }
+
+  function hasDraftLocation() {
+    return !!(draft.serviceArea || draft.locationLabel || (draft.latitude != null && draft.longitude != null));
   }
 
   function syncProblemSummary() {
@@ -605,6 +922,7 @@
       draft.issueKey = '';
       renderIssueEstimate();
       updateReviewButton();
+      persistDraftState();
       return;
     }
     draft.issueCategory = issue.value;
@@ -613,6 +931,7 @@
     document.getElementById('problem-category').value = issue.key;
     renderIssueEstimate();
     updateReviewButton();
+    persistDraftState();
   }
 
   function renderIssueEstimate() {
@@ -626,12 +945,22 @@
   }
 
   function handleDetailsContinue() {
+    if (!hasDraftLocation()) {
+      showError('Choose a location before continuing.');
+      goTo('service-area');
+      return;
+    }
+    if (!draft.issueCategory) {
+      showError('Select the issue before continuing.');
+      goTo('problem');
+      return;
+    }
     if (!Store.getCurrentProfile()) {
       renderGuestContact();
       goTo('guest-contact');
       return;
     }
-    previewMatch();
+    previewMatch('btn-details-review');
   }
 
   function renderGuestContact() {
@@ -650,14 +979,40 @@
 
   function updateGuestContactButton() {
     const button = document.getElementById('btn-guest-continue');
+    const note = document.getElementById('guest-contact-note');
     if (!button) return;
-    button.disabled = !isValidPhone(draft.guestPhone);
+    const phoneValid = isValidPhone(draft.guestPhone);
+    const hasGps = Boolean(draft.latitude && draft.longitude);
+
+    button.disabled = !phoneValid;
+
+    if (!note) return;
+    note.classList.remove('is-warning', 'is-success');
+
+    if (!draft.guestPhone) {
+      note.textContent = hasGps
+        ? 'GPS captured successfully. Enter your mobile number to continue.'
+        : 'Enter your mobile number to continue. You can still book with your area if GPS is unavailable.';
+      return;
+    }
+
+    if (!phoneValid) {
+      note.textContent = hasGps
+        ? 'GPS captured successfully. Enter a valid 10+ digit mobile number to review your booking.'
+        : 'Enter a valid 10+ digit mobile number to review your booking.';
+      note.classList.add('is-warning');
+      return;
+    }
+
+    note.textContent = hasGps
+      ? 'GPS captured successfully. Your contact details are ready for review.'
+      : 'Your contact details are ready. VoltFriq will use your selected area for routing.';
+    note.classList.add('is-success');
   }
 
-  async function previewMatch() {
-    await withButtonLoading('btn-details-review', 'Preparing Review...', async () => {
-      draft.matches = [];
-      draft.selectedElectricianId = null;
+  async function previewMatch(sourceButtonId) {
+    const buttonId = sourceButtonId || 'btn-details-review';
+    await withButtonLoading(buttonId, 'Preparing Review...', async () => {
       renderMatch();
       goTo('match');
     });
@@ -668,27 +1023,32 @@
     const card = document.getElementById('match-electrician-card');
     const transparency = document.getElementById('transparency-card');
     const submitButton = document.getElementById('btn-continue-match');
+    const stats = card.querySelector('.elec-stats');
+    const phone = Store.getCurrentProfile()
+      ? ((Store.getCurrentProfile() && Store.getCurrentProfile().phone) || 'Account phone on file')
+      : draft.guestPhone;
 
-    card.style.display = 'none';
+    card.style.display = '';
+    if (stats) stats.style.display = 'none';
     transparency.style.display = '';
     submitButton.disabled = false;
     submitButton.textContent = 'Submit Booking';
 
-    summary.innerHTML = '<strong>Review booking</strong><br/>Submit once everything looks right.';
+    summary.innerHTML = [
+      '<div class="issue-summary-title">Review your booking</div>',
+      '<div class="helper-note">Submit once everything looks right. VoltFriq will dispatch the best available approved electrician immediately after your booking is created.</div>'
+    ].join('');
     document.getElementById('match-avatar').textContent = '⚡';
-    document.getElementById('match-name').textContent = 'Verified electrician matching starts after submission';
+    document.getElementById('match-name').textContent = 'What happens next';
     document.getElementById('match-specialty').textContent = 'Approved, available, nearby VoltFriqs only';
-    document.getElementById('match-rating').textContent = 'Live';
-    document.getElementById('match-jobs').textContent = uploadedFiles.length;
-    document.getElementById('match-distance').textContent = draft.latitude && draft.longitude ? 'GPS' : 'Area';
-    document.getElementById('match-reason').textContent = 'Matching will use issue fit, area or GPS location, urgency, rating, completed jobs, response time, and availability.';
+    document.getElementById('match-reason').textContent = 'Matching begins after submission using issue fit, location, urgency, availability, response rate, and completed-job performance. Admin can step in manually whenever a faster or better dispatch decision is needed.';
 
     transparency.innerHTML = [
       ['Location', draft.locationLabel || draft.serviceArea],
       ['Issue type', draft.issueLabel || draft.issueCategory],
-      ['Estimated Workmanship Fee', getIssueEstimate(draft.issueCategory, draft.issueLabel)],
+      ['Estimated workmanship range', getIssueEstimate(draft.issueCategory, draft.issueLabel)],
       ['Urgency', formatUrgencyLabel(draft.urgency)],
-      ['Mobile number', Store.getCurrentProfile() ? ((Store.getCurrentProfile() && Store.getCurrentProfile().phone) || 'Account phone') : draft.guestPhone],
+      ['Contact', phone || '--'],
       ['Description', draft.note || 'No extra description added'],
       ['Photos', uploadedFiles.length ? String(uploadedFiles.length) + ' attached' : 'No photo attached']
     ].map(renderKeyValueRow).join('');
@@ -770,16 +1130,32 @@
         await Store.signIn(email, password);
       }
 
-      await continueFromMatch();
+      if (hasDraftLocation() && draft.issueCategory) {
+        await continueFromMatch();
+        return;
+      }
+      if (authScreenIntent === 'tracking') {
+        await openDashboard();
+        return;
+      }
+      await resumeLatestJob();
     });
   }
 
   async function continueFromMatch() {
     await withButtonLoading('btn-continue-match', 'Creating Booking...', async () => {
+      if (!hasDraftLocation()) {
+        goTo('service-area');
+        throw new Error('Choose a location before submitting.');
+      }
+      if (!draft.issueCategory) {
+        goTo('problem');
+        throw new Error('Select the issue before submitting.');
+      }
       if (!Store.getCurrentProfile() && !isValidPhone(draft.guestPhone)) {
         renderGuestContact();
         goTo('guest-contact');
-        return;
+        throw new Error('Enter your mobile number before submitting.');
       }
       const bookingPayload = {
         serviceArea: draft.serviceArea || draft.locationLabel,
@@ -801,12 +1177,12 @@
     });
   }
 
-  async function resumeLatestJob() {
+  async function resumeLatestJob(options) {
     if (!Store.getCurrentProfile() && Store.getGuestAccess()) {
       try {
         const guestJob = await Store.getGuestJob(Store.getGuestAccess().jobId, Store.getGuestAccess().accessToken);
         if (guestJob && !['rated', 'cancelled'].includes(guestJob.status)) {
-          await openTrackedJob(guestJob.id);
+          await openTrackedJob(guestJob.id, { replace: !!(options && options.replace) });
           return;
         }
       } catch (error) {
@@ -816,98 +1192,125 @@
     const jobs = await Store.listCustomerJobs();
     const active = jobs.find((job) => !['rated', 'cancelled'].includes(job.status));
     if (active) {
-      await openTrackedJob(active.id);
+      await openTrackedJob(active.id, { replace: !!(options && options.replace) });
       return;
     }
     if (jobs[0]) {
       currentJob = jobs[0];
     }
-    goTo('welcome');
+    if (options && options.preferTracking) {
+      goTo('welcome', { replace: !!options.replace });
+      return;
+    }
+    goTo('welcome', { replace: !!(options && options.replace) });
   }
 
-  async function openTrackedJob(jobId) {
+  async function openTrackedJob(jobId, options) {
     currentJob = await Store.getJob(jobId);
+    currentTrackedTicket = currentJob.ticket || null;
     bindJobSubscription(jobId);
     await renderSidecars();
-    routeJob(currentJob);
+    routeJob(currentJob, false, options);
+    refreshWelcomeActions();
+    return currentJob;
+  }
+
+  async function openTrackedJobByTicket(ticket, options) {
+    const cleanTicket = String(ticket || '').trim().toUpperCase();
+    if (!cleanTicket) return null;
+
+    if (!Store.getCurrentProfile() && Store.getGuestAccess()) {
+      try {
+        const guestJob = await Store.getGuestJob(Store.getGuestAccess().jobId, Store.getGuestAccess().accessToken);
+        if (guestJob && String(guestJob.ticket || '').toUpperCase() === cleanTicket) {
+          return openTrackedJob(guestJob.id, options);
+        }
+      } catch (error) {
+        Store.clearGuestAccess();
+      }
+    }
+
+    const jobs = Store.getCurrentProfile()
+      ? await Store.listCustomerJobs()
+      : [];
+    const match = jobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
+    if (!match) return null;
+    return openTrackedJob(match.id, options);
   }
 
   function bindJobSubscription(jobId) {
     if (jobSubscription) jobSubscription.unsubscribe();
     jobSubscription = Store.subscribeToJob(jobId, async (job) => {
       currentJob = job;
+       currentTrackedTicket = job.ticket || currentTrackedTicket;
       await renderSidecars();
-      routeJob(job, true);
+      routeJob(job, true, { routeData: { ticket: job.ticket || currentTrackedTicket }, replace: true });
       if (chatOpen) {
         await Chat.render();
       }
     });
   }
 
-  function routeJob(job, preserveScreen) {
+  function routeJob(job, preserveScreen, options) {
+    const routeOptions = Object.assign({}, options || {}, {
+      routeData: { ticket: job.ticket || currentTrackedTicket }
+    });
     renderAssigned(job);
 
     if (job.status === 'assessment_fee_pending' || job.status === 'assessment_payment_pending_verification' || job.status === 'assessment_confirmed') {
       renderAssessmentFee(job);
-      if (!preserveScreen && ['assessment_fee_pending', 'assessment_payment_pending_verification'].includes(job.status)) goTo('appearance-fee');
-      if (job.status === 'assessment_confirmed' && !preserveScreen) goTo('assigned');
+      if (!preserveScreen && ['assessment_fee_pending', 'assessment_payment_pending_verification'].includes(job.status)) goTo('appearance-fee', routeOptions);
+      if (job.status === 'assessment_confirmed' && !preserveScreen) goTo('assigned', routeOptions);
       return;
     }
 
     if (job.status === 'quoted') {
       renderQuoteScreen(job);
-      if (!preserveScreen) goTo('quotation');
+      if (!preserveScreen) goTo('quotation', routeOptions);
       return;
     }
 
     if (job.status === 'quote_accepted' || job.status === 'work_payment_pending_verification' || job.status === 'payment_confirmed') {
       renderPaymentScreen(job);
-      if (!preserveScreen && ['quote_accepted', 'work_payment_pending_verification'].includes(job.status)) goTo('payment');
-      if (job.status === 'payment_confirmed' && !preserveScreen) goTo('assigned');
+      if (!preserveScreen && ['quote_accepted', 'work_payment_pending_verification'].includes(job.status)) goTo('payment', routeOptions);
+      if (job.status === 'payment_confirmed' && !preserveScreen) goTo('assigned', routeOptions);
       return;
     }
 
     if (job.status === 'electrician_completed' || job.status === 'customer_confirmed' || job.status === 'payout_pending') {
       renderConfirmScreen(job);
-      if (!preserveScreen && job.status === 'electrician_completed') goTo('confirm-work');
-      if (!preserveScreen && ['customer_confirmed', 'payout_pending'].includes(job.status)) goTo('assigned');
+      if (!preserveScreen && job.status === 'electrician_completed') goTo('confirm-work', routeOptions);
+      if (!preserveScreen && ['customer_confirmed', 'payout_pending'].includes(job.status)) goTo('assigned', routeOptions);
       return;
     }
 
     if (job.status === 'payout_complete') {
       if (job.isGuest) {
         renderDoneScreen(job);
-        if (!preserveScreen) goTo('done');
+        if (!preserveScreen) goTo('done', routeOptions);
         return;
       }
       renderRatingScreen(job);
-      if (!preserveScreen) goTo('rating');
+      if (!preserveScreen) goTo('rating', routeOptions);
       return;
     }
 
     if (job.status === 'rated') {
       renderDoneScreen(job);
-      if (!preserveScreen) goTo('done');
+      if (!preserveScreen) goTo('done', routeOptions);
       return;
     }
 
-    if (!preserveScreen) goTo('assigned');
+    if (!preserveScreen) goTo('assigned', routeOptions);
   }
 
   function renderAssigned(job) {
     const electrician = job.assignedElectrician;
-    const matchingMessage = job.needsManualAssignment
-      ? 'No electrician available yet — VoltFriq support will follow up'
-      : job.status === 'assigned'
-        ? 'Electrician assigned'
-        : ['assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status)
-          ? 'Electrician accepted'
-        : job.status === 'accepted'
-          ? 'Electrician accepted'
-          : 'Finding a verified electrician near you';
+    const matchingMessage = getTrackingHeadline(job);
+    currentTrackedTicket = job.ticket || currentTrackedTicket;
     document.getElementById('tracking-summary').innerHTML = [
       ['Ticket', job.ticket],
-      ['Dispatch', matchingMessage],
+      ['Tracking', matchingMessage],
       ['Issue', humanizeIssueCategory(job.issueCategory)]
     ].map(renderKeyValueRow).join('');
 
@@ -935,19 +1338,34 @@
     document.getElementById('btn-open-chat').style.display = job.isGuest ? 'none' : '';
     document.getElementById('btn-report-issue-assigned').style.display = job.isGuest ? 'none' : '';
     document.getElementById('btn-report-issue-confirm').style.display = job.isGuest ? 'none' : '';
+    if (document.getElementById('guest-dashboard-card')) {
+      document.getElementById('guest-dashboard-card').style.display = job.isGuest ? '' : 'none';
+    }
     renderStatusLines(job);
+  }
+
+  function getTrackingHeadline(job) {
+    if (job.needsManualAssignment) return 'Booking received. VoltFriq dispatch is reviewing the next best available electrician.';
+    if (['requested', 'matching'].includes(job.status)) return 'Booking received. Matching is in progress.';
+    if (job.status === 'assigned') return 'Electrician assigned. Waiting for acceptance.';
+    if (job.status === 'accepted') return 'Electrician accepted and is preparing the next step.';
+    if (['assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed'].includes(job.status)) return 'Assessment flow is in progress.';
+    if (job.status === 'quoted') return 'Quote ready for your review.';
+    if (['quote_accepted', 'work_payment_pending_verification', 'payment_confirmed'].includes(job.status)) return 'Work payment flow is in progress.';
+    if (['en_route', 'on_site'].includes(job.status)) return 'Your electrician is on the move or on site.';
+    if (job.status === 'work_in_progress') return 'Work is currently in progress.';
+    if (['electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status)) return 'Work is complete and closing steps are in progress.';
+    return 'Booking received. Matching is in progress.';
   }
 
   function renderStatusLines(job) {
     const lines = [
-      statusLine('Finding verified electrician near you', ['requested', 'matching', 'assigned', 'accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), job.needsManualAssignment ? 'No electrician is available yet. VoltFriq support will follow up.' : 'VoltFriq is routing the nearest approved electrician for this request.'),
+      statusLine('Booking received', true, 'Your request has been saved and is now tracked by ticket.'),
+      statusLine('Matching in progress', ['matching', 'assigned', 'accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), job.needsManualAssignment ? 'No instant match accepted yet. Dispatch is reviewing and can manually deploy the next best VoltFriq.' : 'VoltFriq is routing the nearest approved electrician for this request.'),
       statusLine('Electrician assigned', ['assigned', 'accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'An available electrician has been assigned to your booking.'),
-      statusLine('Payment proof submitted', ['assessment_payment_pending_verification', 'work_payment_pending_verification', 'assessment_confirmed', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Submitted payment proofs stay pending until admin verification is complete.'),
-      statusLine('Payment verified', ['assessment_confirmed', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'VoltFriq only moves forward after manual payment verification.'),
-      statusLine('Electrician en route', ['en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Track the assigned electrician as the visit begins.'),
-      statusLine('Work in progress', ['work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'The electrician is actively working on your request.'),
-      statusLine('Completed', ['electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Confirm completion before payout is released.'),
-      statusLine('Rate electrician', ['payout_complete', 'rated'].includes(job.status), 'Rate the finished job after payout is released.')
+      statusLine('Quote / payment steps', ['assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Assessment, quote, and payment confirmations appear here as the job moves forward.'),
+      statusLine('Work in progress', ['en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Track arrival, on-site work, and completion from this screen.'),
+      statusLine('Completion and rating', ['electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Confirm completion, then rate the finished job when the closeout steps are done.')
     ];
     document.getElementById('status-lines').innerHTML = lines.join('');
   }
@@ -1098,7 +1516,11 @@
     });
   }
 
-  async function showHistory() {
+  async function showHistory(fromRoute, options) {
+    if (!Store.getCurrentProfile()) {
+      openCustomerAuthScreen('tracking', 'login', { replace: !!(options && options.replace) });
+      return;
+    }
     try {
       setScreenBusy(true, 'Loading your jobs...');
       await renderSidecars();
@@ -1110,12 +1532,126 @@
       document.querySelectorAll('#history-list .history-card').forEach((card) => {
         card.addEventListener('click', () => openTrackedJob(card.dataset.jobId));
       });
-      goTo('history');
+      goTo('history', { replace: !!(options && options.replace) });
     } catch (error) {
       showError(error);
     } finally {
       setScreenBusy(false);
     }
+  }
+
+  function openCustomerAuthScreen(intent, mode, options) {
+    closeMobileMenu();
+    authScreenIntent = intent || 'default';
+    setAuthMode(mode || 'login');
+    applyAuthScreenContext();
+    goTo('customer-auth', {
+      replace: !!(options && options.replace),
+      routeData: { intent: authScreenIntent, mode: authMode }
+    });
+  }
+
+  function applyAuthScreenContext() {
+    const heading = document.getElementById('auth-heading');
+    const sub = document.getElementById('auth-sub');
+    if (!heading || !sub) return;
+    if (authScreenIntent === 'tracking') {
+      heading.textContent = 'Login to track your jobs';
+      sub.textContent = 'Sign in to see previous bookings, payment proofs, receipts, and live status updates.';
+      return;
+    }
+    if (authScreenIntent === 'dashboard') {
+      heading.textContent = authMode === 'register' ? 'Create your customer dashboard' : 'Sign in to your customer dashboard';
+      sub.textContent = 'Manage active jobs, history, saved addresses, and account details in one place.';
+      return;
+    }
+    if (authScreenIntent === 'claim-guest') {
+      heading.textContent = 'Create your customer dashboard';
+      sub.textContent = 'Create an account for future dashboards, faster repeat bookings, and easier tracking across devices.';
+      return;
+    }
+    heading.textContent = 'Save your job and continue';
+    sub.textContent = 'Your account keeps your jobs, payment proofs, receipts, and ratings in one secure place.';
+  }
+
+  async function openDashboard(options) {
+    closeMobileMenu();
+    if (!Store.getCurrentProfile()) {
+      openCustomerAuthScreen('default', 'login', { replace: !!(options && options.replace) });
+      return;
+    }
+    try {
+      setScreenBusy(true, 'Loading your dashboard...');
+      await loadSavedAddresses();
+      await renderSidecars();
+      await renderDashboard();
+      goTo('dashboard', { replace: !!(options && options.replace) });
+    } catch (error) {
+      showError(error);
+    } finally {
+      setScreenBusy(false);
+    }
+  }
+
+  async function renderDashboard() {
+    const profile = Store.getCurrentProfile() || {};
+    const jobs = await Store.listCustomerJobs();
+    const activeJobs = jobs.filter((job) => !['rated', 'cancelled'].includes(job.status)).slice(0, 3);
+    const recentJobs = jobs.slice(0, 4);
+
+    document.getElementById('dashboard-name').textContent = profile.full_name || 'Customer';
+    document.getElementById('dashboard-sub').textContent = activeJobs.length
+      ? activeJobs.length + ' active job(s) tracked in one place.'
+      : 'Book fast, then manage jobs, history, and referrals from one clean dashboard.';
+
+    document.getElementById('dashboard-active-jobs').innerHTML = activeJobs.length
+      ? activeJobs.map(renderDashboardJobCard).join('')
+      : '<div class="empty-state"><div class="empty-state-text">No active jobs right now.</div></div>';
+    document.querySelectorAll('#dashboard-active-jobs .history-card').forEach((card) => {
+      card.addEventListener('click', () => openTrackedJob(card.dataset.jobId));
+    });
+
+    document.getElementById('dashboard-history-preview').innerHTML = recentJobs.length
+      ? recentJobs.map(renderHistoryCard).join('')
+      : '<div class="empty-state"><div class="empty-state-text">No previous jobs yet.</div></div>';
+    document.querySelectorAll('#dashboard-history-preview .history-card').forEach((card) => {
+      card.addEventListener('click', () => openTrackedJob(card.dataset.jobId));
+    });
+
+    document.getElementById('dashboard-addresses').innerHTML = savedAddresses.length
+      ? savedAddresses.slice(0, 4).map((address) => '<div class="mini-meta-row"><span class="mini-meta-label">' +
+          escapeHtml(address.label || 'Saved address') + '</span><span class="mini-meta-value">' +
+          escapeHtml(address.addressText || address.locationLabel || '--') + '</span></div>').join('')
+      : '<div class="mini-meta-row"><span class="mini-meta-label">Saved addresses</span><span class="mini-meta-value">No saved address yet</span></div>';
+
+    document.getElementById('dashboard-account').innerHTML = [
+      ['Name', profile.full_name || '--'],
+      ['Email', profile.email || (Store.getSession() && Store.getSession().user && Store.getSession().user.email) || '--'],
+      ['Phone', profile.phone || draft.guestPhone || '--']
+    ].map(renderMiniMetaRow).join('');
+  }
+
+  function renderDashboardJobCard(job) {
+    const subtitle = job.assignedElectrician
+      ? 'Assigned to ' + job.assignedElectrician.name
+      : job.needsManualAssignment
+        ? 'Manual dispatch review'
+        : 'Automatic matching in progress';
+    return '<div class="history-card dashboard-job-card" data-job-id="' + job.id + '">' +
+      '<div class="history-card-date">' + escapeHtml(job.ticket) + '</div>' +
+      '<div class="history-card-title">' + escapeHtml(humanizeIssueCategory(job.issueCategory)) + '</div>' +
+      '<div class="history-card-sub">' + escapeHtml(subtitle) + '</div>' +
+      '<div class="history-card-badge badge badge-blue">' + escapeHtml(job.statusLabel) + '</div>' +
+    '</div>';
+  }
+
+  async function handleCustomerSignOut() {
+    await Store.signOut();
+    currentJob = null;
+    currentTrackedTicket = null;
+    refreshWelcomeActions();
+    resetDraft();
+    goTo('welcome', { replace: true });
   }
 
   function renderHistoryCard(job) {
@@ -1197,6 +1733,8 @@
       mapMarker = null;
     }
     document.getElementById('auth-referral-code').value = '';
+    authScreenIntent = 'default';
+    applyAuthScreenContext();
     document.getElementById('dispute-type').value = '';
     document.getElementById('dispute-details').value = '';
     document.getElementById('desc-count').textContent = '0';
@@ -1204,6 +1742,115 @@
     updateAvailabilityCard();
     renderIssueSelect();
     updateReviewButton();
+    window.sessionStorage.removeItem(CUSTOMER_DRAFT_KEY);
+  }
+
+  function persistDraftState() {
+    try {
+      window.sessionStorage.setItem(CUSTOMER_DRAFT_KEY, JSON.stringify({
+        serviceArea: draft.serviceArea,
+        locationLabel: draft.locationLabel,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
+        addressSource: draft.addressSource,
+        issueCategory: draft.issueCategory,
+        issueLabel: draft.issueLabel,
+        issueKey: draft.issueKey,
+        urgency: draft.urgency,
+        requiresAssessment: draft.requiresAssessment,
+        materialHandling: draft.materialHandling,
+        note: draft.note,
+        guestPhone: draft.guestPhone
+      }));
+    } catch (error) {
+      // Session draft recovery is a convenience only.
+    }
+  }
+
+  function hydrateDraftState() {
+    try {
+      const raw = window.sessionStorage.getItem(CUSTOMER_DRAFT_KEY);
+      if (!raw) return;
+      const stored = JSON.parse(raw);
+      draft.serviceArea = stored.serviceArea || '';
+      draft.locationLabel = stored.locationLabel || '';
+      draft.latitude = stored.latitude == null ? null : Number(stored.latitude);
+      draft.longitude = stored.longitude == null ? null : Number(stored.longitude);
+      draft.addressSource = stored.addressSource || '';
+      draft.issueCategory = stored.issueCategory || '';
+      draft.issueLabel = stored.issueLabel || '';
+      draft.issueKey = stored.issueKey || '';
+      draft.urgency = stored.urgency || 'today';
+      draft.requiresAssessment = stored.requiresAssessment !== false;
+      draft.materialHandling = stored.materialHandling || 'voltfriq_supplied';
+      draft.note = stored.note || '';
+      draft.guestPhone = stored.guestPhone || '';
+    } catch (error) {
+      // Ignore broken draft snapshots.
+    }
+  }
+
+  function refreshWelcomeActions() {
+    const profile = Store.getCurrentProfile();
+    const loginButton = document.getElementById('btn-welcome-login');
+    const mobileLoginButton = document.getElementById('btn-mobile-login');
+    const mobileInlineLoginButton = document.getElementById('btn-mobile-login-inline');
+    const signupButton = document.getElementById('btn-welcome-signup');
+    const mobileSignupButton = document.getElementById('btn-mobile-signup');
+    const mobileInlineSignupButton = document.getElementById('btn-mobile-signup-inline');
+    const dashboardButton = document.getElementById('btn-open-dashboard');
+    const mobileDashboardButton = document.getElementById('btn-mobile-dashboard');
+    const mobileInlineDashboardButton = document.getElementById('btn-mobile-dashboard-inline');
+    const dashboardHeroButton = document.getElementById('btn-open-dashboard-hero');
+    const trackButton = document.getElementById('btn-track-job');
+    const mobileTrackButton = document.getElementById('btn-mobile-track');
+    const mobileInlineTrackButton = document.getElementById('btn-mobile-track-inline');
+    const historyButton = document.getElementById('btn-assigned-history');
+
+    if (loginButton) {
+      loginButton.textContent = profile ? 'Dashboard' : 'Sign In';
+    }
+    if (mobileLoginButton) {
+      mobileLoginButton.textContent = profile ? 'Open Dashboard' : 'Sign In';
+      mobileLoginButton.style.display = profile ? 'none' : '';
+    }
+    if (mobileInlineLoginButton) {
+      mobileInlineLoginButton.textContent = profile ? 'Open Dashboard' : 'Sign In';
+      mobileInlineLoginButton.style.display = profile ? 'none' : '';
+    }
+    if (signupButton) {
+      signupButton.style.display = profile ? 'none' : '';
+    }
+    if (mobileSignupButton) {
+      mobileSignupButton.style.display = profile ? 'none' : '';
+    }
+    if (mobileInlineSignupButton) {
+      mobileInlineSignupButton.style.display = profile ? 'none' : '';
+    }
+    if (dashboardButton) {
+      dashboardButton.style.display = profile ? '' : 'none';
+    }
+    if (mobileDashboardButton) {
+      mobileDashboardButton.style.display = profile ? '' : 'none';
+    }
+    if (mobileInlineDashboardButton) {
+      mobileInlineDashboardButton.style.display = profile ? '' : 'none';
+    }
+    if (dashboardHeroButton) {
+      dashboardHeroButton.style.display = profile ? '' : 'none';
+    }
+    if (trackButton) {
+      trackButton.textContent = currentJob ? 'Open Active Job' : 'Track Job';
+    }
+    if (mobileTrackButton) {
+      mobileTrackButton.textContent = currentJob ? 'Open Active Job' : 'Track Job';
+    }
+    if (mobileInlineTrackButton) {
+      mobileInlineTrackButton.textContent = currentJob ? 'Open Active Job' : 'Track Job';
+    }
+    if (historyButton) {
+      historyButton.title = profile ? 'Dashboard History' : 'Track History';
+    }
   }
 
   async function renderSidecars() {
@@ -1461,7 +2108,11 @@
   }
 
   function showError(error) {
-    const message = error && error.message ? error.message : 'Something went wrong.';
+    const message = typeof error === 'string'
+      ? error
+      : error && error.message
+        ? error.message
+        : 'Something went wrong.';
     const authError = document.getElementById('auth-error');
     authError.style.display = 'block';
     authError.textContent = message;

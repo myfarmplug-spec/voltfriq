@@ -65,6 +65,13 @@
   display: flex; align-items: center; gap: 8px;
   margin-bottom: 4px;
 }
+
+.portal-brand-logo {
+  width: min(260px, 70vw);
+  height: auto;
+  display: block;
+}
+
 .logo-bolt { font-size: 32px; }
 .logo-text {
   font-size: 28px; font-weight: 800;
@@ -101,6 +108,18 @@
   font-weight: 600;
   margin-bottom: 12px;
   text-align: center;
+}
+
+.elec-inline-error {
+  background: var(--red-light);
+  color: #991B1B;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin-bottom: 16px;
 }
 
 .elec-apply-link {
@@ -208,19 +227,20 @@
 }
 
 .elec-pending-title {
-  font-size: 24px; font-weight: 800;
+  font-size: 28px; font-weight: 800;
   margin-bottom: 8px;
 }
 .elec-pending-sub {
-  font-size: 15px; color: var(--mid);
+  font-size: 16px; color: var(--mid);
   margin-bottom: 20px; line-height: 1.5;
 }
 .elec-pending-ref {
   padding: 12px 20px;
   background: var(--yellow-light);
-  border-radius: 10px;
+  border-radius: 999px;
   font-size: 14px;
   color: #92400E;
+  font-weight: 800;
 }
 .elec-pending-note {
   font-size: 13px; color: var(--mid);
@@ -245,6 +265,58 @@
   padding: 52px 20px 14px;
   flex-shrink: 0;
   border-bottom: 1px solid #F3F4F6;
+}
+
+/* Dark-panel consistency */
+.elec-reg-body,
+.elec-dash-scroll,
+.elec-job-scroll,
+.elec-confirm-scroll,
+.elec-profile-scroll,
+.elec-history-scroll,
+.elec-appeal-wrap {
+  background: linear-gradient(180deg, #07111f 0%, #091423 100%);
+  color: #f8fbff;
+}
+
+.elec-reg-note,
+.elec-appeal-card,
+.photo-placeholder,
+.chip,
+.elec-job-item,
+.elec-alert-card,
+.elec-info-card,
+.elec-hist-card,
+.elec-profile-card,
+.elec-trust-card,
+.elec-confirm-card,
+.doc-field-card,
+.certification-card,
+.elec-question-card {
+  background: linear-gradient(180deg, rgba(11, 23, 39, 0.98) 0%, rgba(7, 15, 27, 0.98) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f8fbff;
+}
+
+.elec-reg-note,
+.elec-job-desc,
+.elec-info-label,
+.elec-pending-sub,
+.elec-pending-note,
+.validation-question-feedback,
+.document-group-meta,
+.doc-field-help,
+.elec-job-item-note,
+.elec-job-item-status[style],
+.elec-hist-cat {
+  color: rgba(214, 225, 240, 0.7) !important;
+}
+
+.photo-placeholder:hover,
+.chip.active,
+.chip:hover {
+  border-color: rgba(255, 184, 0, 0.4);
+  background: rgba(255, 184, 0, 0.12);
 }
 .elec-top-left {
   display: flex; align-items: center; gap: 12px;
@@ -865,6 +937,14 @@
   .elec-dash-stats {
     grid-template-columns: repeat(4, 1fr);
   }
+
+  .certification-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .certification-grid input:first-child {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (min-width: 768px) {
@@ -1002,8 +1082,176 @@
   margin-bottom: 10px;
 }
 
-.elec-question-card textarea {
-  min-height: 86px;
+.expertise-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.expertise-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.expertise-empty,
+.certification-empty,
+.doc-empty-state,
+.expertise-no-match {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--light);
+  color: var(--mid);
+  font-size: 13px;
+}
+
+.expertise-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: var(--yellow-light);
+  color: #92400E;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.expertise-dropdown {
+  border: 1.5px solid #E5E7EB;
+  border-radius: 14px;
+  background: var(--white);
+  overflow: hidden;
+}
+
+.expertise-dropdown .form-input {
+  border: 0;
+  border-radius: 0;
+}
+
+.expertise-options {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid #F3F4F6;
+}
+
+.expertise-option {
+  border: 0;
+  border-bottom: 1px solid #F3F4F6;
+  background: var(--white);
+  padding: 14px 16px;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dark);
+  cursor: pointer;
+}
+
+.expertise-option:last-child {
+  border-bottom: 0;
+}
+
+.certification-card {
+  border: 1.5px solid #F3F4F6;
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--white);
+  margin-bottom: 10px;
+}
+
+.certification-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.certification-remove {
+  margin-top: 12px;
+  color: var(--red) !important;
+}
+
+.validation-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.validation-option {
+  border: 1.5px solid #E5E7EB;
+  border-radius: 14px;
+  background: var(--white);
+  padding: 14px;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dark);
+  cursor: pointer;
+}
+
+.validation-option.active {
+  border-color: var(--yellow);
+  background: #FFFBEB;
+}
+
+.validation-question-feedback,
+.validation-feedback {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mid);
+}
+
+.validation-feedback {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--light);
+}
+
+.validation-feedback.is-good {
+  background: #ECFDF5;
+  color: #065F46;
+}
+
+.validation-feedback.is-review {
+  background: #FEF2F2;
+  color: #991B1B;
+}
+
+.document-group {
+  border: 1.5px solid #F3F4F6;
+  border-radius: 16px;
+  padding: 14px;
+  background: var(--white);
+  margin-bottom: 14px;
+}
+
+.document-group-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--dark);
+  margin-bottom: 10px;
+}
+
+.document-group-meta {
+  color: var(--mid);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.document-group-or {
+  padding: 4px 0 10px;
+  text-align: center;
+  color: var(--mid);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .doc-field-card {
@@ -1014,16 +1262,94 @@
   margin-bottom: 12px;
 }
 
+.doc-field-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .doc-field-label {
   font-size: 13px;
   font-weight: 700;
-  margin-bottom: 8px;
 }
 
 .doc-field-help {
   font-size: 12px;
   color: var(--mid);
   margin-bottom: 10px;
+}
+
+.doc-field-body {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.doc-preview-image,
+.doc-preview-file {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid #E5E7EB;
+  background: var(--light);
+}
+
+.doc-preview-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--mid);
+}
+
+.doc-file-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.doc-file-meta strong {
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.doc-file-meta span {
+  font-size: 12px;
+  color: var(--mid);
+}
+
+.doc-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: #E5E7EB;
+  overflow: hidden;
+}
+
+.doc-progress span {
+  display: block;
+  height: 100%;
+  background: var(--yellow);
+}
+
+.doc-remove-btn {
+  color: var(--red) !important;
+  min-height: auto !important;
+  padding: 0 !important;
+}
+
+.doc-field-actions {
+  display: flex;
+}
+
+.doc-field-actions .btn-secondary {
+  width: 100%;
 }
 
 .confirm-check-label {
@@ -1060,4 +1386,118 @@
   color: #1E40AF;
   font-size: 11px;
   font-weight: 800;
+}
+
+/* Full-app dark theme unification */
+.elec-reg-body,
+.elec-dash-scroll,
+.elec-job-scroll,
+.elec-assess-scroll,
+.elec-confirm-scroll,
+.elec-profile-scroll,
+.elec-history-scroll {
+  color: var(--text-primary);
+}
+
+.progress-bar,
+.elec-confirm-summary,
+.elec-job-photo-empty,
+.elec-status-tracker .track-dot,
+.confirm-check-label,
+.doc-preview-image,
+.doc-preview-file,
+.doc-progress {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.progress-label,
+.elec-reg-note,
+.elec-pending-sub,
+.elec-pending-note,
+.elec-job-item-time,
+.elec-job-item-meta,
+.elec-job-desc,
+.elec-status-tracker .track-info span,
+.elec-materials-note,
+.elec-profile-meta,
+.doc-field-help,
+.doc-file-meta span,
+.elec-watch-note {
+  color: var(--text-secondary);
+}
+
+.photo-placeholder,
+.elec-appeal-card,
+.elec-job-item,
+.elec-job-card {
+  background: linear-gradient(180deg, rgba(12, 24, 41, 0.96) 0%, rgba(8, 17, 31, 0.98) 100%);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.photo-placeholder:hover,
+.elec-job-item:hover {
+  border-color: rgba(255, 184, 0, 0.45);
+}
+
+.elec-pending-ref,
+.elec-confirm-status {
+  background: rgba(255, 184, 0, 0.1);
+  border: 1px solid rgba(255, 184, 0, 0.24);
+  color: #ffd978;
+}
+
+.elec-customer-trust-mini,
+.elec-reg-note,
+.elec-payout-pill {
+  background: rgba(91, 167, 255, 0.12);
+  color: #bddcff;
+}
+
+.elec-job-row,
+.elec-profile-header,
+.elec-skill-item,
+.elec-job-desc,
+.doc-field-body {
+  border-color: var(--border-subtle);
+}
+
+.elec-job-label {
+  color: var(--text-secondary);
+}
+
+.elec-line-item input {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.elec-line-item input:focus {
+  border-color: rgba(255, 184, 0, 0.55);
+  box-shadow: var(--focus-ring);
+}
+
+.elec-job-photo-thumb,
+.elec-job-photo-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-subtle);
+}
+
+.elec-alert-card {
+  background: rgba(255, 184, 0, 0.12);
+  border-color: rgba(255, 184, 0, 0.28);
+}
+
+.elec-alert-card .elec-job-item-name,
+.confirm-status-text {
+  color: #ffd978;
+}
+
+.elec-profile-avatar,
+.elec-top-avatar {
+  background: rgba(255, 184, 0, 0.14);
+  color: var(--yellow);
 }

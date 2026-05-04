@@ -20,6 +20,18 @@ const Store = (() => {
       elite_jobs: 60
     }
   };
+  const DEFAULT_EXPERTISE_CATEGORIES = [
+    'Light fitting',
+    'Socket repair',
+    'Wiring issue',
+    'Inverter',
+    'Generator',
+    'Tripped breaker',
+    'General Installation',
+    'Inspection',
+    'Solar',
+    'Other'
+  ];
 
   const STATUS_LABELS = {
     requested: 'Requested',
@@ -67,6 +79,7 @@ const Store = (() => {
     wallet: null,
     guestAccess: null,
     settings: DEFAULT_SETTINGS,
+    expertiseCategories: DEFAULT_EXPERTISE_CATEGORIES.slice(),
     authListenersBound: false,
     dispatchHeartbeatId: null
   };
@@ -227,6 +240,15 @@ const Store = (() => {
     return new Error(fallbackMessage || 'Something went wrong.');
   }
 
+  function isMissingSchemaError(error) {
+    const message = String((error && error.message) || error || '').toLowerCase();
+    return message.includes('does not exist')
+      || message.includes('could not find the table')
+      || message.includes('schema cache')
+      || message.includes('column')
+      || message.includes('relation');
+  }
+
   function requireRole(role) {
     if (!state.profile || state.profile.role !== role) {
       throw new Error('You do not have permission to perform this action.');
@@ -270,7 +292,7 @@ const Store = (() => {
 
     await hydrateSession();
     await loadSettings();
-    startDispatchHeartbeat();
+    await loadExpertiseCategories();
     return {
       configured: true,
       profile: state.profile,
@@ -330,7 +352,7 @@ const Store = (() => {
     if (state.profile && state.profile.role === 'electrician') {
       const electricianResult = await client
         .from('electricians')
-        .select('*, electrician_skills(category), electrician_documents(*)')
+        .select('*, electrician_skills(category), electrician_documents(*), electrician_certifications(*)')
         .eq('profile_id', state.profile.id)
         .maybeSingle();
       state.electrician = electricianResult.data || null;
@@ -376,7 +398,31 @@ const Store = (() => {
     return state.settings;
   }
 
+  async function loadExpertiseCategories() {
+    const client = ensureClient();
+    if (!client) return state.expertiseCategories;
+    const result = await client
+      .from('expertise_categories')
+      .select('*')
+      .order('label', { ascending: true });
+    if (!result.error && result.data && result.data.length) {
+      state.expertiseCategories = result.data.map((item) => item.label).filter(Boolean);
+      return state.expertiseCategories;
+    }
+    state.expertiseCategories = (state.settings.issue_categories || []).filter(Boolean).length
+      ? state.settings.issue_categories.filter(Boolean)
+      : DEFAULT_EXPERTISE_CATEGORIES.slice();
+    return state.expertiseCategories;
+  }
+
+  function getExpertiseCategories() {
+    return state.expertiseCategories && state.expertiseCategories.length
+      ? state.expertiseCategories.slice()
+      : DEFAULT_EXPERTISE_CATEGORIES.slice();
+  }
+
   function startDispatchHeartbeat() {
+    if (!config().enableClientDispatchHeartbeat) return;
     if (state.dispatchHeartbeatId) return;
     state.dispatchHeartbeatId = window.setInterval(() => {
       processDispatchQueue().catch(() => {});
@@ -399,9 +445,9 @@ const Store = (() => {
   }
 
   function getRoleHome(role) {
-    if (role === 'admin') return 'admin.html';
-    if (role === 'electrician') return 'electrician.html';
-    return 'index.html';
+    if (role === 'admin') return '/admin/dashboard';
+    if (role === 'electrician') return '/electricians/dashboard';
+    return '/dashboard';
   }
 
   async function signUpCustomer(payload) {
@@ -484,23 +530,49 @@ const Store = (() => {
       .eq('id', signUp.data.user.id);
     if (profileUpdate.error) throw normalizeError(profileUpdate.error, 'Could not save the electrician profile.');
 
-    const electricianInsert = await client
+    const electricianPayload = {
+      profile_id: signUp.data.user.id,
+      status: 'pending',
+      years_experience: payload.yearsExperience || 0,
+      service_areas: payload.serviceAreas || [],
+      location_label: payload.locationLabel || null,
+      latitude: payload.latitude || null,
+      longitude: payload.longitude || null,
+      bank_name: payload.bankName || '',
+      bank_account_number: payload.bankAccountNumber || '',
+      bank_account_name: payload.bankAccountName || '',
+      availability_status: payload.availabilityStatus || 'available',
+      onboarding_score: payload.onboardingValidationScore || 0,
+      onboarding_review_status: payload.onboardingReviewStatus || 'pending',
+      onboarding_feedback: payload.onboardingFeedback || null,
+      onboarding_answers: payload.onboardingAnswers || []
+    };
+
+    let electricianInsert = await client
       .from('electricians')
-      .upsert({
-        profile_id: signUp.data.user.id,
-        status: 'pending',
-        years_experience: payload.yearsExperience || 0,
-        service_areas: payload.serviceAreas || [],
-        location_label: payload.locationLabel || null,
-        latitude: payload.latitude || null,
-        longitude: payload.longitude || null,
-        bank_name: payload.bankName || '',
-        bank_account_number: payload.bankAccountNumber || '',
-        bank_account_name: payload.bankAccountName || '',
-        availability_status: payload.availabilityStatus || 'available'
-      }, { onConflict: 'profile_id' })
+      .upsert(electricianPayload, { onConflict: 'profile_id' })
       .select('*')
       .single();
+
+    if (electricianInsert.error && isMissingSchemaError(electricianInsert.error)) {
+      electricianInsert = await client
+        .from('electricians')
+        .upsert({
+          profile_id: electricianPayload.profile_id,
+          status: electricianPayload.status,
+          years_experience: electricianPayload.years_experience,
+          service_areas: electricianPayload.service_areas,
+          location_label: electricianPayload.location_label,
+          latitude: electricianPayload.latitude,
+          longitude: electricianPayload.longitude,
+          bank_name: electricianPayload.bank_name,
+          bank_account_number: electricianPayload.bank_account_number,
+          bank_account_name: electricianPayload.bank_account_name,
+          availability_status: electricianPayload.availability_status
+        }, { onConflict: 'profile_id' })
+        .select('*')
+        .single();
+    }
 
     if (electricianInsert.error) throw normalizeError(electricianInsert.error, 'Could not create the electrician account.');
 
@@ -514,14 +586,35 @@ const Store = (() => {
       if (skillsResult.error) throw normalizeError(skillsResult.error, 'Could not save electrician skills.');
     }
 
+    const certifications = (payload.certifications || [])
+      .filter((item) => item && item.title)
+      .map((item) => ({
+        electrician_id: electricianId,
+        title: item.title,
+        license_number: item.licenseNumber || null,
+        issuer: item.issuer || null
+      }));
+    if (certifications.length) {
+      const certificationsResult = await client.from('electrician_certifications').insert(certifications);
+      if (certificationsResult.error && !isMissingSchemaError(certificationsResult.error)) {
+        throw normalizeError(certificationsResult.error, 'Could not save certifications.');
+      }
+    }
+
     const documents = [];
     for (let index = 0; index < (payload.documents || []).length; index += 1) {
       const documentItem = payload.documents[index];
       let filePath = null;
       let fileUrl = null;
       if (documentItem.file) {
+        if (typeof payload.onDocumentUploadProgress === 'function') {
+          payload.onDocumentUploadProgress(documentItem.type, { status: 'uploading', progress: 20 });
+        }
         filePath = await uploadFile('electricianDocuments', documentItem.file, electricianId + '/' + index);
         fileUrl = filePath;
+        if (typeof payload.onDocumentUploadProgress === 'function') {
+          payload.onDocumentUploadProgress(documentItem.type, { status: 'uploaded', progress: 100 });
+        }
       }
       documents.push({
         electrician_id: electricianId,
@@ -1001,6 +1094,17 @@ const Store = (() => {
     return getJob(result.data.id);
   }
 
+  async function rerunAutomaticAssignment(jobId) {
+    requireRole('admin');
+    const client = ensureClient();
+    const result = await client.rpc('dispatch_job', {
+      p_job_id: jobId,
+      p_manual_electrician_id: null
+    });
+    if (result.error) throw normalizeError(result.error, 'Could not assign the next available VoltFriq.');
+    return getJob(result.data.id);
+  }
+
   async function setElectricianStatus(electricianId, status) {
     requireRole('admin');
     const client = ensureClient();
@@ -1073,7 +1177,7 @@ const Store = (() => {
     const client = ensureClient();
     let query = client
       .from('electricians')
-      .select('*, profile:profiles(full_name, phone, avatar_url), electrician_skills(category), electrician_documents(*)')
+      .select('*, profile:profiles(full_name, phone, avatar_url), electrician_skills(category), electrician_documents(*), electrician_certifications(*)')
       .order('created_at', { ascending: false });
     if (filter && filter !== 'all') {
       query = query.eq('status', filter);
@@ -1296,6 +1400,50 @@ const Store = (() => {
     if (result.error) throw normalizeError(result.error, 'Could not save admin settings.');
     state.settings = Object.assign({}, DEFAULT_SETTINGS, result.data);
     return state.settings;
+  }
+
+  async function saveExpertiseCategory(label, currentLabel) {
+    requireRole('admin');
+    const client = ensureClient();
+    const cleanLabel = String(label || '').trim();
+    if (!cleanLabel) throw new Error('Enter an expertise category.');
+    if (currentLabel && currentLabel !== cleanLabel) {
+      const existing = await client.from('expertise_categories').delete().eq('label', currentLabel);
+      if (existing.error && !isMissingSchemaError(existing.error)) throw normalizeError(existing.error, 'Could not update expertise category.');
+    }
+    const result = await client
+      .from('expertise_categories')
+      .upsert({ label: cleanLabel }, { onConflict: 'label' })
+      .select('*')
+      .single();
+    let categories;
+    if (result.error && isMissingSchemaError(result.error)) {
+      categories = Array.from(new Set([].concat(state.settings.issue_categories || [], [cleanLabel]).filter(Boolean)));
+      state.expertiseCategories = categories.slice();
+    } else if (result.error) {
+      throw normalizeError(result.error, 'Could not save expertise category.');
+    } else {
+      categories = await loadExpertiseCategories();
+    }
+    await saveSettings({ issue_categories: categories });
+    return result.data || { label: cleanLabel };
+  }
+
+  async function removeExpertiseCategory(label) {
+    requireRole('admin');
+    const client = ensureClient();
+    const result = await client.from('expertise_categories').delete().eq('label', label);
+    let categories;
+    if (result.error && isMissingSchemaError(result.error)) {
+      categories = (state.settings.issue_categories || []).filter((item) => item !== label);
+      state.expertiseCategories = categories.slice();
+    } else if (result.error) {
+      throw normalizeError(result.error, 'Could not remove expertise category.');
+    } else {
+      categories = await loadExpertiseCategories();
+    }
+    await saveSettings({ issue_categories: categories });
+    return true;
   }
 
   async function addJobMessage(jobId, senderRole, content, messageType) {
@@ -1666,6 +1814,7 @@ const Store = (() => {
     submitPaymentProof,
     verifyPayment,
     setManualAssignment,
+    rerunAutomaticAssignment,
     setElectricianStatus,
     setElectricianWatchlist,
     updateCurrentElectrician,
@@ -1689,6 +1838,10 @@ const Store = (() => {
     submitRating,
     submitCustomerReview,
     loadSettings,
+    loadExpertiseCategories,
+    getExpertiseCategories,
+    saveExpertiseCategory,
+    removeExpertiseCategory,
     saveSettings,
     addJobMessage,
     getJobMessages,

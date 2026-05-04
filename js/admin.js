@@ -12,6 +12,26 @@
   let selectedJob = null;
   let selectedElectrician = null;
   let portalSubscription = null;
+  let pendingAdminRoute = null;
+
+  const ADMIN_ROUTE_TITLES = {
+    'admin-login': 'VoltFriq Admin | Login',
+    'admin-dashboard': 'VoltFriq Admin | Dashboard',
+    'admin-requests': 'VoltFriq Admin | Dispatch',
+    'admin-request-detail': 'VoltFriq Admin | Dispatch Detail',
+    'admin-electricians': 'VoltFriq Admin | Electricians',
+    'admin-elec-detail': 'VoltFriq Admin | Electrician Profile',
+    'admin-jobs': 'VoltFriq Admin | Jobs',
+    'admin-job-detail': 'VoltFriq Admin | Job Detail',
+    'admin-materials': 'VoltFriq Admin | Materials',
+    'admin-finance': 'VoltFriq Admin | Finance',
+    'admin-disputes': 'VoltFriq Admin | Disputes',
+    'admin-trust': 'VoltFriq Admin | Trust',
+    'admin-settings': 'VoltFriq Admin | Settings',
+    'admin-expertise': 'VoltFriq Admin | Expertise',
+    'admin-prices': 'VoltFriq Admin | Prices',
+    'admin-chats': 'VoltFriq Admin | Chats'
+  };
 
   const currentFilter = {
     requests: 'all',
@@ -25,7 +45,9 @@
   document.addEventListener('DOMContentLoaded', init);
 
   async function init() {
+    configureAdminRoutes();
     bindEvents();
+    pendingAdminRoute = getCurrentRouteState();
     try {
       const boot = await Store.init();
       if (!boot.configured) {
@@ -34,23 +56,98 @@
       }
 
       if (boot.profile && boot.profile.role === 'customer') {
-        window.location.href = 'index.html';
+        window.location.href = Store.getRoleHome('customer');
         return;
       }
       if (boot.profile && boot.profile.role === 'electrician') {
-        window.location.href = 'electrician.html';
+        window.location.href = Store.getRoleHome('electrician');
         return;
       }
 
       if (boot.profile && boot.profile.role === 'admin') {
         attachRealtime();
-        await showApp();
+        await showApp(pendingAdminRoute);
       } else {
-        goTo('admin-login');
+        await handleAdminRouteActivation({
+          screen: (pendingAdminRoute && pendingAdminRoute.screen) || 'admin-login',
+          data: pendingAdminRoute ? pendingAdminRoute.data : null,
+          source: 'initial'
+        });
       }
     } catch (error) {
       showLoginError(error.message || 'Could not start the admin portal.');
     }
+  }
+
+  function configureAdminRoutes() {
+    configureRoutes({
+      defaultScreen: 'admin-login',
+      pathParser: parseAdminRoute,
+      pathResolver: resolveAdminPath,
+      titleResolver: resolveAdminTitle,
+      onRouteActivated: async (route) => {
+        await handleAdminRouteActivation(route);
+      }
+    });
+  }
+
+  function parseAdminRoute(pathname) {
+    const path = normalizeAdminPath(pathname);
+    if (path === '/admin' || path === '/admin/login' || path === '/admin.html') return { screen: 'admin-login' };
+    if (path === '/admin/dashboard') return { screen: 'admin-dashboard' };
+    if (path.indexOf('/admin/dispatch/') === 0) return { screen: 'admin-request-detail', data: { ticket: decodeURIComponent(path.split('/').pop() || '') } };
+    if (path === '/admin/dispatch') return { screen: 'admin-requests' };
+    if (path.indexOf('/admin/jobs/') === 0) return { screen: 'admin-job-detail', data: { ticket: decodeURIComponent(path.split('/').pop() || '') } };
+    if (path === '/admin/jobs') return { screen: 'admin-jobs' };
+    if (path.indexOf('/admin/electricians/') === 0) return { screen: 'admin-elec-detail', data: { electricianId: decodeURIComponent(path.split('/').pop() || '') } };
+    if (path === '/admin/electricians') return { screen: 'admin-electricians' };
+    if (path === '/admin/finance') return { screen: 'admin-finance' };
+    if (path === '/admin/trust') return { screen: 'admin-trust' };
+    if (path === '/admin/disputes') return { screen: 'admin-disputes' };
+    if (path === '/admin/settings') return { screen: 'admin-settings' };
+    return { screen: 'admin-login' };
+  }
+
+  function resolveAdminPath(screen, routeData) {
+    if (screen === 'admin-login') return '/admin/login';
+    if (screen === 'admin-dashboard') return '/admin/dashboard';
+    if (screen === 'admin-requests') return '/admin/dispatch';
+    if (screen === 'admin-request-detail') return routeData && routeData.ticket ? '/admin/dispatch/' + encodeURIComponent(routeData.ticket) : '/admin/dispatch';
+    if (screen === 'admin-jobs') return '/admin/jobs';
+    if (screen === 'admin-job-detail') return routeData && routeData.ticket ? '/admin/jobs/' + encodeURIComponent(routeData.ticket) : '/admin/jobs';
+    if (screen === 'admin-electricians') return '/admin/electricians';
+    if (screen === 'admin-elec-detail') return routeData && routeData.electricianId ? '/admin/electricians/' + encodeURIComponent(routeData.electricianId) : '/admin/electricians';
+    if (screen === 'admin-finance') return '/admin/finance';
+    if (screen === 'admin-trust') return '/admin/trust';
+    if (screen === 'admin-disputes') return '/admin/disputes';
+    if (screen === 'admin-settings' || screen === 'admin-expertise' || screen === 'admin-prices') return '/admin/settings';
+    return '/admin/dashboard';
+  }
+
+  function resolveAdminTitle(screen, routeData) {
+    if (screen === 'admin-job-detail' && routeData && routeData.ticket) {
+      return 'VoltFriq Admin | Job ' + routeData.ticket;
+    }
+    if (screen === 'admin-request-detail' && routeData && routeData.ticket) {
+      return 'VoltFriq Admin | Dispatch ' + routeData.ticket;
+    }
+    if (screen === 'admin-elec-detail' && routeData && routeData.electricianId) {
+      return 'VoltFriq Admin | Electrician ' + routeData.electricianId.slice(0, 8).toUpperCase();
+    }
+    return ADMIN_ROUTE_TITLES[screen] || 'VoltFriq Admin';
+  }
+
+  async function handleAdminRouteActivation(route) {
+    if (!route || !route.screen) return;
+    const profile = Store.getCurrentProfile();
+    const isAdmin = profile && profile.role === 'admin';
+
+    if (!isAdmin) {
+      goTo('admin-login', { replace: route.source !== 'popstate' });
+      return;
+    }
+
+    await showApp(route);
   }
 
   function bindEvents() {
@@ -85,14 +182,16 @@
         throw new Error('This account does not have admin access.');
       }
       attachRealtime();
-      await showApp();
+      await showApp((pendingAdminRoute && pendingAdminRoute.screen && pendingAdminRoute.screen !== 'admin-login')
+        ? Object.assign({}, pendingAdminRoute, { source: 'login' })
+        : { screen: 'admin-dashboard', data: null, source: 'login' });
     });
   }
 
-  async function showApp() {
+  async function showApp(route) {
     $('#admin-bottom-nav').style.display = 'flex';
     await loadData();
-    navigateTo('admin-dashboard');
+    await activateAdminRoute(route && route.screen ? route : { screen: 'admin-dashboard', data: null, source: 'app' });
   }
 
   async function loadData() {
@@ -102,6 +201,7 @@
     currentNotifications = await Store.listNotifications();
     currentDisputes = await Store.listDisputes();
     currentAppeals = await Store.listAppeals();
+    await Store.loadExpertiseCategories();
     clearLoginError();
   }
 
@@ -118,6 +218,7 @@
     if (screen === 'admin-materials') renderMaterials();
     if (screen === 'admin-chats') renderChats();
     if (screen === 'admin-prices') renderPrices();
+    if (screen === 'admin-expertise') renderExpertiseCategories();
   }
 
   function renderDashboard() {
@@ -220,7 +321,9 @@
       timelineCard(selectedJob.timeline);
 
     bindAssignmentControls(selectedJob);
-    goTo('admin-request-detail');
+    navigateTo('admin-request-detail', {
+      routeData: { ticket: selectedJob.ticket }
+    });
   }
 
   function renderElectricians() {
@@ -315,6 +418,14 @@
       const link = href ? '<a class="admin-inline-link" href="' + escapeAttribute(href) + '" target="_blank" rel="noreferrer">View file</a>' : 'No file';
       return '<div class="admin-file-row"><div><div class="admin-file-name">' + escapeHtml(documentLabel(documentItem.document_type)) + '</div><div class="admin-file-meta">' + escapeHtml(documentItem.status || 'pending') + '</div></div><div>' + link + '</div></div>';
     }).join('') || '<div class="admin-empty-inline">No documents uploaded.</div>';
+    const certifications = (selectedElectrician.electrician_certifications || []).length
+      ? (selectedElectrician.electrician_certifications || []).map((certification) => {
+          const pieces = [certification.title || 'Certification'];
+          if (certification.issuer) pieces.push(certification.issuer);
+          if (certification.license_number) pieces.push('License: ' + certification.license_number);
+          return [pieces[0], pieces.slice(1).join(' · ') || 'Submitted during onboarding'];
+        })
+      : [['Certifications', 'No structured certifications submitted']];
 
     $('#elec-detail-body').innerHTML =
       infoCard('Electrician profile', [
@@ -327,13 +438,16 @@
         ['Suspension reason', selectedElectrician.suspended_reason || '--'],
         ['Availability', selectedElectrician.availability_status || 'offline'],
         ['Experience', String(selectedElectrician.years_experience || 0) + ' years'],
-        ['Service areas', (selectedElectrician.service_areas || []).join(', ') || '--']
+        ['Service areas', (selectedElectrician.service_areas || []).join(', ') || '--'],
+        ['Onboarding score', selectedElectrician.onboarding_score ? Number(selectedElectrician.onboarding_score).toFixed(0) + '%' : '--'],
+        ['Onboarding review', selectedElectrician.onboarding_review_status || 'pending']
       ]) +
       infoCard('Trust history', electricianTrustRows(selectedElectrician)) +
       appealsCard(selectedElectrician) +
       infoCard('Skills', (selectedElectrician.electrician_skills || []).length
         ? selectedElectrician.electrician_skills.map((skill) => [humanizeIssue(skill.category), 'Matched skill'])
         : [['Skills', 'No skills listed']]) +
+      infoCard('Certifications', certifications) +
       '<div class="admin-info-card"><div class="admin-info-card-title">Documents</div>' + docs + '</div>' +
       electricianActionsCard(selectedElectrician);
 
@@ -342,7 +456,9 @@
     bindElectricianAction('btn-suspend-elec', electricianId, 'suspended');
     bindWatchlistAction('btn-add-watchlist', electricianId, true);
     bindWatchlistAction('btn-remove-watchlist', electricianId, false);
-    goTo('admin-elec-detail');
+    navigateTo('admin-elec-detail', {
+      routeData: { electricianId: electricianId }
+    });
   }
 
   function renderJobs() {
@@ -393,7 +509,9 @@
     bindPaymentButtons(selectedJob);
     bindPayoutButtons(selectedJob);
     bindQuickReassignButton(selectedJob);
-    goTo('admin-job-detail');
+    navigateTo('admin-job-detail', {
+      routeData: { ticket: selectedJob.ticket }
+    });
     await Chat.init('admin-job-chat', selectedJob.id, 'admin', (Store.getCurrentProfile() || {}).full_name || 'Admin');
   }
 
@@ -486,12 +604,17 @@
       formField('Negative Rating Max Score', '<input type="number" class="form-input" id="set-negative-score" value="' + Number(trustSettings.negative_rating_max_score || 2) + '" />') +
       formField('Watchlist Rank Penalty (km)', '<input type="number" class="form-input" id="set-watchlist-penalty" value="' + Number(trustSettings.watchlist_rank_penalty_km || 8) + '" />') +
       '<button class="btn-primary btn-full" id="btn-save-settings">Save Settings</button>' +
+      '<div style="margin-top:16px"><button class="btn-secondary btn-full" id="btn-open-expertise">Manage Expertise Categories</button></div>' +
       '<div style="margin-top:16px"><button class="btn-secondary btn-full" id="btn-open-prices">Manage Workmanship Prices</button></div>' +
       '<div style="margin-top:16px"><button class="btn-ghost" id="btn-admin-logout" style="width:100%;color:var(--red)">Logout</button></div>';
 
     $('#btn-save-settings').addEventListener('click', saveSettings);
+    $('#btn-open-expertise').addEventListener('click', async () => {
+      navigateTo('admin-expertise');
+      await renderExpertiseCategories();
+    });
     $('#btn-open-prices').addEventListener('click', () => {
-      goTo('admin-prices');
+      navigateTo('admin-prices');
       renderPrices();
     });
     $('#btn-admin-logout').addEventListener('click', handleLogout);
@@ -557,6 +680,52 @@
     renderPrices();
   }
 
+  async function renderExpertiseCategories() {
+    const categories = Store.getExpertiseCategories();
+    $('#expertise-list-container').innerHTML = categories.length ? categories.map((label, index) => {
+      return '<div class="price-item">' +
+        '<div class="price-item-info">' +
+          '<div class="price-item-num">' + String(index + 1) + '</div>' +
+          '<div class="price-item-details"><input class="form-input expertise-inline-input" data-expertise-input="' + escapeAttribute(label) + '" value="' + escapeAttribute(label) + '" /></div>' +
+        '</div>' +
+        '<div class="price-item-actions">' +
+          '<button class="btn-icon" id="save-expertise-' + slugify(label) + '" data-save-expertise="' + escapeAttribute(label) + '" aria-label="Save category">✓</button>' +
+          '<button class="btn-icon" data-remove-expertise="' + escapeAttribute(label) + '" aria-label="Remove category">&times;</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') : emptyState('No expertise categories added yet.');
+    const addButton = $('#btn-add-expertise-category');
+    if (addButton) addButton.onclick = addExpertiseCategory;
+    $$('#expertise-list-container [data-save-expertise]').forEach((button) => {
+      button.onclick = async () => {
+        const currentLabel = button.dataset.saveExpertise;
+        const input = button.closest('.price-item').querySelector('[data-expertise-input]');
+        await withButtonLoading(button.id, '...', async () => {
+          await Store.saveExpertiseCategory(input.value.trim(), currentLabel);
+          await Store.loadSettings();
+          await Store.loadExpertiseCategories();
+          await renderExpertiseCategories();
+        });
+      };
+    });
+    $$('#expertise-list-container [data-remove-expertise]').forEach((button) => {
+      button.onclick = async () => {
+        await Store.removeExpertiseCategory(button.dataset.removeExpertise);
+        await Store.loadSettings();
+        await renderExpertiseCategories();
+      };
+    });
+  }
+
+  async function addExpertiseCategory() {
+    await withButtonLoading('btn-add-expertise-category', 'Adding...', async () => {
+      await Store.saveExpertiseCategory($('#new-expertise-category').value.trim());
+      $('#new-expertise-category').value = '';
+      await Store.loadSettings();
+      await renderExpertiseCategories();
+    });
+  }
+
   function renderPriceCategoryOptions() {
     const select = $('#new-price-category');
     if (!select) return;
@@ -570,7 +739,7 @@
       'Inverter',
       'Generator',
       'Other'
-    ].concat(settings.issue_categories || [])));
+    ].concat(Store.getExpertiseCategories ? Store.getExpertiseCategories() : [], settings.issue_categories || [])));
     select.innerHTML = categories.map((category) => '<option value="' + escapeAttribute(category) + '">' + escapeHtml(humanizeIssue(category)) + '</option>').join('');
   }
 
@@ -596,7 +765,7 @@
 
   async function handleLogout() {
     await Store.signOut();
-    window.location.href = 'admin.html';
+    window.location.href = '/admin/login';
   }
 
   function bindFilterTabs(selector, key) {
@@ -668,16 +837,88 @@
   }
 
   function assignmentCard(matches, job) {
+    const pools = buildDispatchPools(job, matches);
     return '<div class="admin-assign-section">' +
-      '<div class="admin-assign-title">Manual dispatch override</div>' +
-      '<div class="admin-assign-copy">Admin can assign or reassign this job at any time.</div>' +
-      (matches.length ? matches.map((match, index) => {
-        return '<div class="admin-elec-option' + (index === 0 ? ' selected' : '') + '" data-elec-id="' + match.id + '">' +
-          '<div class="admin-elec-avatar">⚡</div>' +
-          '<div class="admin-elec-info"><div class="admin-elec-name">' + escapeHtml(match.name) + '</div><div class="admin-elec-meta"><span>' + escapeHtml(match.levelBadge || 'Verified Pro') + '</span><span>★ ' + escapeHtml(match.rating ? match.rating.toFixed(1) : '--') + '</span><span>' + escapeHtml((match.distance || '0.0') + ' km') + '</span>' + (match.watchlist ? '<span>Watchlist</span>' : '') + '</div></div>' +
-        '</div>';
-      }).join('') : '<div class="admin-empty-inline">No approved available electricians matched this request yet.</div>') +
-      '<button class="btn-primary btn-full" id="btn-admin-assign" style="margin-top:12px"' + (matches.length ? '' : ' disabled') + '>' + (job.assignedElectrician ? 'Reassign electrician' : 'Assign electrician') + '</button>' +
+      '<div class="admin-assign-title">Dispatch Control</div>' +
+      '<div class="admin-assign-copy">Automatic dispatch is the default. Admin can rerun matching, reassign to another approved available VoltFriq, or force deploy an override choice.</div>' +
+      dispatchPoolSection('Recommended matches', 'Best fit by issue, location, urgency, and response performance.', pools.recommended, 'recommended') +
+      dispatchPoolSection('Approved & available', 'Approved VoltFriqs who are available now even if they were not top-ranked.', pools.available, 'available') +
+      dispatchPoolSection('Admin override', 'Approved VoltFriqs outside the recommended pool or currently off-policy. Use only when manual judgment is required.', pools.override, 'override') +
+      '<div class="admin-action-row">' +
+        '<button class="btn-secondary btn-full" id="btn-admin-auto-assign">Assign next available</button>' +
+        '<button class="btn-primary btn-full" id="btn-admin-assign">' + (job.assignedElectrician ? 'Reassign selected VoltFriq' : 'Assign selected VoltFriq') + '</button>' +
+        '<button class="btn-secondary btn-full" id="btn-admin-force-assign">Force deploy selected</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function buildDispatchPools(job, matches) {
+    const recommended = (matches || []).map((match) => ({
+      id: match.id,
+      name: match.name,
+      levelBadge: match.levelBadge || 'Verified Pro',
+      rating: match.rating,
+      jobsCompleted: match.jobsCompleted,
+      distance: match.distance,
+      availability: 'available',
+      watchlist: !!match.watchlist,
+      pool: 'recommended'
+    }));
+
+    const recommendedIds = new Set(recommended.map((item) => item.id));
+    const approved = currentElectricians.filter((electrician) => electrician.status === 'approved');
+    const available = approved
+      .filter((electrician) => electrician.availability_status === 'available' && !recommendedIds.has(electrician.id))
+      .map((electrician) => normalizeDispatchElectrician(electrician, 'available', job));
+    const override = approved
+      .filter((electrician) => electrician.availability_status !== 'available' || !serviceAreaMatch(electrician, job.serviceArea))
+      .filter((electrician) => !recommendedIds.has(electrician.id))
+      .map((electrician) => normalizeDispatchElectrician(electrician, 'override', job));
+
+    return { recommended, available, override };
+  }
+
+  function normalizeDispatchElectrician(electrician, pool, job) {
+    return {
+      id: electrician.id,
+      name: electrician.profile && electrician.profile.full_name ? electrician.profile.full_name : 'VoltFriq',
+      levelBadge: electrician.level_badge || 'Verified Pro',
+      rating: electrician.average_rating ? Number(electrician.average_rating) : 0,
+      jobsCompleted: Number(electrician.completed_jobs || 0),
+      distance: serviceAreaMatch(electrician, job.serviceArea) ? 'In area' : 'Override',
+      availability: electrician.availability_status || 'offline',
+      watchlist: !!electrician.watchlist,
+      pool
+    };
+  }
+
+  function serviceAreaMatch(electrician, serviceArea) {
+    const areas = electrician.service_areas || [];
+    return areas.some((area) => String(area || '').toLowerCase() === String(serviceArea || '').toLowerCase());
+  }
+
+  function dispatchPoolSection(title, copy, items, pool) {
+    return '<div class="admin-dispatch-group">' +
+      '<div class="admin-dispatch-group-title">' + escapeHtml(title) + '</div>' +
+      '<div class="admin-dispatch-group-copy">' + escapeHtml(copy) + '</div>' +
+      (items.length
+        ? items.map((item, index) => {
+            return '<div class="admin-elec-option' + (index === 0 && pool === 'recommended' ? ' selected' : '') + '" data-elec-id="' + escapeAttribute(item.id) + '" data-pool="' + escapeAttribute(pool) + '">' +
+              '<div class="admin-elec-avatar">⚡</div>' +
+              '<div class="admin-elec-info">' +
+                '<div class="admin-elec-name">' + escapeHtml(item.name) + '</div>' +
+                '<div class="admin-elec-meta">' +
+                  '<span>' + escapeHtml(item.levelBadge || 'Verified Pro') + '</span>' +
+                  '<span>★ ' + escapeHtml(item.rating ? item.rating.toFixed(1) : '--') + '</span>' +
+                  '<span>' + escapeHtml(String(item.jobsCompleted || 0)) + ' jobs</span>' +
+                  '<span>' + escapeHtml(item.distance || '--') + '</span>' +
+                  '<span>' + escapeHtml(item.availability || 'offline') + '</span>' +
+                  (item.watchlist ? '<span>Watchlist</span>' : '') +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('')
+        : '<div class="admin-empty-inline">No VoltFriqs in this group right now.</div>') +
     '</div>';
   }
 
@@ -882,19 +1123,53 @@
     });
 
     const assignButton = $('#btn-admin-assign');
-    if (!assignButton || assignButton.disabled) return;
-    assignButton.addEventListener('click', async () => {
-      const selectedOption = document.querySelector('.admin-elec-option.selected');
-      if (!selectedOption) {
-        showLoginError('Select an electrician before assigning.');
-        return;
-      }
-      await withButtonLoading('btn-admin-assign', job.assignedElectrician ? 'Reassigning...' : 'Assigning...', async () => {
-        await Store.setManualAssignment(job.id, selectedOption.dataset.elecId);
-        await loadData();
-        await openRequestDetail(job.id);
+    const forceButton = $('#btn-admin-force-assign');
+    const autoButton = $('#btn-admin-auto-assign');
+    const getSelected = () => document.querySelector('.admin-elec-option.selected');
+
+    if (autoButton) {
+      autoButton.addEventListener('click', async () => {
+        await withButtonLoading('btn-admin-auto-assign', 'Assigning...', async () => {
+          await Store.rerunAutomaticAssignment(job.id);
+          await loadData();
+          await openRequestDetail(job.id);
+        });
       });
-    });
+    }
+
+    if (assignButton) {
+      assignButton.addEventListener('click', async () => {
+        const selectedOption = getSelected();
+        if (!selectedOption) {
+          showLoginError('Select an electrician before assigning.');
+          return;
+        }
+        if (selectedOption.dataset.pool === 'override') {
+          showLoginError('Use force deploy for an admin override selection.');
+          return;
+        }
+        await withButtonLoading('btn-admin-assign', job.assignedElectrician ? 'Reassigning...' : 'Assigning...', async () => {
+          await Store.setManualAssignment(job.id, selectedOption.dataset.elecId);
+          await loadData();
+          await openRequestDetail(job.id);
+        });
+      });
+    }
+
+    if (forceButton) {
+      forceButton.addEventListener('click', async () => {
+        const selectedOption = getSelected();
+        if (!selectedOption) {
+          showLoginError('Select an electrician before force deploying.');
+          return;
+        }
+        await withButtonLoading('btn-admin-force-assign', 'Force deploying...', async () => {
+          await Store.setManualAssignment(job.id, selectedOption.dataset.elecId);
+          await loadData();
+          await openRequestDetail(job.id);
+        });
+      });
+    }
   }
 
   async function bindPaymentButtons(job) {
@@ -987,10 +1262,78 @@
     }
   }
 
-  function navigateTo(screen) {
-    $$('.admin-nav-item').forEach((item) => item.classList.toggle('active', item.dataset.screen === screen));
-    goTo(screen);
+  function navigateTo(screen, options) {
+    const navScreen = adminNavScreen(screen);
+    $$('.admin-nav-item').forEach((item) => item.classList.toggle('active', item.dataset.screen === navScreen));
+    goTo(screen, {
+      replace: !!(options && options.replace),
+      routeData: options && options.routeData ? options.routeData : null
+    });
     refreshScreen(screen);
+  }
+
+  async function activateAdminRoute(route) {
+    const nextRoute = route && route.screen ? route : { screen: 'admin-dashboard', data: null };
+
+    if (nextRoute.screen === 'admin-login') {
+      navigateTo('admin-dashboard', { replace: true });
+      return;
+    }
+
+    if (nextRoute.screen === 'admin-request-detail' && nextRoute.data && nextRoute.data.ticket) {
+      await openRequestDetailByTicket(nextRoute.data.ticket);
+      return;
+    }
+
+    if (nextRoute.screen === 'admin-job-detail' && nextRoute.data && nextRoute.data.ticket) {
+      await openJobDetailByTicket(nextRoute.data.ticket);
+      return;
+    }
+
+    if (nextRoute.screen === 'admin-elec-detail' && nextRoute.data && nextRoute.data.electricianId) {
+      openElectricianDetail(nextRoute.data.electricianId);
+      return;
+    }
+
+    navigateTo(nextRoute.screen, {
+      replace: nextRoute.source !== 'popstate',
+      routeData: nextRoute.data || null
+    });
+  }
+
+  async function openRequestDetailByTicket(ticket) {
+    const cleanTicket = String(ticket || '').trim().toUpperCase();
+    const match = currentJobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
+    if (!match) {
+      navigateTo('admin-requests', { replace: true });
+      return;
+    }
+    await openRequestDetail(match.id);
+  }
+
+  async function openJobDetailByTicket(ticket) {
+    const cleanTicket = String(ticket || '').trim().toUpperCase();
+    const match = currentJobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
+    if (!match) {
+      navigateTo('admin-jobs', { replace: true });
+      return;
+    }
+    await openJobDetail(match.id);
+  }
+
+  function adminNavScreen(screen) {
+    if (['admin-request-detail'].includes(screen)) return 'admin-requests';
+    if (['admin-job-detail', 'admin-materials', 'admin-chats'].includes(screen)) return 'admin-jobs';
+    if (['admin-elec-detail'].includes(screen)) return 'admin-electricians';
+    if (['admin-expertise', 'admin-prices'].includes(screen)) return 'admin-settings';
+    return screen;
+  }
+
+  function normalizeAdminPath(pathname) {
+    const raw = String(pathname || '/admin/login').trim();
+    if (!raw) return '/admin/login';
+    const cleaned = raw.replace(/\/+$/, '');
+    return cleaned || '/admin/login';
   }
 
   function buildAlerts() {
@@ -1109,9 +1452,14 @@
     const map = {
       government_id: 'Government ID',
       certification: 'Certification',
-      bank_proof: 'Bank proof'
+      bank_proof: 'Bank proof',
+      utility_bill: 'Light bill'
     };
     return map[value] || value || 'Document';
+  }
+
+  function slugify(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   }
 
   function formatRelative(value) {

@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Voltfriq – Electrician Portal</title>
+  <title>VoltFriq – Electrician Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/shared.css?v=20260429-stability" />
-  <link rel="stylesheet" href="css/electrician.css?v=20260429-stability" />
-  <link rel="stylesheet" href="css/chat.css?v=20260429-stability" />
+  <link rel="stylesheet" href="/css/shared.css?v=20260503-ia3" />
+  <link rel="stylesheet" href="/css/electrician.css?v=20260503-ia3" />
+  <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
 </head>
 <body>
 
@@ -20,8 +20,7 @@
       <section class="elec-login-panel">
         <div class="elec-login-content">
           <div class="logo">
-            <span class="logo-bolt">⚡</span>
-            <span class="logo-text">VoltFriq</span>
+            <img class="portal-brand-logo" src="/assets/voltfriq-logo.png" alt="VoltFriq logo" />
           </div>
           <div class="elec-login-subtitle">Electrician Portal</div>
 
@@ -42,7 +41,7 @@
         </div>
       </section>
       <aside class="elec-login-visual" aria-label="VoltFriq electrician welcome">
-        <img src="assets/voltfriq-home-hero.png?v=20260429-stability" alt="VoltFriq verified electrician" />
+        <img src="/assets/voltfriq-home-hero.png?v=20260429-onboardingv2" alt="VoltFriq verified electrician" />
       </aside>
     </div>
   </div>
@@ -78,7 +77,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">Location</label>
-        <input type="text" class="form-input" id="reg-location" placeholder="e.g. Lekki, Lagos" />
+        <input type="text" class="form-input" id="reg-location" placeholder="e.g. GRA, Port Harcourt" />
       </div>
       <div class="form-group">
         <label class="form-label">Profile Photo <span class="optional">(optional)</span></label>
@@ -157,16 +156,24 @@
       </div>
       <div class="form-group">
         <label class="form-label">Areas of Expertise</label>
-        <div class="skills-grid" id="reg-skills-grid"></div>
+        <div class="expertise-picker" id="reg-expertise-picker">
+          <div class="expertise-selected" id="reg-selected-expertise"></div>
+          <div class="expertise-dropdown">
+            <input type="text" class="form-input" id="reg-expertise-search" placeholder="Search and add expertise" />
+            <div class="expertise-options" id="reg-expertise-options"></div>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Certifications <span class="optional">(optional)</span></label>
-        <textarea class="form-input" id="reg-certifications" rows="3" placeholder="List training, license numbers, or electrical qualifications..."></textarea>
+        <div id="reg-certification-list"></div>
+        <button class="btn-secondary btn-full" id="btn-add-certification" type="button">Add Certification</button>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Quick safety questions</label>
+        <label class="form-label">Safety validation</label>
         <div id="onboarding-question-list"></div>
+        <div class="validation-feedback" id="validation-feedback"></div>
       </div>
 
       <button class="btn-primary btn-full" id="btn-reg-next-3">Next</button>
@@ -185,10 +192,10 @@
     <div class="elec-reg-body">
       <div class="progress-bar"><div class="progress-fill" style="width:80%"></div></div>
       <div class="progress-label">Step 4 of 5 — Documents</div>
-      <div class="elec-reg-note">Upload clear photos or PDFs. If a file is not ready, submit what you have and admin can follow up.</div>
+      <div class="elec-reg-note">Upload clear photos or PDFs. Government ID is required, plus bank proof or light bill.</div>
 
       <div class="form-group">
-        <label class="form-label">Required Documents</label>
+        <label class="form-label">Documents</label>
         <div id="reg-document-fields"></div>
       </div>
 
@@ -237,15 +244,15 @@
       <div class="elec-pending-anim">
         <div class="pending-ring r1"></div>
         <div class="pending-ring r2"></div>
-        <div class="pending-icon">⏳</div>
+        <div class="pending-icon">✓</div>
       </div>
-      <h2 class="elec-pending-title">Application Submitted!</h2>
-      <p class="elec-pending-sub">We'll review your application within <strong>24-48 hours</strong>.</p>
+      <h2 class="elec-pending-title">Application Submitted</h2>
+      <p class="elec-pending-sub">We’ll review your application within <strong>24–48 hours</strong>.</p>
       <div class="elec-pending-ref">
-        Reference: <strong id="pending-ref-id">VFQ-XXXXXX</strong>
+        Reference: <strong id="pending-ref-id">PENDING</strong>
       </div>
-      <p class="elec-pending-note">You'll receive a notification when your account is approved. Check back soon!</p>
-      <button class="btn-secondary" id="btn-pending-back" style="margin-top:24px">Back to Login</button>
+      <p class="elec-pending-note">You’ll be notified once approved.</p>
+      <button class="btn-secondary btn-full" id="btn-pending-back" style="margin-top:24px">Back to Login</button>
     </div>
   </div>
 
@@ -682,11 +689,11 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="env.js?v=20260429-stability"></script>
-  <script src="js/config.js?v=20260429-stability"></script>
-  <script src="js/store.js?v=20260429-stability"></script>
-  <script src="js/navigation.js?v=20260429-stability"></script>
-  <script src="js/chat.js?v=20260429-stability"></script>
-  <script src="js/electrician.js?v=20260429-stability"></script>
+  <script src="/env.js?v=20260503-ia3"></script>
+  <script src="/js/config.js?v=20260503-ia3"></script>
+  <script src="/js/store.js?v=20260503-ia3"></script>
+  <script src="/js/navigation.js?v=20260503-ia3"></script>
+  <script src="/js/chat.js?v=20260503-ia3"></script>
+  <script src="/js/electrician.js?v=20260503-ia3"></script>
 </body>
 </html>

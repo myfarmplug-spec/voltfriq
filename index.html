@@ -8,117 +8,216 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="css/shared.css?v=20260429-stability" />
-  <link rel="stylesheet" href="css/customer.css?v=20260429-stability" />
-  <link rel="stylesheet" href="css/chat.css?v=20260429-stability" />
-  <link rel="stylesheet" href="css/home.css?v=20260429-stability" />
+  <link rel="stylesheet" href="/css/shared.css?v=20260503-ia3" />
+  <link rel="stylesheet" href="/css/customer.css?v=20260503-ia3" />
+  <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
+  <link rel="stylesheet" href="/css/home.css?v=20260503-ia3" />
 </head>
 <body>
   <div id="screen-welcome" class="screen active">
     <div class="welcome-bg welcome-shell">
-      <header class="header site-header">
-        <div class="header-inner site-header-inner">
-          <div class="welcome-logo">&#9889; VoltFriq</div>
-          <div class="welcome-top-links">
+      <header class="site-header">
+        <div class="site-header-inner">
+          <a class="brand-lockup" href="#screen-welcome" aria-label="VoltFriq home">
+            <img class="brand-logo" src="/assets/voltfriq-logo.png" alt="VoltFriq logo" />
+          </a>
+
+          <nav class="site-nav" aria-label="Primary">
+            <a class="site-nav-link is-active" href="#screen-welcome">Home</a>
+            <a class="site-nav-link" href="#landing-trust">Services</a>
+            <a class="site-nav-link" href="#landing-why">How It Works</a>
+            <a class="site-nav-link" href="#landing-stats">About Us</a>
+            <a class="site-nav-link" href="#landing-footer">Contact</a>
+          </nav>
+
+          <div class="site-header-actions">
             <button class="btn-ghost welcome-link" id="btn-track-job">Track Job</button>
-            <button class="btn-ghost welcome-link welcome-login-link" id="btn-welcome-login">Login</button>
+            <button class="btn-ghost welcome-link" id="btn-open-dashboard" style="display:none;">Dashboard</button>
+            <button class="btn-ghost welcome-link" id="btn-welcome-signup">Create Account</button>
+            <button class="btn-ghost welcome-login-link" id="btn-welcome-login">Sign In</button>
+            <button class="btn-primary nav-cta" id="btn-begin-area-nav">
+              <span>Book an Electrician</span>
+            </button>
+            <button class="menu-toggle" type="button" id="btn-mobile-menu" aria-label="Open navigation menu" aria-controls="mobile-menu-panel" aria-expanded="false">
+              <span></span><span></span><span></span>
+            </button>
           </div>
         </div>
       </header>
 
-      <main class="main hero-shell">
-        <section class="hero">
-          <div class="hero-copy-main">
-            <h1 class="welcome-title">
-              <span class="title-line">Book an</span>
-              <span class="title-line title-highlight">electrician</span>
-              <span class="title-line">near you.</span>
-            </h1>
-            <p class="welcome-sub">Fast, verified, nearby help.</p>
+      <div class="mobile-menu-backdrop" id="mobile-menu-backdrop" hidden>
+        <aside class="mobile-menu-panel" id="mobile-menu-panel" aria-label="Mobile navigation">
+          <div class="mobile-menu-head">
+            <a class="brand-lockup mobile-menu-brand" href="#screen-welcome" aria-label="VoltFriq home">
+              <img class="brand-logo" src="/assets/voltfriq-logo.png" alt="VoltFriq logo" />
+            </a>
+            <button class="btn-icon mobile-menu-close" id="btn-mobile-menu-close" aria-label="Close navigation menu">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
           </div>
+          <nav class="mobile-menu-links" aria-label="Mobile primary">
+            <a class="mobile-menu-link" href="#screen-welcome" data-mobile-anchor="home">Home</a>
+            <a class="mobile-menu-link" href="#landing-trust" data-mobile-anchor="services">Services</a>
+            <a class="mobile-menu-link" href="#landing-why" data-mobile-anchor="how-it-works">How It Works</a>
+            <a class="mobile-menu-link" href="#landing-stats" data-mobile-anchor="about">About Us</a>
+            <a class="mobile-menu-link" href="#landing-footer" data-mobile-anchor="contact">Contact</a>
+          </nav>
+          <div class="mobile-menu-actions">
+            <button class="btn-primary btn-full" id="btn-begin-area-mobile">Book an Electrician</button>
+            <button class="btn-secondary btn-full" id="btn-mobile-track">Track Job</button>
+            <button class="btn-secondary btn-full" id="btn-mobile-login">Sign In</button>
+            <button class="btn-secondary btn-full" id="btn-mobile-signup">Create Account</button>
+            <button class="btn-secondary btn-full" id="btn-mobile-dashboard" style="display:none;">Dashboard</button>
+            <a href="/electricians/apply" class="mobile-menu-apply" id="link-mobile-apply">Apply as a VoltFriq</a>
+          </div>
+        </aside>
+      </div>
 
-          <div class="hero-right">
-            <div class="hero-visual-stage">
-              <div class="hero-orbit hero-orbit-one" aria-hidden="true"></div>
-              <div class="hero-orbit hero-orbit-two" aria-hidden="true"></div>
-              <div class="hero-dot-grid" aria-hidden="true"></div>
-              <figure class="home-image-card image-wrapper">
-                <img src="assets/voltfriq-home-hero.png?v=20260429-stability" alt="VoltFriq verified electrician ready to help nearby" />
+      <main class="landing-main">
+        <section class="hero-shell">
+          <div class="hero-grid">
+            <div class="hero-copy-panel">
+              <div class="location-badge">
+                <span class="location-badge-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s7-4.5 7-10a7 7 0 10-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
+                </span>
+                <span>Port-Harcourt</span>
+              </div>
+              <h1 class="welcome-title">
+                <span class="title-line">Port-Harcourt,</span>
+                <span class="title-line title-highlight">We Are Live</span>
+                <span class="title-line">In Your City!</span>
+              </h1>
+              <p class="welcome-sub">Trusted electricians, fast response, and nearby support — all in Port-Harcourt.</p>
+              <div class="hero-actions">
+                <button class="btn-primary hero-primary-btn" id="btn-begin-area">
+                  <span>Book an Electrician Now</span>
+                  <span class="hero-primary-icon" aria-hidden="true">→</span>
+                </button>
+                <button class="btn-secondary hero-secondary-btn" id="btn-open-dashboard-hero" style="display:none;">Open Dashboard</button>
+              </div>
+              <div class="hero-mobile-links">
+                <button class="btn-secondary hero-mobile-link" id="btn-mobile-track-inline">Track Job</button>
+                <button class="btn-secondary hero-mobile-link" id="btn-mobile-login-inline">Sign In</button>
+                <button class="btn-secondary hero-mobile-link" id="btn-mobile-signup-inline">Create Account</button>
+                <button class="btn-secondary hero-mobile-link" id="btn-mobile-dashboard-inline" style="display:none;">Dashboard</button>
+                <a href="/electricians/apply" class="hero-mobile-apply">Apply as a VoltFriq</a>
+              </div>
+            </div>
+
+            <div class="hero-visual-panel">
+              <div class="hero-bridge-backdrop" aria-hidden="true">
+                <div class="bridge-tower"></div>
+                <div class="bridge-road"></div>
+                <div class="bridge-cable bridge-cable-left"></div>
+                <div class="bridge-cable bridge-cable-right"></div>
+                <div class="bridge-reflection"></div>
+              </div>
+              <div class="hero-lightning" aria-hidden="true"></div>
+              <figure class="hero-figure">
+                <img src="/assets/voltfriq-home-hero.png?v=20260429-stability" alt="VoltFriq electrician ready to help in Port-Harcourt" />
               </figure>
-              <aside class="hero-status-card" aria-label="Nearest electrician status">
-                <div class="hero-status-top"><span class="status-dot" aria-hidden="true"></span>Nearest Electrician</div>
-                <div class="hero-status-distance">2.3 km</div>
-                <div class="hero-status-away">Away</div>
-              <div class="hero-status-available">Available Now</div>
-            </aside>
-          </div>
-          </div>
-
-          <div class="hero-cta-block">
-            <div class="hero-actions">
-              <button class="btn-primary btn-large hero-primary-btn" id="btn-begin-area">
-                <span>Find an Electrician</span>
-                <span class="hero-primary-icon" aria-hidden="true">&#9889;</span>
-              </button>
-            </div>
-
-            <div class="hero-trust-grid" aria-label="Why customers trust VoltFriq">
-              <div class="hero-trust-item">
-                <span class="hero-trust-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
-                </span>
-                <span>Verified Electricians</span>
-              </div>
-              <div class="hero-trust-item">
-                <span class="hero-trust-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>
-                </span>
-                <span>Fast Response</span>
-              </div>
-              <div class="hero-trust-item">
-                <span class="hero-trust-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-4.5 7-10a7 7 0 10-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
-                </span>
-                <span>Nearby Support</span>
-              </div>
-              <div class="hero-trust-item">
-                <span class="hero-trust-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 118 0v3"/></svg>
-                </span>
-                <span>Manual Payment Verification</span>
-              </div>
             </div>
           </div>
 
-          <div class="hero-assurance-bar" aria-label="VoltFriq service assurances">
-            <div class="hero-assurance-item">
-              <span class="hero-assurance-icon" aria-hidden="true">
+          <div class="hero-trust-grid" id="landing-trust" aria-label="Why customers trust VoltFriq">
+            <div class="hero-trust-item">
+              <span class="hero-trust-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
               </span>
-              <span>Trusted Professionals</span>
+              <span>Verified Electricians</span>
             </div>
-            <div class="hero-assurance-item">
-              <span class="hero-assurance-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.7-5 2.7.9-5.6-4-3.9 5.6-.8L12 3z"/></svg>
+            <div class="hero-trust-item">
+              <span class="hero-trust-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>
               </span>
-              <span>Quality Workmanship</span>
+              <span>Fast Response</span>
             </div>
-            <div class="hero-assurance-item">
-              <span class="hero-assurance-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+            <div class="hero-trust-item">
+              <span class="hero-trust-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-4.5 7-10a7 7 0 10-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
               </span>
-              <span>On-time Service</span>
+              <span>Nearby Support</span>
             </div>
-            <div class="hero-assurance-item">
-              <span class="hero-assurance-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/></svg>
+            <div class="hero-trust-item">
+              <span class="hero-trust-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 118 0v3"/></svg>
               </span>
-              <span>Support You Can Rely On</span>
+              <span>Safe &amp; Reliable</span>
             </div>
           </div>
         </section>
+
+        <section class="landing-section" id="landing-why">
+          <div class="section-header">
+            <span class="section-line" aria-hidden="true"></span>
+            <h2 class="section-title">Why Choose VoltFriq?</h2>
+            <span class="section-line" aria-hidden="true"></span>
+          </div>
+
+          <div class="why-grid">
+            <article class="why-card">
+              <div class="why-card-icon" aria-hidden="true">👥</div>
+              <h3>Certified &amp; Verified Pros</h3>
+              <p>Skilled and background-checked electricians for homes, offices, and urgent callouts.</p>
+            </article>
+            <article class="why-card">
+              <div class="why-card-icon" aria-hidden="true">⚡</div>
+              <h3>Fast Response</h3>
+              <p>Quick arrival, minimal downtime, and clear updates from booking to completion.</p>
+            </article>
+            <article class="why-card">
+              <div class="why-card-icon" aria-hidden="true">📄</div>
+              <h3>Transparent Pricing</h3>
+              <p>Clear workmanship expectations, straightforward pricing, and no surprise charges.</p>
+            </article>
+            <article class="why-card">
+              <div class="why-card-icon" aria-hidden="true">🛡️</div>
+              <h3>100% Satisfaction Guaranteed</h3>
+              <p>We stay accountable until the job is done right and the customer is satisfied.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section landing-section-stats" id="landing-stats">
+          <div class="stats-grid">
+            <article class="stat-pill">
+              <div class="stat-icon" aria-hidden="true">✓</div>
+              <div>
+                <strong>5,000+</strong>
+                <span>Jobs Completed</span>
+              </div>
+            </article>
+            <article class="stat-pill">
+              <div class="stat-icon" aria-hidden="true">☺</div>
+              <div>
+                <strong>4.9/5</strong>
+                <span>Customer Rating</span>
+              </div>
+            </article>
+            <article class="stat-pill">
+              <div class="stat-icon" aria-hidden="true">◔</div>
+              <div>
+                <strong>30–60 Mins</strong>
+                <span>Arrival Time</span>
+              </div>
+            </article>
+            <article class="stat-pill">
+              <div class="stat-icon" aria-hidden="true">◎</div>
+              <div>
+                <strong>100%</strong>
+                <span>Local Support</span>
+              </div>
+            </article>
+          </div>
+        </section>
       </main>
-      <footer class="home-powered-footer">Powered by Nuchapta Electricals &amp; DotXan Tech.</footer>
+
+      <div class="mobile-sticky-cta">
+        <button class="btn-primary mobile-sticky-btn" id="btn-begin-area-mobile">Book an Electrician Now</button>
+      </div>
+
+      <footer class="home-powered-footer" id="landing-footer">Powered by Nuchapta Electricals.</footer>
     </div>
   </div>
 
@@ -317,6 +416,7 @@
       <div class="form-group">
         <label class="form-label">Mobile number</label>
         <input type="tel" class="form-input" id="guest-phone" inputmode="tel" autocomplete="tel" placeholder="0800 000 0000" />
+        <div class="helper-note guest-contact-note" id="guest-contact-note"></div>
       </div>
 
       <div class="guest-location-confirm card" id="guest-location-confirm"></div>
@@ -334,8 +434,8 @@
     </div>
     <div class="screen-body auth-body">
       <div class="auth-icon">&#128274;</div>
-      <h2 class="auth-heading">Save your job and continue</h2>
-      <p class="auth-sub">Your account keeps your jobs, payment proofs, receipts, and ratings in one secure place.</p>
+      <h2 class="auth-heading" id="auth-heading">Save your job and continue</h2>
+      <p class="auth-sub" id="auth-sub">Your account keeps your jobs, payment proofs, receipts, and ratings in one secure place.</p>
 
       <div class="auth-tabs tabs">
         <button class="tab active" id="tab-login" data-tab="login">Login</button>
@@ -363,7 +463,71 @@
         <button class="btn-primary btn-full" id="btn-auth-submit">Login</button>
       </div>
 
-      <a href="electrician.html?apply=1" class="auth-elec-link">&#128736; Become a VoltFriq</a>
+      <a href="/electricians/apply" class="auth-elec-link">Apply as a VoltFriq</a>
+    </div>
+  </div>
+
+  <div id="screen-dashboard" class="screen">
+    <div class="screen-header">
+      <button class="btn-icon" onclick="goBack()" aria-label="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="screen-header-title">Customer Dashboard</div>
+    </div>
+    <div class="screen-body dashboard-body">
+      <section class="dashboard-hero card">
+        <div class="dashboard-kicker">Account</div>
+        <h2 id="dashboard-name">Customer</h2>
+        <p id="dashboard-sub">Manage active jobs, saved addresses, and account details in one place.</p>
+        <div class="dashboard-hero-actions">
+          <button class="btn-primary" id="btn-dashboard-new-booking">Book Another Job</button>
+          <button class="btn-secondary" id="btn-dashboard-track">Open Active Job</button>
+        </div>
+      </section>
+
+      <div class="dashboard-grid">
+        <section class="dashboard-panel card">
+          <div class="dashboard-panel-head">
+            <div>
+              <div class="issue-summary-title">Active Jobs</div>
+              <div class="dashboard-panel-copy">Track what is moving right now.</div>
+            </div>
+          </div>
+          <div class="dashboard-stack" id="dashboard-active-jobs"></div>
+        </section>
+
+        <section class="dashboard-panel card">
+          <div class="dashboard-panel-head">
+            <div>
+              <div class="issue-summary-title">Recent History</div>
+              <div class="dashboard-panel-copy">Jump back into recent requests and receipts.</div>
+            </div>
+            <button class="btn-ghost dashboard-inline-link" id="btn-dashboard-history">View All</button>
+          </div>
+          <div class="dashboard-stack" id="dashboard-history-preview"></div>
+        </section>
+
+        <section class="dashboard-panel card">
+          <div class="dashboard-panel-head">
+            <div>
+              <div class="issue-summary-title">Saved Addresses</div>
+              <div class="dashboard-panel-copy">Reuse the places you request service most often.</div>
+            </div>
+          </div>
+          <div class="mini-meta-list" id="dashboard-addresses"></div>
+        </section>
+
+        <section class="dashboard-panel card">
+          <div class="dashboard-panel-head">
+            <div>
+              <div class="issue-summary-title">Account</div>
+              <div class="dashboard-panel-copy">Customer access stays optional. Dashboard access does not.</div>
+            </div>
+          </div>
+          <div class="mini-meta-list" id="dashboard-account"></div>
+          <button class="btn-secondary btn-full" id="btn-dashboard-signout">Sign Out</button>
+        </section>
+      </div>
     </div>
   </div>
 
@@ -384,7 +548,7 @@
 
       <div class="match-electrician-card card" id="match-electrician-card">
         <div class="match-electrician-head">
-          <div class="match-electrician-avatar" id="match-avatar">👷</div>
+          <div class="match-electrician-avatar" id="match-avatar">⚡</div>
           <div>
             <div class="match-electrician-name" id="match-name">--</div>
             <div class="match-electrician-specialty" id="match-specialty">--</div>
@@ -401,7 +565,6 @@
       <div class="transparency-card card" id="transparency-card"></div>
 
       <button class="btn-primary btn-large" id="btn-continue-match">Submit Booking</button>
-      <button class="btn-secondary btn-full" id="btn-change-specialist" style="display:none;">Change Specialist</button>
     </div>
   </div>
 
@@ -476,6 +639,12 @@
       <div class="issue-summary card">
         <div class="issue-summary-title">Notifications</div>
         <div class="mini-meta-list" id="customer-notifications-list"></div>
+      </div>
+
+      <div class="issue-summary card guest-dashboard-card" id="guest-dashboard-card" style="display:none;">
+        <div class="issue-summary-title">Optional Account</div>
+        <div class="guest-dashboard-copy">Create a customer account for future dashboards, faster repeat bookings, and easier tracking across devices.</div>
+        <button class="btn-secondary btn-full" id="btn-guest-create-account">Create Account</button>
       </div>
 
       <div class="issue-summary card">
@@ -755,11 +924,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="env.js?v=20260429-stability"></script>
-  <script src="js/config.js?v=20260429-stability"></script>
-  <script src="js/store.js?v=20260429-stability"></script>
-  <script src="js/navigation.js?v=20260429-stability"></script>
-  <script src="js/chat.js?v=20260429-stability"></script>
-  <script src="js/customer.js?v=20260429-stability"></script>
+  <script src="/env.js?v=20260503-ia3"></script>
+  <script src="/js/config.js?v=20260503-ia3"></script>
+  <script src="/js/store.js?v=20260503-ia3"></script>
+  <script src="/js/navigation.js?v=20260503-ia3"></script>
+  <script src="/js/chat.js?v=20260503-ia3"></script>
+  <script src="/js/customer.js?v=20260503-ia3"></script>
 </body>
 </html>

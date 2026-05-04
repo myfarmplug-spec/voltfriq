@@ -91,6 +91,10 @@ create table if not exists public.electricians (
   total_ratings integer not null default 0,
   completed_jobs integer not null default 0,
   availability_status text not null default 'available',
+  onboarding_score numeric(5,2) not null default 0,
+  onboarding_review_status text not null default 'pending',
+  onboarding_feedback text,
+  onboarding_answers jsonb not null default '[]'::jsonb,
   last_offered_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -114,9 +118,25 @@ create table if not exists public.electrician_skills (
   unique (electrician_id, category)
 );
 
+create table if not exists public.expertise_categories (
+  id uuid primary key default gen_random_uuid(),
+  label text not null unique,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.electrician_certifications (
+  id uuid primary key default gen_random_uuid(),
+  electrician_id uuid not null references public.electricians(id) on delete cascade,
+  title text not null,
+  license_number text,
+  issuer text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.admin_settings (
   id uuid primary key default gen_random_uuid(),
-  service_areas text[] not null default '{"Lekki Phase 1","Victoria Island","Ikeja","Surulere","Yaba","Ajah"}',
+  service_areas text[] not null default '{"GRA Phase 2","D-Line","Woji","Rumuola","Rumuodomaya","Ada George","Eliozu","Trans Amadi"}',
   issue_categories text[] not null default '{"Power outage","Wiring issue","Tripped breaker","Light fitting","Socket repair","Generator","CCTV Installation","Solar Installation","General Installation","Security Alarm","Inverter","Other"}',
   assessment_fee numeric(12,2) not null default 5000,
   ranking_weights jsonb not null default '{"distance":20,"rating":50,"availability":20,"completed_jobs":30,"skill_match":70}'::jsonb,
@@ -270,6 +290,8 @@ drop trigger if exists jobs_touch_updated_at on public.jobs;
 create trigger jobs_touch_updated_at before update on public.jobs for each row execute function public.touch_updated_at();
 drop trigger if exists admin_settings_touch_updated_at on public.admin_settings;
 create trigger admin_settings_touch_updated_at before update on public.admin_settings for each row execute function public.touch_updated_at();
+drop trigger if exists expertise_categories_touch_updated_at on public.expertise_categories;
+create trigger expertise_categories_touch_updated_at before update on public.expertise_categories for each row execute function public.touch_updated_at();
 
 create or replace function public.handle_job_status_notifications()
 returns trigger
@@ -1007,11 +1029,30 @@ insert into public.admin_settings (id)
 select gen_random_uuid()
 where not exists (select 1 from public.admin_settings);
 
+insert into public.expertise_categories (label)
+select category
+from (
+  values
+    ('Light fitting'),
+    ('Socket repair'),
+    ('Wiring issue'),
+    ('Inverter'),
+    ('Generator'),
+    ('Tripped breaker'),
+    ('General Installation'),
+    ('Inspection'),
+    ('Solar'),
+    ('Other')
+) as defaults(category)
+on conflict (label) do nothing;
+
 alter table public.profiles enable row level security;
 alter table public.customers enable row level security;
 alter table public.electricians enable row level security;
 alter table public.electrician_documents enable row level security;
 alter table public.electrician_skills enable row level security;
+alter table public.expertise_categories enable row level security;
+alter table public.electrician_certifications enable row level security;
 alter table public.admin_settings enable row level security;
 alter table public.jobs enable row level security;
 alter table public.job_photos enable row level security;
@@ -1067,6 +1108,39 @@ for all using (
 with check (
   public.is_admin() or exists (
     select 1 from public.electricians e where e.id = electrician_id and e.profile_id = auth.uid()
+  )
+);
+
+create policy "expertise categories readable by all" on public.expertise_categories
+for select to anon, authenticated
+using (true);
+
+create policy "expertise categories admin write" on public.expertise_categories
+for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+create policy "electrician certifications own or admin read" on public.electrician_certifications
+for select to authenticated
+using (
+  public.is_admin()
+  or exists (
+    select 1
+    from public.electricians e
+    where e.id = electrician_id
+      and e.profile_id = auth.uid()
+  )
+);
+
+create policy "electrician certifications own insert" on public.electrician_certifications
+for insert to authenticated
+with check (
+  public.is_admin()
+  or exists (
+    select 1
+    from public.electricians e
+    where e.id = electrician_id
+      and e.profile_id = auth.uid()
   )
 );
 
