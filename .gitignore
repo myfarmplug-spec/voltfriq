@@ -3,5 +3,4 @@
 .env
 .env.local
 .env.*.local
-env.js
 .vercel

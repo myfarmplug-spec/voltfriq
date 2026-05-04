@@ -815,7 +815,9 @@ const Store = (() => {
       .eq('customer_id', customerId)
       .order('created_at', { ascending: false });
     if (result.error) throw normalizeError(result.error, 'Could not load customer jobs.');
-    return (result.data || []).map(normalizeJob);
+    const jobs = (result.data || []).map(normalizeJob);
+    await Promise.all(jobs.map(hydrateProtectedAssets));
+    return jobs;
   }
 
   async function listElectricianJobs() {
@@ -837,7 +839,9 @@ const Store = (() => {
       .eq('assigned_electrician_id', electricianId)
       .order('created_at', { ascending: false });
     if (result.error) throw normalizeError(result.error, 'Could not load assigned jobs.');
-    return (result.data || []).map(normalizeJob);
+    const jobs = (result.data || []).map(normalizeJob);
+    await Promise.all(jobs.map(hydrateProtectedAssets));
+    return jobs;
   }
 
   async function listAdminJobs() {
@@ -860,11 +864,7 @@ const Store = (() => {
       .order('created_at', { ascending: false });
     if (result.error) throw normalizeError(result.error, 'Could not load admin jobs.');
     const jobs = (result.data || []).map(normalizeJob);
-    await Promise.all(jobs.map(async (job) => {
-      if (job.latestPayment && job.latestPayment.proof_path) {
-        job.latestPayment.proofUrl = await createSignedStorageUrl('paymentProofs', job.latestPayment.proof_path);
-      }
-    }));
+    await Promise.all(jobs.map(hydrateProtectedAssets));
     return jobs;
   }
 
@@ -895,7 +895,7 @@ const Store = (() => {
       .eq('id', jobId)
       .single();
     if (result.error) throw normalizeError(result.error, 'Could not load the job details.');
-    return normalizeJob(result.data);
+    return hydrateProtectedAssets(normalizeJob(result.data));
   }
 
   async function previewMatches(input) {
@@ -998,7 +998,7 @@ const Store = (() => {
       latitude: input.latitude || null,
       longitude: input.longitude || null
     }).catch(() => {});
-    const normalized = normalizeJob(jobRow);
+    const normalized = await hydrateProtectedAssets(normalizeJob(jobRow));
     normalized.guestAccessToken = accessToken;
     return normalized;
   }
@@ -1010,7 +1010,7 @@ const Store = (() => {
       p_access_token: accessToken
     });
     if (result.error) throw normalizeError(result.error, 'Could not load guest job tracking.');
-    return normalizeJob(result.data);
+    return hydrateProtectedAssets(normalizeJob(result.data));
   }
 
   async function acceptAssignedJob(jobId) {
@@ -1665,6 +1665,19 @@ const Store = (() => {
     const result = await client.storage.from(bucket).createSignedUrl(path, expiresIn || 900);
     if (result.error) return '';
     return result.data && result.data.signedUrl ? result.data.signedUrl : '';
+  }
+
+  async function hydrateProtectedAssets(job) {
+    if (!job) return job;
+    await Promise.all((job.photos || []).map(async (photo) => {
+      if (photo.file_path) {
+        photo.url = await createSignedStorageUrl('jobPhotos', photo.file_path);
+      }
+    }));
+    if (job.latestPayment && job.latestPayment.proof_path) {
+      job.latestPayment.proofUrl = await createSignedStorageUrl('paymentProofs', job.latestPayment.proof_path);
+    }
+    return job;
   }
 
   function mapQuote(rawQuotes) {

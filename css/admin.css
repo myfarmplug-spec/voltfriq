@@ -712,27 +712,6 @@
   background: var(--yellow); margin-left: auto; margin-top: 4px;
 }
 
-/* ─── BOTTOM NAV (5 items) ────────────────────────────────────── */
-.admin-bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  display: flex; background: var(--white);
-  border-top: 1px solid #E5E7EB;
-  padding: 6px 0 max(6px, env(safe-area-inset-bottom));
-  z-index: 100;
-}
-.admin-nav-item {
-  flex: 1; display: flex; flex-direction: column;
-  align-items: center; gap: 2px; padding: 6px 0;
-  font-size: 10px; font-weight: 500; color: var(--mid);
-  background: none; border: none; cursor: pointer;
-  font-family: inherit;
-  -webkit-tap-highlight-color: transparent;
-  transition: color 0.15s;
-}
-.admin-nav-item.active { color: var(--yellow); }
-.admin-nav-icon { font-size: 18px; line-height: 1; }
-.admin-nav-label { line-height: 1; }
-
 /* ─── STATUS BADGES ───────────────────────────────────────────── */
 .status-pending      { background: var(--yellow-light); color: #92400E; }
 .status-fee-pending  { background: var(--blue-light); color: #1E40AF; }
@@ -1014,4 +993,92 @@
 
 .price-item-amount {
   color: #ffd978;
+}
+
+/* ─── FINAL DARK-SHELL GUARANTEE ─────────────────────────────── */
+.admin-stat,
+.admin-pending-card,
+.admin-queue-card,
+.admin-job-card,
+.admin-info-card,
+.admin-list-item,
+.admin-file-card,
+.admin-empty,
+.admin-timeline,
+.admin-elec-option,
+.admin-elec-card,
+.admin-material-item,
+.admin-material-card,
+.admin-photo-box,
+.admin-chat-wrap,
+.admin-chat-list-item,
+.admin-price-item,
+.price-item,
+.price-add-form,
+.admin-doc-card,
+.admin-finance-card,
+.admin-dispute-card,
+.admin-appeal-card,
+.admin-settings-card,
+.admin-review-card {
+  background: rgba(12, 24, 41, 0.96) !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: var(--text-primary) !important;
+}
+
+.admin-feed-text,
+.admin-job-card-name,
+.admin-pending-label,
+.admin-queue-title,
+.admin-info-card-title,
+.admin-screen-title,
+.admin-section-title,
+.admin-detail-title,
+.admin-list-title,
+.admin-file-name,
+.admin-material-job,
+.admin-tx-amount,
+.admin-chat-name,
+.admin-review-title {
+  color: var(--text-primary) !important;
+}
+
+.admin-job-card-id,
+.admin-pending-count,
+.admin-feed-time,
+.admin-feed-text small,
+.admin-job-card-row,
+.admin-info-label,
+.admin-screen-title small,
+.admin-queue-copy,
+.admin-list-subtitle,
+.admin-file-meta,
+.admin-material-meta,
+.admin-tx-meta,
+.admin-chat-preview,
+.admin-review-copy {
+  color: var(--text-secondary) !important;
+}
+
+.admin-feed-item,
+.admin-job-card-bottom,
+.admin-info-row,
+.admin-file-row,
+.admin-material-item,
+.admin-tx-item,
+.admin-chat-list-item,
+.admin-review-row,
+.admin-detail-section {
+  border-color: var(--border-subtle) !important;
+}
+
+.admin-filter-tabs,
+.admin-filter-tab.active,
+.admin-table-wrap,
+.admin-table th,
+.admin-table td,
+.admin-search-input,
+.admin-select,
+.admin-form-surface {
+  border-color: var(--border-subtle) !important;
 }

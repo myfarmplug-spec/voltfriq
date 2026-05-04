@@ -96,7 +96,7 @@ const ElecApp = (() => {
     try {
       const boot = await Store.init();
       if (!boot.configured) {
-        showError('Add your Supabase keys in js/config.js before using the electrician portal.');
+        showError('The electrician portal is still starting. Refresh the page in a moment.');
         return;
       }
 

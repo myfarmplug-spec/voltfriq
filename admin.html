@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VoltFriq Admin Portal</title>
+  <meta name="theme-color" content="#07111d" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/assets/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -34,20 +38,25 @@
         <button class="btn-primary btn-full" id="btn-admin-login">Login</button>
         <div class="admin-login-error" id="admin-login-error">Invalid email or password</div>
       </div>
+      <div class="portal-legal-links">
+        <a href="/terms">Terms</a>
+        <span aria-hidden="true">.</span>
+        <a href="/privacy">Privacy</a>
+      </div>
     </div>
   </div>
 
   <!-- ═══ SCREEN: DASHBOARD ═══════════════════════════════════════ -->
   <div id="screen-admin-dashboard" class="screen">
     <div class="admin-body">
-      <div class="admin-screen-title">Operations Dashboard <small>Manual control stays available across matching, payments, and payouts.</small></div>
+      <div class="admin-screen-title">Operations Dashboard <small>Prioritise the jobs, proofs, approvals, and disputes that need action now.</small></div>
 
       <div class="admin-stats" id="admin-stats">
         <!-- JS fills -->
       </div>
 
       <div class="admin-section">
-        <div class="admin-section-title">Alerts <span class="count-badge" id="pending-count">0</span></div>
+        <div class="admin-section-title">Needs action now <span class="count-badge" id="pending-count">0</span></div>
         <div class="admin-pending-cards" id="admin-pending-actions">
           <!-- JS fills -->
         </div>

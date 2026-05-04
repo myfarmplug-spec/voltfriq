@@ -51,6 +51,14 @@
       "destination": "/index.html"
     },
     {
+      "source": "/terms",
+      "destination": "/terms.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
       "source": "/pricing",
       "destination": "/index.html"
     },

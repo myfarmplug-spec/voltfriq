@@ -38,12 +38,44 @@ const missingTables = requiredTables.filter((name) => {
   return !pattern.test(sqlCorpus);
 });
 
-if (missingRpcs.length || missingTables.length) {
+const duplicateTargets = [
+  'wallets',
+  'wallet_transactions',
+  'referrals',
+  'disputes',
+  'customer_addresses'
+];
+
+const duplicateFunctions = [
+  'verify_job_payment',
+  'create_guest_customer_job',
+  'update_guest_job_status'
+];
+
+const duplicateTableHits = duplicateTargets.filter((name) => {
+  const pattern = new RegExp(`create\\s+table(?:\\s+if\\s+not\\s+exists)?\\s+public\\.${name}\\b`, 'ig');
+  const hits = schemaSource.match(pattern);
+  return (hits || []).length > 1;
+});
+
+const duplicateFunctionHits = duplicateFunctions.filter((name) => {
+  const pattern = new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${name}\\b`, 'ig');
+  const hits = schemaSource.match(pattern);
+  return (hits || []).length > 1;
+});
+
+if (missingRpcs.length || missingTables.length || duplicateTableHits.length || duplicateFunctionHits.length) {
   if (missingRpcs.length) {
     console.error('Missing RPC definitions:\n- ' + missingRpcs.join('\n- '));
   }
   if (missingTables.length) {
     console.error('Missing required tables:\n- ' + missingTables.join('\n- '));
+  }
+  if (duplicateTableHits.length) {
+    console.error('Duplicate table definitions in schema.sql:\n- ' + duplicateTableHits.join('\n- '));
+  }
+  if (duplicateFunctionHits.length) {
+    console.error('Duplicate function definitions in schema.sql:\n- ' + duplicateFunctionHits.join('\n- '));
   }
   process.exit(1);
 }

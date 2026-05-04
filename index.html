@@ -17,6 +17,9 @@
   <meta name="twitter:description" content="Trusted electricians, fast response, and nearby support in Port Harcourt." />
   <meta name="twitter:image" content="https://www.voltfriq.com/assets/voltfriq-home-hero.png?v=20260429-stability" />
   <link rel="canonical" href="https://www.voltfriq.com/" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/assets/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -39,8 +42,8 @@
             <a class="site-nav-link is-active" href="#screen-welcome">Home</a>
             <a class="site-nav-link" href="#landing-trust">Services</a>
             <a class="site-nav-link" href="#landing-why">How It Works</a>
-            <a class="site-nav-link" href="#landing-stats">About Us</a>
-            <a class="site-nav-link" href="#landing-footer">Contact</a>
+            <a class="site-nav-link" href="/privacy">Privacy</a>
+            <a class="site-nav-link" href="/terms">Terms</a>
           </nav>
 
           <div class="site-header-actions">
@@ -49,7 +52,7 @@
             <button class="btn-ghost welcome-link" id="btn-welcome-signup">Create Account</button>
             <button class="btn-ghost welcome-login-link" id="btn-welcome-login">Sign In</button>
             <button class="btn-primary nav-cta" id="btn-begin-area-nav">
-              <span>Book an Electrician</span>
+              <span>Find an Electrician</span>
             </button>
             <button class="menu-toggle" type="button" id="btn-mobile-menu" aria-label="Open navigation menu" aria-controls="mobile-menu-panel" aria-expanded="false">
               <span></span><span></span><span></span>
@@ -86,17 +89,17 @@
                 <span class="location-badge-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s7-4.5 7-10a7 7 0 10-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
                 </span>
-                <span>Port-Harcourt</span>
+                <span>Now live in Port Harcourt</span>
               </div>
               <h1 class="welcome-title">
-                <span class="title-line">Port-Harcourt,</span>
-                <span class="title-line title-highlight">We Are Live</span>
-                <span class="title-line">In Your City!</span>
+                <span class="title-line">Book an</span>
+                <span class="title-line title-highlight">electrician</span>
+                <span class="title-line">near you.</span>
               </h1>
-              <p class="welcome-sub">Trusted electricians, fast response, and nearby support — all in Port-Harcourt.</p>
+              <p class="welcome-sub">Fast, verified, nearby help for homes and businesses in Port Harcourt.</p>
               <div class="hero-actions">
                 <button class="btn-primary hero-primary-btn" id="btn-begin-area">
-                  <span>Book an Electrician Now</span>
+                  <span>Find an Electrician</span>
                   <span class="hero-primary-icon" aria-hidden="true">→</span>
                 </button>
                 <button class="btn-secondary hero-secondary-btn" id="btn-open-dashboard-hero" style="display:none;">Open Dashboard</button>
@@ -147,7 +150,7 @@
               <span class="hero-trust-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 118 0v3"/></svg>
               </span>
-              <span>Safe &amp; Reliable</span>
+              <span>Manual Payment Verification</span>
             </div>
           </div>
         </section>
@@ -186,28 +189,28 @@
         <section class="landing-section landing-section-stats" id="landing-stats">
           <div class="stats-grid">
             <article class="stat-pill">
-              <div class="stat-icon" aria-hidden="true">✓</div>
+              <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M20 6L9 17l-5-5"/></svg></div>
               <div>
                 <strong>5,000+</strong>
                 <span>Jobs Completed</span>
               </div>
             </article>
             <article class="stat-pill">
-              <div class="stat-icon" aria-hidden="true">☺</div>
+              <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.3 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/></svg></div>
               <div>
                 <strong>4.9/5</strong>
                 <span>Customer Rating</span>
               </div>
             </article>
             <article class="stat-pill">
-              <div class="stat-icon" aria-hidden="true">◔</div>
+              <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
               <div>
                 <strong>30–60 Mins</strong>
                 <span>Arrival Time</span>
               </div>
             </article>
             <article class="stat-pill">
-              <div class="stat-icon" aria-hidden="true">◎</div>
+              <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M12 21s7-4.5 7-10a7 7 0 10-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg></div>
               <div>
                 <strong>100%</strong>
                 <span>Local Support</span>
@@ -218,10 +221,13 @@
       </main>
 
       <div class="mobile-sticky-cta">
-        <button class="btn-primary mobile-sticky-btn" id="btn-begin-area-mobile">Book an Electrician Now</button>
+        <button class="btn-primary mobile-sticky-btn" id="btn-begin-area-sticky">Find an Electrician</button>
       </div>
 
-      <footer class="home-powered-footer" id="landing-footer">Powered by Nuchapta Electricals.</footer>
+      <footer class="home-powered-footer" id="landing-footer">
+        <span>&copy; 2026 VoltFriq. All rights reserved.</span>
+        <span class="footer-legal-links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a></span>
+      </footer>
     </div>
   </div>
 
@@ -321,7 +327,7 @@
         <div class="issue-estimate-card" id="issue-estimate-card" style="display:none;">
           <span>Estimated Workmanship Fee</span>
           <strong id="issue-estimate-value">--</strong>
-          <small>Final cost may vary after inspection.</small>
+          <small>Includes a ₦5,000 assessment visit for site visit and diagnosis. Final cost may vary after inspection.</small>
         </div>
       </div>
 
@@ -469,6 +475,11 @@
       </div>
 
       <a href="/electricians/apply" class="auth-elec-link">Apply as a VoltFriq</a>
+      <div class="portal-legal-links">
+        <a href="/terms">Terms</a>
+        <span aria-hidden="true">.</span>
+        <a href="/privacy">Privacy</a>
+      </div>
     </div>
   </div>
 
@@ -570,6 +581,7 @@
       <div class="transparency-card card" id="transparency-card"></div>
 
       <button class="btn-primary btn-large" id="btn-continue-match">Submit Booking</button>
+      <p class="booking-legal-note">By booking, you agree to VoltFriq&apos;s <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
     </div>
   </div>
 

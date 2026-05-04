@@ -58,7 +58,7 @@
     try {
       const boot = await Store.init();
       if (!boot.configured) {
-        showLoginError('Add your Supabase keys in js/config.js before using the admin portal.');
+        showLoginError('The admin portal is still starting. Refresh the page in a moment.');
         return;
       }
 
@@ -444,7 +444,7 @@
     if (!selectedElectrician) return;
 
     const docs = (selectedElectrician.electrician_documents || []).map((documentItem) => {
-      const href = documentItem.signedUrl || (documentItem.file_path ? Store.getPublicStorageUrl('electricianDocuments', documentItem.file_path) : '');
+      const href = documentItem.signedUrl || '';
       const link = href ? '<a class="admin-inline-link" href="' + escapeAttribute(href) + '" target="_blank" rel="noreferrer">View file</a>' : 'No file';
       return '<div class="admin-file-row"><div><div class="admin-file-name">' + escapeHtml(documentLabel(documentItem.document_type)) + '</div><div class="admin-file-meta">' + escapeHtml(documentItem.status || 'pending') + '</div></div><div>' + link + '</div></div>';
     }).join('') || '<div class="admin-empty-inline">No documents uploaded.</div>';
@@ -957,7 +957,7 @@
     if (!payment) {
       return infoCard('Payment verification', [['Latest proof', 'No payment proof submitted yet']]);
     }
-    const proofUrl = payment.proofUrl || (payment.proof_path ? Store.getPublicStorageUrl('paymentProofs', payment.proof_path) : '');
+    const proofUrl = payment.proofUrl || '';
     const proofMarkup = proofUrl
       ? '<a class="admin-inline-link" href="' + escapeAttribute(proofUrl) + '" target="_blank" rel="noreferrer">Open payment proof</a>'
       : 'No proof file uploaded';

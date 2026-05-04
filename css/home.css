@@ -1,4 +1,4 @@
-/* VoltFriq Port-Harcourt launch landing page */
+/* VoltFriq booking-first landing page */
 
 body {
   background:
@@ -43,6 +43,35 @@ body.mobile-menu-open {
 .home-powered-footer {
   width: min(100%, 1380px);
   margin: 0 auto;
+}
+
+.home-powered-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: rgba(214, 225, 240, 0.72);
+}
+
+.footer-legal-links {
+  display: inline-flex;
+  gap: 14px;
+}
+
+.footer-legal-links a {
+  color: var(--yellow);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.stat-icon svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.hero-copy-panel {
+  justify-content: center;
 }
 
 .site-header {

@@ -115,6 +115,7 @@
     on('btn-begin-area', 'click', startBooking);
     on('btn-begin-area-nav', 'click', startBooking);
     on('btn-begin-area-mobile', 'click', startBooking);
+    on('btn-begin-area-sticky', 'click', startBooking);
     on('btn-welcome-signup', 'click', () => openCustomerAuthScreen('dashboard', 'register'));
     on('btn-mobile-signup-inline', 'click', () => openCustomerAuthScreen('dashboard', 'register'));
     on('btn-mobile-signup', 'click', () => {
@@ -1035,7 +1036,7 @@
       ? ((Store.getCurrentProfile() && Store.getCurrentProfile().phone) || 'Account phone on file')
       : draft.guestPhone;
 
-    card.style.display = '';
+    card.style.display = 'none';
     if (stats) stats.style.display = 'none';
     transparency.style.display = '';
     submitButton.disabled = false;
@@ -1043,16 +1044,16 @@
 
     summary.innerHTML = [
       '<div class="issue-summary-title">Review your booking</div>',
-      '<div class="helper-note">Submit once everything looks right. VoltFriq will dispatch the best available approved electrician immediately after your booking is created.</div>' +
+      '<div class="helper-note">Check the details below, then submit once. VoltFriq will route the nearest approved electrician after your booking is created.</div>' +
       '<ul class="trust-inline-list">' +
-        '<li>No work starts until you review and approve the next payment step.</li>' +
-        '<li>Payment proofs are checked manually before any work or payout moves forward.</li>' +
-        '<li>You can track the assigned VoltFriq and report an issue directly from the job screen.</li>' +
+        '<li>No work starts until you approve the next step.</li>' +
+        '<li>Payment proofs are manually verified.</li>' +
+        '<li>You can track every update after submission.</li>' +
       '</ul>'
     ].join('');
     if (draft.requiresAssessment) {
       const feeAmount = Store.formatCurrency((Store.getSettings() && Store.getSettings().assessment_fee) || 0);
-      summary.innerHTML += '<div class="flow-fee-note"><strong>Inspection / assessment charge:</strong> ' + escapeHtml(feeAmount) + '. This covers the first on-site diagnosis when the issue needs a physical check before final workmanship pricing is confirmed.</div>';
+      summary.innerHTML += '<div class="flow-fee-note"><strong>Assessment visit:</strong> ' + escapeHtml(feeAmount) + '. This covers site visit and diagnosis before final workmanship pricing is confirmed.</div>';
     }
     document.getElementById('match-avatar').textContent = '⚡';
     document.getElementById('match-name').textContent = 'What happens next';
@@ -2181,9 +2182,15 @@
   function clearError() {
     if (screenBusy) screenBusy = false;
     const authError = document.getElementById('auth-error');
-    authError.classList.remove('is-success');
-    authError.style.display = 'none';
-    authError.textContent = '';
+    if (authError) {
+      authError.classList.remove('is-success');
+      authError.style.display = 'none';
+      authError.textContent = '';
+    }
+    document.querySelectorAll('.flow-error').forEach((error) => {
+      error.style.display = 'none';
+      error.textContent = '';
+    });
   }
 
   function showError(error) {
@@ -2193,6 +2200,21 @@
         ? error.message
         : 'Something went wrong.';
     const authError = document.getElementById('auth-error');
+    const activeScreen = document.querySelector('.screen.active');
+    if (activeScreen && activeScreen.id !== 'screen-customer-auth') {
+      const body = activeScreen.querySelector('.screen-body') || activeScreen;
+      let flowError = body.querySelector('.flow-error');
+      if (!flowError) {
+        flowError = document.createElement('div');
+        flowError.className = 'flow-error';
+        flowError.setAttribute('role', 'alert');
+        body.insertBefore(flowError, body.firstElementChild || null);
+      }
+      flowError.textContent = message;
+      flowError.style.display = 'block';
+      return;
+    }
+    if (!authError) return;
     authError.classList.remove('is-success');
     authError.style.display = 'block';
     authError.textContent = message;
