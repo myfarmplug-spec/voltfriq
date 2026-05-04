@@ -29,9 +29,18 @@
 .admin-login-card .form-input::placeholder { color: rgba(255,255,255,0.3); }
 .admin-login-card .form-label { color: rgba(255,255,255,0.5); }
 .admin-login-card .btn-primary { width: 100%; margin-top: 8px; }
+.admin-inline-link {
+  padding: 0 !important;
+  min-height: auto !important;
+  margin-top: 8px;
+  color: var(--yellow) !important;
+}
 .admin-login-error {
   color: var(--red); font-size: 13px; font-weight: 500;
   text-align: center; margin-top: 12px; display: none;
+}
+.admin-login-error.is-success {
+  color: #8ef1c6;
 }
 /* ─── ADMIN BODY (screens after login) ────────────────────────── */
 .admin-body {

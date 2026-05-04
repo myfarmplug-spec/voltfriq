@@ -641,6 +641,26 @@ const Store = (() => {
     return result.data;
   }
 
+  async function requestPasswordReset(email, redirectTo) {
+    const client = ensureClient();
+    const result = await client.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectTo || (window.location.origin + '/login?reset=1')
+    });
+    if (result.error) throw normalizeError(result.error, 'Could not send the reset link.');
+    return true;
+  }
+
+  async function updatePassword(nextPassword) {
+    const client = ensureClient();
+    if (!nextPassword || nextPassword.length < 8) {
+      throw new Error('Enter a new password with at least 8 characters.');
+    }
+    const result = await client.auth.updateUser({ password: nextPassword });
+    if (result.error) throw normalizeError(result.error, 'Could not update the password.');
+    await hydrateSession();
+    return result.data;
+  }
+
   async function signOut() {
     const client = ensureClient();
     if (!client) return;
@@ -831,7 +851,13 @@ const Store = (() => {
       `)
       .order('created_at', { ascending: false });
     if (result.error) throw normalizeError(result.error, 'Could not load admin jobs.');
-    return (result.data || []).map(normalizeJob);
+    const jobs = (result.data || []).map(normalizeJob);
+    await Promise.all(jobs.map(async (job) => {
+      if (job.latestPayment && job.latestPayment.proof_path) {
+        job.latestPayment.proofUrl = await createSignedStorageUrl('paymentProofs', job.latestPayment.proof_path);
+      }
+    }));
+    return jobs;
   }
 
   async function getJob(jobId) {
@@ -1184,7 +1210,16 @@ const Store = (() => {
     }
     const result = await query;
     if (result.error) throw normalizeError(result.error, 'Could not load electricians.');
-    return result.data || [];
+    const electricians = result.data || [];
+    await Promise.all(electricians.map(async (electrician) => {
+      const docs = electrician.electrician_documents || [];
+      await Promise.all(docs.map(async (documentItem) => {
+        if (documentItem.file_path) {
+          documentItem.signedUrl = await createSignedStorageUrl('electricianDocuments', documentItem.file_path);
+        }
+      }));
+    }));
+    return electricians;
   }
 
   async function getWalletSummary() {
@@ -1615,6 +1650,15 @@ const Store = (() => {
     return result && result.data ? result.data.publicUrl || '' : '';
   }
 
+  async function createSignedStorageUrl(bucketKey, path, expiresIn) {
+    const client = ensureClient();
+    if (!client || !path) return '';
+    const bucket = (config().storageBuckets && config().storageBuckets[bucketKey]) || STORAGE_PATHS[bucketKey] || bucketKey;
+    const result = await client.storage.from(bucket).createSignedUrl(path, expiresIn || 900);
+    if (result.error) return '';
+    return result.data && result.data.signedUrl ? result.data.signedUrl : '';
+  }
+
   function mapQuote(rawQuotes) {
     const quotes = rawQuotes || [];
     const current = quotes.length ? quotes[quotes.length - 1] : null;
@@ -1793,9 +1837,12 @@ const Store = (() => {
     getPaymentStatusLabel,
     formatCurrency,
     getPublicStorageUrl,
+    createSignedStorageUrl,
     signUpCustomer,
     signUpElectrician,
     signIn,
+    requestPasswordReset,
+    updatePassword,
     signOut,
     updateProfile,
     listCustomerJobs,

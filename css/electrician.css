@@ -109,6 +109,17 @@
   margin-bottom: 12px;
   text-align: center;
 }
+.elec-login-error.is-success {
+  background: rgba(16, 185, 129, 0.12);
+  color: #8ef1c6;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+}
+.elec-inline-link {
+  padding: 0 !important;
+  min-height: auto !important;
+  margin: 0 0 14px;
+  color: var(--yellow) !important;
+}
 
 .elec-inline-error {
   background: var(--red-light);

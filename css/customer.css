@@ -803,6 +803,20 @@
   font-size: 13px; font-weight: 600;
   margin-bottom: 12px;
 }
+.auth-error.is-success {
+  background: rgba(16, 185, 129, 0.12);
+  color: #8ef1c6;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+}
+.auth-inline-link {
+  padding: 0 !important;
+  min-height: auto !important;
+  margin: 2px 0 14px;
+  color: var(--yellow) !important;
+}
+.auth-inline-link:hover {
+  color: #ffe18e !important;
+}
 .auth-divider {
   display: flex; align-items: center; gap: 12px;
   width: 100%; max-width: 360px;
@@ -2614,6 +2628,24 @@
 
 .guest-contact-note.is-success {
   color: #7ff0c0;
+}
+
+.trust-inline-list {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: rgba(231, 239, 250, 0.78);
+  display: grid;
+  gap: 8px;
+  line-height: 1.55;
+}
+
+.flow-fee-note {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 184, 0, 0.08);
+  border: 1px solid rgba(255, 184, 0, 0.16);
+  color: #ffe5a8;
 }
 
 .status-line-dot {

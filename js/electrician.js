@@ -18,6 +18,12 @@ const ElecApp = (() => {
   let documentUploads = {};
   let validationAnswers = {};
   let pendingElectricianRoute = null;
+
+  function wantsPasswordReset() {
+    const query = new URLSearchParams(window.location.search || '');
+    const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+    return query.get('reset') === '1' || hash.get('type') === 'recovery';
+  }
   const ISSUE_LABELS = {
     'Light fitting': 'Light fitting',
     'Socket repair': 'Socket repair',
@@ -85,6 +91,7 @@ const ElecApp = (() => {
   async function init() {
     configureElectricianRoutes();
     bindEvents();
+    updateLoginRecoveryState();
     pendingElectricianRoute = getCurrentRouteState();
     try {
       const boot = await Store.init();
@@ -116,7 +123,7 @@ const ElecApp = (() => {
         }
       });
 
-      if (boot.profile) {
+      if (boot.profile && !wantsPasswordReset()) {
         await resumeSession(pendingElectricianRoute);
       } else {
         await handleElectricianRouteActivation({
@@ -233,6 +240,7 @@ const ElecApp = (() => {
 
   function bindEvents() {
     document.getElementById('btn-login').addEventListener('click', handleLogin);
+    document.getElementById('btn-login-forgot').addEventListener('click', handleForgotPassword);
     document.getElementById('login-password').addEventListener('keydown', (event) => {
       if (event.key === 'Enter') handleLogin();
     });
@@ -315,15 +323,36 @@ const ElecApp = (() => {
   }
 
   async function handleLogin() {
-    await withButtonLoading('btn-login', 'Signing In...', async () => {
+    await withButtonLoading('btn-login', wantsPasswordReset() ? 'Updating Password...' : 'Signing In...', async () => {
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value.trim();
+      if (wantsPasswordReset()) {
+        if (!password) throw new Error('Enter your new password to finish the reset.');
+        await Store.updatePassword(password);
+        window.history.replaceState({}, '', '/electricians/login');
+        updateLoginRecoveryState();
+        showNotice('Password updated. Sign in with the new password.');
+        document.getElementById('login-password').value = '';
+        return;
+      }
       if (!email || !password) throw new Error('Enter your email and password.');
       await Store.signIn(email, password);
       if ((Store.getCurrentProfile() || {}).role !== 'electrician') {
         throw new Error('This account is not registered as a VoltFriq.');
       }
       await resumeSession(pendingElectricianRoute);
+    });
+  }
+
+  async function handleForgotPassword() {
+    const email = document.getElementById('login-email').value.trim();
+    if (!email) {
+      showError('Enter your email first so we know where to send the reset link.');
+      return;
+    }
+    await withButtonLoading('btn-login-forgot', 'Sending Reset Link...', async () => {
+      await Store.requestPasswordReset(email, window.location.origin + '/electricians/login?reset=1');
+      showNotice('Reset link sent. Open it on this device, then choose a new password.');
     });
   }
 
@@ -720,6 +749,7 @@ const ElecApp = (() => {
 
   async function loadDashboard() {
     try {
+      renderDashboardLoading();
       currentJobs = await Store.listElectricianJobs();
       renderDashboardHeader();
       renderDashboardLists();
@@ -1465,6 +1495,7 @@ const ElecApp = (() => {
   function showError(message) {
     const loginError = document.getElementById('login-error');
     if (currentScreen === 'elec-login' && loginError) {
+      loginError.classList.remove('is-success');
       loginError.textContent = message;
       loginError.style.display = 'block';
       return;
@@ -1488,6 +1519,7 @@ const ElecApp = (() => {
   function clearError() {
     const error = document.getElementById('login-error');
     if (error) {
+      error.classList.remove('is-success');
       error.textContent = '';
       error.style.display = 'none';
     }
@@ -1498,6 +1530,51 @@ const ElecApp = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
+
+  function showNotice(message) {
+    const loginError = document.getElementById('login-error');
+    if (!loginError) return;
+    loginError.classList.add('is-success');
+    loginError.textContent = message;
+    loginError.style.display = 'block';
+  }
+
+  function updateLoginRecoveryState() {
+    const subtitle = document.querySelector('.elec-login-subtitle');
+    const passwordLabel = document.querySelector('.elec-login-form .form-group:nth-child(2) .form-label');
+    const passwordInput = document.getElementById('login-password');
+    const button = document.getElementById('btn-login');
+    const forgot = document.getElementById('btn-login-forgot');
+    const apply = document.getElementById('btn-apply');
+    if (!subtitle || !passwordLabel || !passwordInput || !button || !forgot || !apply) return;
+    if (wantsPasswordReset()) {
+      subtitle.textContent = 'Set a New Password';
+      passwordLabel.textContent = 'New Password';
+      passwordInput.placeholder = 'Enter your new password';
+      button.textContent = 'Update Password';
+      forgot.style.display = 'none';
+      apply.style.display = 'none';
+      return;
+    }
+    subtitle.textContent = 'Electrician Portal';
+    passwordLabel.textContent = 'Password';
+    passwordInput.placeholder = 'Enter password';
+    button.textContent = 'Login';
+    forgot.style.display = '';
+    apply.style.display = '';
+  }
+
+  function renderDashboardLoading() {
+    const stack = '<div class="skeleton-card"></div><div class="skeleton-card"></div>';
+    const stats = document.getElementById('dash-stats');
+    if (stats) {
+      stats.innerHTML = stack;
+    }
+    ['dash-progress-jobs', 'dash-new-assignments', 'dash-accepted-jobs', 'dash-completed-jobs'].forEach((id) => {
+      const container = document.getElementById(id);
+      if (container) container.innerHTML = stack;
+    });
+  }
 
   function normalizeElectricianPath(pathname) {
     const raw = String(pathname || '/electricians/login').trim();

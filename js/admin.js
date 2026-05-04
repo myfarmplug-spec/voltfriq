@@ -14,6 +14,12 @@
   let portalSubscription = null;
   let pendingAdminRoute = null;
 
+  function wantsPasswordReset() {
+    const query = new URLSearchParams(window.location.search || '');
+    const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+    return query.get('reset') === '1' || hash.get('type') === 'recovery';
+  }
+
   const ADMIN_ROUTE_TITLES = {
     'admin-login': 'VoltFriq Admin | Login',
     'admin-dashboard': 'VoltFriq Admin | Dashboard',
@@ -47,6 +53,7 @@
   async function init() {
     configureAdminRoutes();
     bindEvents();
+    updateAdminRecoveryUI();
     pendingAdminRoute = getCurrentRouteState();
     try {
       const boot = await Store.init();
@@ -64,7 +71,7 @@
         return;
       }
 
-      if (boot.profile && boot.profile.role === 'admin') {
+      if (boot.profile && boot.profile.role === 'admin' && !wantsPasswordReset()) {
         attachRealtime();
         await showApp(pendingAdminRoute);
       } else {
@@ -152,6 +159,7 @@
 
   function bindEvents() {
     $('#btn-admin-login').addEventListener('click', handleLogin);
+    $('#btn-admin-forgot').addEventListener('click', handleForgotPassword);
     $('#admin-password').addEventListener('keydown', (event) => {
       if (event.key === 'Enter') handleLogin();
     });
@@ -172,9 +180,18 @@
   }
 
   async function handleLogin() {
-    await withButtonLoading('btn-admin-login', 'Signing In...', async () => {
+    await withButtonLoading('btn-admin-login', wantsPasswordReset() ? 'Updating Password...' : 'Signing In...', async () => {
       const email = $('#admin-email').value.trim();
       const password = $('#admin-password').value.trim();
+      if (wantsPasswordReset()) {
+        if (!password) throw new Error('Enter your new password to finish the reset.');
+        await Store.updatePassword(password);
+        window.history.replaceState({}, '', '/admin/login');
+        updateAdminRecoveryUI();
+        showLoginNotice('Password updated. Sign in with the new password.');
+        $('#admin-password').value = '';
+        return;
+      }
       if (!email || !password) throw new Error('Enter admin email and password.');
       await Store.signIn(email, password);
       if ((Store.getCurrentProfile() || {}).role !== 'admin') {
@@ -188,8 +205,21 @@
     });
   }
 
+  async function handleForgotPassword() {
+    const email = $('#admin-email').value.trim();
+    if (!email) {
+      showLoginError('Enter the admin email first so we can send the reset link.');
+      return;
+    }
+    await withButtonLoading('btn-admin-forgot', 'Sending Reset Link...', async () => {
+      await Store.requestPasswordReset(email, window.location.origin + '/admin/login?reset=1');
+      showLoginNotice('Reset link sent. Open it on this device, then choose a new password.');
+    });
+  }
+
   async function showApp(route) {
     $('#admin-bottom-nav').style.display = 'flex';
+    renderAdminLoadingState();
     await loadData();
     await activateAdminRoute(route && route.screen ? route : { screen: 'admin-dashboard', data: null, source: 'app' });
   }
@@ -414,7 +444,7 @@
     if (!selectedElectrician) return;
 
     const docs = (selectedElectrician.electrician_documents || []).map((documentItem) => {
-      const href = documentItem.file_path ? Store.getPublicStorageUrl('electricianDocuments', documentItem.file_path) : '';
+      const href = documentItem.signedUrl || (documentItem.file_path ? Store.getPublicStorageUrl('electricianDocuments', documentItem.file_path) : '');
       const link = href ? '<a class="admin-inline-link" href="' + escapeAttribute(href) + '" target="_blank" rel="noreferrer">View file</a>' : 'No file';
       return '<div class="admin-file-row"><div><div class="admin-file-name">' + escapeHtml(documentLabel(documentItem.document_type)) + '</div><div class="admin-file-meta">' + escapeHtml(documentItem.status || 'pending') + '</div></div><div>' + link + '</div></div>';
     }).join('') || '<div class="admin-empty-inline">No documents uploaded.</div>';
@@ -927,7 +957,7 @@
     if (!payment) {
       return infoCard('Payment verification', [['Latest proof', 'No payment proof submitted yet']]);
     }
-    const proofUrl = payment.proof_path ? Store.getPublicStorageUrl('paymentProofs', payment.proof_path) : '';
+    const proofUrl = payment.proofUrl || (payment.proof_path ? Store.getPublicStorageUrl('paymentProofs', payment.proof_path) : '');
     const proofMarkup = proofUrl
       ? '<a class="admin-inline-link" href="' + escapeAttribute(proofUrl) + '" target="_blank" rel="noreferrer">Open payment proof</a>'
       : 'No proof file uploaded';
@@ -1474,17 +1504,61 @@
     return '<div class="empty-state"><div class="empty-state-text">' + escapeHtml(text) + '</div></div>';
   }
 
+  function renderAdminLoadingState() {
+    const skeleton = '<div class="skeleton-card"></div><div class="skeleton-card"></div>';
+    if ($('#admin-stats')) {
+      $('#admin-stats').innerHTML = skeleton;
+    }
+    if ($('#admin-pending-actions')) {
+      $('#admin-pending-actions').innerHTML = skeleton;
+    }
+    if ($('#admin-control-queue')) {
+      $('#admin-control-queue').innerHTML = skeleton;
+    }
+    if ($('#admin-feed')) {
+      $('#admin-feed').innerHTML = '<div class="skeleton-stack"><div class="skeleton-line long"></div><div class="skeleton-line medium"></div><div class="skeleton-line long"></div></div>';
+    }
+  }
+
+  function updateAdminRecoveryUI() {
+    const passwordLabel = document.querySelector('label[for="admin-password"]') || document.querySelector('.admin-login-card .form-group:nth-child(2) .form-label');
+    const note = document.querySelector('.admin-login-note');
+    const button = $('#btn-admin-login');
+    const forgot = $('#btn-admin-forgot');
+    if (!passwordLabel || !note || !button || !forgot) return;
+    if (wantsPasswordReset()) {
+      passwordLabel.textContent = 'New Password';
+      note.textContent = 'Use the reset link from your email, then choose a new password here.';
+      button.textContent = 'Update Password';
+      forgot.style.display = 'none';
+      return;
+    }
+    passwordLabel.textContent = 'Password';
+    note.textContent = 'Invite-only access for operations, dispatch, finance, trust, and approvals.';
+    button.textContent = 'Login';
+    forgot.style.display = '';
+  }
+
   function showLoginError(message) {
     const loginError = $('#admin-login-error');
     if (currentScreen && currentScreen !== 'admin-login') {
       window.alert(message);
       return;
     }
+    loginError.classList.remove('is-success');
+    loginError.style.display = 'block';
+    loginError.textContent = message;
+  }
+
+  function showLoginNotice(message) {
+    const loginError = $('#admin-login-error');
+    loginError.classList.add('is-success');
     loginError.style.display = 'block';
     loginError.textContent = message;
   }
 
   function clearLoginError() {
+    $('#admin-login-error').classList.remove('is-success');
     $('#admin-login-error').style.display = 'none';
     $('#admin-login-error').textContent = '';
   }

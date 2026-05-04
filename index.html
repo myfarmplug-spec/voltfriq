@@ -4,6 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VoltFriq - Customer Portal</title>
+  <meta name="description" content="Book verified electricians in Port Harcourt with fast dispatch, manual payment verification, and live job tracking from request to completion." />
+  <meta name="theme-color" content="#07111d" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="VoltFriq | Port Harcourt Electricians" />
+  <meta property="og:description" content="Trusted electricians, fast response, and nearby support in Port Harcourt." />
+  <meta property="og:url" content="https://www.voltfriq.com/" />
+  <meta property="og:image" content="https://www.voltfriq.com/assets/voltfriq-home-hero.png?v=20260429-stability" />
+  <meta property="og:image:alt" content="VoltFriq electrician ready to help in Port Harcourt" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="VoltFriq | Port Harcourt Electricians" />
+  <meta name="twitter:description" content="Trusted electricians, fast response, and nearby support in Port Harcourt." />
+  <meta name="twitter:image" content="https://www.voltfriq.com/assets/voltfriq-home-hero.png?v=20260429-stability" />
+  <link rel="canonical" href="https://www.voltfriq.com/" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -460,6 +473,7 @@
           <input type="password" class="form-input" id="auth-password" placeholder="Enter password" />
         </div>
         <div class="auth-error" id="auth-error" style="display:none;"></div>
+        <button class="btn-ghost auth-inline-link" id="btn-auth-forgot" type="button">Forgot password?</button>
         <button class="btn-primary btn-full" id="btn-auth-submit">Login</button>
       </div>
 
@@ -726,10 +740,8 @@
         <div class="issue-summary-title">Payment Method</div>
         <div class="urgency-selector" id="payment-method-selector">
           <button class="urgency-chip active" data-method="bank_transfer">Bank Transfer</button>
-          <button class="urgency-chip" data-method="paystack" disabled>Paystack</button>
-          <button class="urgency-chip" data-method="flutterwave" disabled>Flutterwave</button>
         </div>
-        <div class="helper-note">Bank transfer is primary. Any automated gateway still stays behind manual admin verification.</div>
+        <div class="helper-note">Send payment to the account below, then upload proof for manual verification. Work only moves after VoltFriq confirms the transfer.</div>
       </div>
 
       <div class="snapshot-card card" id="payment-snapshot"></div>

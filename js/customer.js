@@ -52,6 +52,12 @@
 
   const CUSTOMER_DRAFT_KEY = 'voltfriq_customer_draft_v1';
 
+  function wantsPasswordReset() {
+    const query = new URLSearchParams(window.location.search || '');
+    const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+    return query.get('reset') === '1' || hash.get('type') === 'recovery';
+  }
+
   const CUSTOMER_ROUTE_TITLES = {
     welcome: 'VoltFriq | Port Harcourt Electricians',
     'service-area': 'VoltFriq | Book | Location',
@@ -236,6 +242,7 @@
 
     on('tab-login', 'click', () => setAuthMode('login'));
     on('tab-register', 'click', () => setAuthMode('register'));
+    on('btn-auth-forgot', 'click', handleCustomerPasswordResetRequest);
     on('btn-auth-submit', 'click', handleAuthSubmit);
 
     on('btn-continue-match', 'click', continueFromMatch);
@@ -1036,8 +1043,17 @@
 
     summary.innerHTML = [
       '<div class="issue-summary-title">Review your booking</div>',
-      '<div class="helper-note">Submit once everything looks right. VoltFriq will dispatch the best available approved electrician immediately after your booking is created.</div>'
+      '<div class="helper-note">Submit once everything looks right. VoltFriq will dispatch the best available approved electrician immediately after your booking is created.</div>' +
+      '<ul class="trust-inline-list">' +
+        '<li>No work starts until you review and approve the next payment step.</li>' +
+        '<li>Payment proofs are checked manually before any work or payout moves forward.</li>' +
+        '<li>You can track the assigned VoltFriq and report an issue directly from the job screen.</li>' +
+      '</ul>'
     ].join('');
+    if (draft.requiresAssessment) {
+      const feeAmount = Store.formatCurrency((Store.getSettings() && Store.getSettings().assessment_fee) || 0);
+      summary.innerHTML += '<div class="flow-fee-note"><strong>Inspection / assessment charge:</strong> ' + escapeHtml(feeAmount) + '. This covers the first on-site diagnosis when the issue needs a physical check before final workmanship pricing is confirmed.</div>';
+    }
     document.getElementById('match-avatar').textContent = '⚡';
     document.getElementById('match-name').textContent = 'What happens next';
     document.getElementById('match-specialty').textContent = 'Approved, available, nearby VoltFriqs only';
@@ -1104,8 +1120,13 @@
     document.getElementById('tab-register').classList.toggle('active', mode === 'register');
     document.getElementById('auth-name-group').style.display = mode === 'register' ? 'block' : 'none';
     document.getElementById('auth-referral-group').style.display = mode === 'register' ? 'block' : 'none';
-    document.getElementById('btn-auth-submit').textContent = mode === 'register' ? 'Create Account' : 'Login';
-    document.getElementById('auth-error').style.display = 'none';
+    document.getElementById('btn-auth-forgot').style.display = mode === 'login' ? '' : 'none';
+    document.getElementById('btn-auth-submit').textContent = mode === 'register'
+      ? 'Create Account'
+      : mode === 'reset'
+        ? 'Update Password'
+        : 'Login';
+    clearError();
   }
 
   async function handleAuthSubmit() {
@@ -1114,7 +1135,20 @@
     const name = document.getElementById('auth-name').value.trim();
     const referralCode = document.getElementById('auth-referral-code').value.trim();
 
-    await withButtonLoading('btn-auth-submit', authMode === 'register' ? 'Creating Account...' : 'Signing In...', async () => {
+    await withButtonLoading('btn-auth-submit', authMode === 'register' ? 'Creating Account...' : authMode === 'reset' ? 'Updating Password...' : 'Signing In...', async () => {
+      if (authMode === 'reset') {
+        if (!password) {
+          throw new Error('Enter your new password to finish the reset.');
+        }
+        await Store.updatePassword(password);
+        setAuthMode('login');
+        applyAuthScreenContext();
+        window.history.replaceState({}, '', '/login');
+        showNotice('Password updated. You can now sign in with the new password.');
+        document.getElementById('auth-password').value = '';
+        return;
+      }
+
       if (!email || !password) {
         throw new Error('Enter your email and password to continue.');
       }
@@ -1139,6 +1173,18 @@
         return;
       }
       await resumeLatestJob();
+    });
+  }
+
+  async function handleCustomerPasswordResetRequest() {
+    const email = document.getElementById('auth-contact').value.trim();
+    if (!email) {
+      showError('Enter your email first so we know where to send the reset link.');
+      return;
+    }
+    await withButtonLoading('btn-auth-forgot', 'Sending Reset Link...', async () => {
+      await Store.requestPasswordReset(email, window.location.origin + '/login?reset=1');
+      showNotice('Reset link sent. Open the email on this device, then choose a new password.');
     });
   }
 
@@ -1360,12 +1406,12 @@
 
   function renderStatusLines(job) {
     const lines = [
-      statusLine('Booking received', true, 'Your request has been saved and is now tracked by ticket.'),
-      statusLine('Matching in progress', ['matching', 'assigned', 'accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), job.needsManualAssignment ? 'No instant match accepted yet. Dispatch is reviewing and can manually deploy the next best VoltFriq.' : 'VoltFriq is routing the nearest approved electrician for this request.'),
-      statusLine('Electrician assigned', ['assigned', 'accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'An available electrician has been assigned to your booking.'),
-      statusLine('Quote / payment steps', ['assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Assessment, quote, and payment confirmations appear here as the job moves forward.'),
+      statusLine('Submitted', true, 'Your request has been saved and is now tracked by ticket.'),
+      statusLine('Assigned', ['matching', 'assigned', 'accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), job.needsManualAssignment ? 'No instant match accepted yet. Dispatch is reviewing and can manually deploy the next best VoltFriq.' : 'VoltFriq is routing the nearest approved electrician for this request.'),
+      statusLine('VoltFriq confirmed', ['assigned', 'accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'You will see the assigned VoltFriq before any work begins.'),
+      statusLine('Payment pending verification', ['assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Assessment, quote, and payment proofs stay here until manual verification is complete.'),
       statusLine('Work in progress', ['en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Track arrival, on-site work, and completion from this screen.'),
-      statusLine('Completion and rating', ['electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Confirm completion, then rate the finished job when the closeout steps are done.')
+      statusLine('Awaiting customer confirmation', ['electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Confirm completion, then rate the finished job when the closeout steps are done.')
     ];
     document.getElementById('status-lines').innerHTML = lines.join('');
   }
@@ -1382,7 +1428,7 @@
     document.getElementById('fee-amount').textContent = Store.formatCurrency(settings.assessment_fee || 0);
     document.getElementById('assessment-snapshot').innerHTML = [
       ['Status', job.statusLabel],
-      ['Verification', 'Manual review required before the VoltFriq can continue'],
+      ['Verification', 'Submitted does not mean verified. VoltFriq confirms this payment manually before the inspection visit can continue.'],
       ['Ticket', job.ticket]
     ].map(renderKeyValueRow).join('');
     document.getElementById('fee-bank-name').textContent = settings.platform_bank_name || '';
@@ -1411,7 +1457,7 @@
     const settings = Store.getSettings();
     const amount = job.quote && job.quote.total ? job.quote.total : 0;
     document.getElementById('payment-amount').textContent = Store.formatCurrency(amount);
-    document.getElementById('payment-note').textContent = 'Upload your payment proof. A VoltFriq only moves forward after admin verifies it.';
+    document.getElementById('payment-note').textContent = 'Upload your payment proof. Submitted means received, not yet verified. Work only moves after VoltFriq confirms the transfer.';
     document.getElementById('payment-snapshot').innerHTML = [
       ['Status', job.statusLabel],
       ['Ticket', job.ticket],
@@ -1523,6 +1569,7 @@
     }
     try {
       setScreenBusy(true, 'Loading your jobs...');
+      renderHistoryLoading();
       await renderSidecars();
       const jobs = await Store.listCustomerJobs();
       const filtered = historyFilter === 'completed'
@@ -1543,7 +1590,7 @@
   function openCustomerAuthScreen(intent, mode, options) {
     closeMobileMenu();
     authScreenIntent = intent || 'default';
-    setAuthMode(mode || 'login');
+    setAuthMode(wantsPasswordReset() ? 'reset' : (mode || 'login'));
     applyAuthScreenContext();
     goTo('customer-auth', {
       replace: !!(options && options.replace),
@@ -1555,6 +1602,11 @@
     const heading = document.getElementById('auth-heading');
     const sub = document.getElementById('auth-sub');
     if (!heading || !sub) return;
+    if (authMode === 'reset') {
+      heading.textContent = 'Choose your new password';
+      sub.textContent = 'Use a fresh password with at least 8 characters. Once saved, you can sign in again immediately.';
+      return;
+    }
     if (authScreenIntent === 'tracking') {
       heading.textContent = 'Login to track your jobs';
       sub.textContent = 'Sign in to see previous bookings, payment proofs, receipts, and live status updates.';
@@ -1582,6 +1634,7 @@
     }
     try {
       setScreenBusy(true, 'Loading your dashboard...');
+      renderDashboardLoading();
       await loadSavedAddresses();
       await renderSidecars();
       await renderDashboard();
@@ -1662,6 +1715,25 @@
       '<div class="history-card-badge badge badge-blue">' + escapeHtml(job.statusLabel) + '</div>' +
       (job.rating ? '<div class="history-card-sub">Your rating: ' + escapeHtml(String(job.rating.score)) + '/5</div>' : '') +
     '</div>';
+  }
+
+  function renderDashboardLoading() {
+    const stack = [
+      '<div class="skeleton-card"></div>',
+      '<div class="skeleton-card"></div>'
+    ].join('');
+    document.getElementById('dashboard-active-jobs').innerHTML = stack;
+    document.getElementById('dashboard-history-preview').innerHTML = stack;
+    document.getElementById('dashboard-addresses').innerHTML = '<div class="skeleton-stack"><div class="skeleton-line long"></div><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div>';
+    document.getElementById('dashboard-account').innerHTML = '<div class="skeleton-stack"><div class="skeleton-line medium"></div><div class="skeleton-line long"></div><div class="skeleton-line medium"></div></div>';
+  }
+
+  function renderHistoryLoading() {
+    document.getElementById('history-list').innerHTML = [
+      '<div class="skeleton-card"></div>',
+      '<div class="skeleton-card"></div>',
+      '<div class="skeleton-card"></div>'
+    ].join('');
   }
 
   function renderPriceList() {
@@ -2103,6 +2175,7 @@
   function clearError() {
     if (screenBusy) screenBusy = false;
     const authError = document.getElementById('auth-error');
+    authError.classList.remove('is-success');
     authError.style.display = 'none';
     authError.textContent = '';
   }
@@ -2114,6 +2187,14 @@
         ? error.message
         : 'Something went wrong.';
     const authError = document.getElementById('auth-error');
+    authError.classList.remove('is-success');
+    authError.style.display = 'block';
+    authError.textContent = message;
+  }
+
+  function showNotice(message) {
+    const authError = document.getElementById('auth-error');
+    authError.classList.add('is-success');
     authError.style.display = 'block';
     authError.textContent = message;
   }

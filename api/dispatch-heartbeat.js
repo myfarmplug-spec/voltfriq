@@ -5,9 +5,13 @@ export default async function handler(req, res) {
   }
 
   const expectedSecret = process.env.CRON_SECRET;
+  if (!expectedSecret) {
+    res.status(500).json({ ok: false, error: 'Missing cron secret' });
+    return;
+  }
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (expectedSecret && token !== expectedSecret) {
+  if (token !== expectedSecret) {
     res.status(401).json({ ok: false, error: 'Unauthorized' });
     return;
   }

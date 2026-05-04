@@ -254,6 +254,47 @@ a { color: inherit; }
 }
 
 .form-input::placeholder { color: var(--text-tertiary); }
+
+.skeleton-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.skeleton-card,
+.skeleton-line {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.skeleton-card::after,
+.skeleton-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
+  animation: voltfriqShimmer 1.35s infinite;
+}
+
+.skeleton-card {
+  min-height: 110px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 999px;
+}
+
+.skeleton-line.short { width: 34%; }
+.skeleton-line.medium { width: 58%; }
+.skeleton-line.long { width: 82%; }
+
+@keyframes voltfriqShimmer {
+  100% { transform: translateX(100%); }
+}
 textarea.form-input { resize: none; line-height: 1.55; }
 
 .form-select {
