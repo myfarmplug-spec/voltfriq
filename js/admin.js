@@ -255,6 +255,16 @@
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
+    const alerts = buildAlerts();
+
+    $('#pending-count').textContent = String(alerts.length);
+    $('#admin-pending-actions').innerHTML = alerts.length
+      ? alerts.map((alert) => actionCardMarkup(alert)).join('')
+      : emptyState('No urgent alerts right now.');
+    $('#admin-pending-actions').querySelectorAll('.admin-pending-card').forEach((card) => {
+      card.addEventListener('click', () => navigateTo(card.dataset.target));
+    });
+
     const stats = {
       totalJobsToday: currentJobs.filter((job) => new Date(job.createdAt) >= todayStart).length,
       completedJobs: currentJobs.filter(isCompletedJob).length,
@@ -270,15 +280,6 @@
       statCard('⚡', stats.activeElectricians, 'Active electricians'),
       statCard('↩️', stats.rejectedJobs, 'Rejected jobs')
     ].join('');
-
-    const alerts = buildAlerts();
-    $('#pending-count').textContent = String(alerts.length);
-    $('#admin-pending-actions').innerHTML = alerts.length
-      ? alerts.map((alert) => actionCardMarkup(alert)).join('')
-      : emptyState('No urgent alerts right now.');
-    $('#admin-pending-actions').querySelectorAll('.admin-pending-card').forEach((card) => {
-      card.addEventListener('click', () => navigateTo(card.dataset.target));
-    });
 
     $('#admin-control-queue').innerHTML = [
       queueCard('Pending electricians', currentElectricians.filter((electrician) => electrician.status === 'pending').length, 'Review onboarding and approve or reject electricians.', 'admin-electricians'),
@@ -1368,36 +1369,20 @@
 
   function buildAlerts() {
     const alerts = [];
-    const noElectricianCount = currentJobs.filter((job) => job.needsManualAssignment).length;
-    if (noElectricianCount) {
-      alerts.push({ tag: 'Dispatch', label: 'No electrician available', count: noElectricianCount + ' job(s) need manual assignment', target: 'admin-requests' });
-    }
-    const timeoutCount = currentJobs.filter(hasTimeoutTimeline).length;
-    if (timeoutCount) {
-      alerts.push({ tag: 'Dispatch', label: 'Job not accepted within time', count: timeoutCount + ' timed-out assignment(s)', target: 'admin-requests' });
-    }
     if (currentPayments.length) {
-      alerts.push({ tag: 'Payment', label: 'Payment pending verification', count: currentPayments.length + ' proof submission(s)', target: 'admin-finance' });
+      alerts.push({ tag: 'Payment', label: 'Pending payments', count: currentPayments.length + ' proof submission(s) need review', target: 'admin-finance' });
     }
-    const stuckCount = currentJobs.filter(isCustomerStuck).length;
+    const pendingElectricianCount = currentElectricians.filter((electrician) => electrician.status === 'pending').length;
+    if (pendingElectricianCount) {
+      alerts.push({ tag: 'Onboarding', label: 'Pending electricians', count: pendingElectricianCount + ' application(s) need review', target: 'admin-electricians' });
+    }
+    const stuckCount = currentJobs.filter(isStuckJob).length;
     if (stuckCount) {
-      alerts.push({ tag: 'Follow-up', label: 'Customer stuck in flow', count: stuckCount + ' job(s) need intervention', target: 'admin-jobs' });
-    }
-    const lowRatingCount = currentJobs.filter((job) => job.rating && Number(job.rating.score || 0) <= 2).length;
-    if (lowRatingCount) {
-      alerts.push({ tag: 'Quality', label: 'Low rating follow-up', count: lowRatingCount + ' completed job(s)', target: 'admin-jobs' });
+      alerts.push({ tag: 'Dispatch', label: 'Stuck jobs', count: stuckCount + ' job(s) need intervention', target: 'admin-requests' });
     }
     const disputeCount = currentDisputes.filter((dispute) => dispute.status === 'open').length;
     if (disputeCount) {
-      alerts.push({ tag: 'Disputes', label: 'Disputes raised', count: disputeCount + ' customer issue(s) require action', target: 'admin-disputes' });
-    }
-    const appealCount = currentAppeals.filter((appeal) => appeal.status === 'open').length;
-    if (appealCount) {
-      alerts.push({ tag: 'Appeals', label: 'Suspension appeals', count: appealCount + ' appeal(s) need admin decision', target: 'admin-trust' });
-    }
-    const watchCount = currentElectricians.filter((electrician) => electrician.watchlist).length;
-    if (watchCount) {
-      alerts.push({ tag: 'Trust', label: 'Watchlist monitoring', count: watchCount + ' VoltFriq(s) under review', target: 'admin-trust' });
+      alerts.push({ tag: 'Disputes', label: 'Open disputes', count: disputeCount + ' customer issue(s) require action', target: 'admin-disputes' });
     }
     return alerts;
   }
@@ -1411,6 +1396,10 @@
   function isCustomerStuck(job) {
     if (!['assessment_fee_pending', 'quoted', 'quote_accepted', 'customer_confirmed'].includes(job.status)) return false;
     return hoursSince(job.updatedAt) >= 6;
+  }
+
+  function isStuckJob(job) {
+    return !!(job.needsManualAssignment || hasTimeoutTimeline(job) || hasRejectedTimeline(job) || isCustomerStuck(job));
   }
 
   function hasRejectedTimeline(job) {

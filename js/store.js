@@ -1397,10 +1397,6 @@ const Store = (() => {
     return updateJobStatus(jobId, 'customer_confirmed', 'Customer confirmed the work.');
   }
 
-  async function markPayoutPending(jobId) {
-    return updateJobStatus(jobId, 'payout_pending', 'Job moved to payout queue.');
-  }
-
   async function markPayoutComplete(jobId) {
     requireRole('admin');
     return updateJobStatus(jobId, 'payout_complete', 'Admin released payout.');
@@ -1901,7 +1897,6 @@ const Store = (() => {
     markWorkStarted,
     markWorkCompleted,
     markCustomerConfirmed,
-    markPayoutPending,
     markPayoutComplete,
     submitRating,
     submitCustomerReview,

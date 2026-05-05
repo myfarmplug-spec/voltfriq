@@ -1535,7 +1535,6 @@
     await withButtonLoading('btn-confirm-complete', 'Confirming...', async () => {
       if (!currentJob) return;
       await Store.markCustomerConfirmed(currentJob.id);
-      await Store.markPayoutPending(currentJob.id);
       await openTrackedJob(currentJob.id);
     });
   }

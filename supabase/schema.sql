@@ -667,6 +667,10 @@ declare
   admin_profile uuid;
   job_row public.jobs;
 begin
+  if not ("public"."is_admin"() or "auth"."role"() = 'service_role') then
+    raise exception 'Admin or service role required';
+  end if;
+
   select * into job_row from public.jobs where id = p_job_id for update;
   if not found then
     raise exception 'Job not found';
@@ -1895,30 +1899,59 @@ CREATE FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "pu
     AS $$
 declare
   job_row public.jobs;
+  actor_metadata jsonb := coalesce(p_metadata, '{}'::jsonb);
+  actor_customer_id uuid := public.current_customer_id();
+  actor_electrician_id uuid := public.current_electrician_id();
+  is_admin_actor boolean := public.is_admin();
 begin
   select * into job_row from public.jobs where id = p_job_id for update;
   if not found then
     raise exception 'Job not found';
   end if;
 
-  if not (
-    public.is_admin()
-    or job_row.customer_id = public.current_customer_id()
-    or job_row.assigned_electrician_id = public.current_electrician_id()
-  ) then
+  if is_admin_actor then
+    actor_metadata := actor_metadata || jsonb_build_object('admin_override', true);
+  elsif job_row.customer_id = actor_customer_id then
+    if not (
+      (job_row.status = 'quoted' and p_next_status = 'quote_accepted')
+      or (job_row.status = 'electrician_completed' and p_next_status = 'customer_confirmed')
+      or (
+        p_next_status = 'cancelled'
+        and job_row.status in (
+          'requested',
+          'matching',
+          'assigned',
+          'accepted',
+          'assessment_fee_pending',
+          'quoted'
+        )
+      )
+    ) then
+      raise exception 'Customers cannot move a job from % to %', job_row.status, p_next_status;
+    end if;
+  elsif job_row.assigned_electrician_id = actor_electrician_id then
+    if not (
+      (job_row.status = 'assessment_confirmed' and p_next_status = 'en_route')
+      or (job_row.status = 'en_route' and p_next_status = 'on_site')
+      or (job_row.status = 'payment_confirmed' and p_next_status = 'work_in_progress')
+      or (job_row.status = 'work_in_progress' and p_next_status = 'electrician_completed')
+    ) then
+      raise exception 'Electricians cannot move a job from % to %', job_row.status, p_next_status;
+    end if;
+  else
     raise exception 'You do not have permission to update this job';
   end if;
 
   update public.jobs
   set status = p_next_status,
-      customer_confirmed_at = case when p_next_status = 'customer_confirmed' then now() else customer_confirmed_at end,
-      electrician_completed_at = case when p_next_status = 'electrician_completed' then now() else electrician_completed_at end,
-      payout_released_at = case when p_next_status = 'payout_complete' then now() else payout_released_at end
+      customer_confirmed_at = case when p_next_status = 'customer_confirmed' then coalesce(customer_confirmed_at, now()) else customer_confirmed_at end,
+      electrician_completed_at = case when p_next_status = 'electrician_completed' then coalesce(electrician_completed_at, now()) else electrician_completed_at end,
+      payout_released_at = case when p_next_status = 'payout_complete' then coalesce(payout_released_at, now()) else payout_released_at end
   where id = p_job_id
   returning * into job_row;
 
   insert into public.job_timeline (job_id, status, note, actor_profile_id, metadata)
-  values (p_job_id, p_next_status, p_note, auth.uid(), coalesce(p_metadata, '{}'::jsonb));
+  values (p_job_id, p_next_status, p_note, auth.uid(), actor_metadata);
 
   return job_row;
 end;
@@ -2129,6 +2162,20 @@ begin
     raise exception 'Guest job not found';
   end if;
 
+  if p_payment_type = 'assessment_fee' then
+    if job_row.status <> 'assessment_fee_pending' then
+      raise exception 'Assessment fee proof can only be submitted when the job is awaiting the assessment fee';
+    end if;
+    next_status := 'assessment_payment_pending_verification';
+  elsif p_payment_type in ('quote_payment', 'material_payment') then
+    if job_row.status <> 'quote_accepted' then
+      raise exception 'Work payment proof can only be submitted after the quote is accepted';
+    end if;
+    next_status := 'work_payment_pending_verification';
+  else
+    raise exception 'Unsupported payment type for guest submission';
+  end if;
+
   if exists (
     select 1
     from public.job_payments
@@ -2142,12 +2189,6 @@ begin
   insert into public.job_payments (job_id, guest_customer_id, submitted_by, payment_type, amount, proof_path, reference)
   values (p_job_id, job_row.guest_customer_id, null, p_payment_type, coalesce(p_amount, 0), p_proof_path, p_reference)
   returning * into payment_row;
-
-  next_status := case
-    when p_payment_type = 'assessment_fee' then 'assessment_payment_pending_verification'
-    when p_payment_type in ('quote_payment', 'material_payment') then 'work_payment_pending_verification'
-    else job_row.status
-  end;
 
   update public.jobs
   set status = next_status
@@ -2277,20 +2318,65 @@ CREATE FUNCTION "public"."submit_payment_proof"("p_job_id" "uuid", "p_payment_ty
     SET "search_path" TO 'public'
     AS $$
 declare
+  customer_row public.customers;
+  job_row public.jobs;
   payment_row public.job_payments;
+  next_status job_status;
 begin
+  select * into customer_row
+  from public.customers
+  where profile_id = auth.uid();
+
+  if not found then
+    raise exception 'Customer profile not found';
+  end if;
+
+  select * into job_row
+  from public.jobs
+  where id = p_job_id
+  for update;
+
+  if not found then
+    raise exception 'Job not found';
+  end if;
+
+  if job_row.customer_id is distinct from customer_row.id then
+    raise exception 'You can only submit payment proof for your own job';
+  end if;
+
+  if p_payment_type = 'assessment_fee' then
+    if job_row.status <> 'assessment_fee_pending' then
+      raise exception 'Assessment fee proof can only be submitted when the job is awaiting the assessment fee';
+    end if;
+    next_status := 'assessment_payment_pending_verification';
+  elsif p_payment_type in ('quote_payment', 'material_payment') then
+    if job_row.status <> 'quote_accepted' then
+      raise exception 'Work payment proof can only be submitted after the quote is accepted';
+    end if;
+    next_status := 'work_payment_pending_verification';
+  else
+    raise exception 'Unsupported payment type for customer submission';
+  end if;
+
+  if exists (
+    select 1
+    from public.job_payments
+    where job_id = p_job_id
+      and payment_type = p_payment_type
+      and status in ('submitted', 'verified')
+  ) then
+    raise exception 'Payment proof for this step has already been submitted';
+  end if;
+
   insert into public.job_payments (job_id, submitted_by, payment_type, amount, proof_path, reference)
   values (p_job_id, auth.uid(), p_payment_type, coalesce(p_amount, 0), p_proof_path, p_reference)
   returning * into payment_row;
 
   update public.jobs
-  set status = case
-    when p_payment_type = 'assessment_fee' then 'assessment_payment_pending_verification'::job_status
-    else 'work_payment_pending_verification'::job_status
-  end
+  set status = next_status
   where id = p_job_id;
 
-  perform public.append_job_timeline(p_job_id, (select status from public.jobs where id = p_job_id), 'Payment proof submitted for manual verification.', auth.uid());
+  perform public.append_job_timeline(p_job_id, next_status, 'Payment proof submitted for manual verification.', auth.uid());
   perform public.create_notification(
     (select id from public.profiles where role = 'admin' order by created_at asc limit 1),
     p_job_id,
@@ -2426,8 +2512,10 @@ CREATE FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
+declare
+  job_row public.jobs;
 begin
-  perform 1
+  select * into job_row
   from public.jobs
   where id = p_job_id
     and customer_access_token = p_access_token
@@ -2438,13 +2526,27 @@ begin
     raise exception 'Guest job not found';
   end if;
 
-  if p_next_status not in ('quote_accepted', 'customer_confirmed', 'payout_pending', 'cancelled') then
-    raise exception 'Guest customers cannot set this job status';
+  if not (
+    (job_row.status = 'quoted' and p_next_status = 'quote_accepted')
+    or (job_row.status = 'electrician_completed' and p_next_status = 'customer_confirmed')
+    or (
+      p_next_status = 'cancelled'
+      and job_row.status in (
+        'requested',
+        'matching',
+        'assigned',
+        'accepted',
+        'assessment_fee_pending',
+        'quoted'
+      )
+    )
+  ) then
+    raise exception 'Guest customers cannot move a job from % to %', job_row.status, p_next_status;
   end if;
 
   update public.jobs
   set status = p_next_status,
-      customer_confirmed_at = case when p_next_status in ('customer_confirmed', 'payout_pending') then coalesce(customer_confirmed_at, now()) else customer_confirmed_at end
+      customer_confirmed_at = case when p_next_status = 'customer_confirmed' then coalesce(customer_confirmed_at, now()) else customer_confirmed_at end
   where id = p_job_id;
 
   insert into public.job_timeline (job_id, status, note, actor_profile_id, metadata)
@@ -5535,7 +5637,6 @@ GRANT ALL ON FUNCTION "public"."current_electrician_id"() TO "service_role";
 -- Name: FUNCTION "dispatch_job"("p_job_id" "uuid", "p_manual_electrician_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."dispatch_job"("p_job_id" "uuid", "p_manual_electrician_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."dispatch_job"("p_job_id" "uuid", "p_manual_electrician_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."dispatch_job"("p_job_id" "uuid", "p_manual_electrician_id" "uuid") TO "service_role";
 
@@ -6181,4 +6282,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TA
 --
 
 \unrestrict TtFFXOux5TxedzkAASB8ayF6wpMvPfR2Rvt8eFyAuw2MC75rim6iiJ6Fhil76Bw
-
