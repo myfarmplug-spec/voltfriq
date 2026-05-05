@@ -25,7 +25,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/css/shared.css?v=20260503-ia3" />
-  <link rel="stylesheet" href="/css/customer.css?v=20260503-ia3" />
+  <link rel="stylesheet" href="/css/customer.css?v=20260505-flow4" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
   <link rel="stylesheet" href="/css/home.css?v=20260503-ia3" />
 </head>
@@ -35,51 +35,17 @@
       <header class="site-header">
         <div class="site-header-inner">
           <a class="brand-lockup" href="#screen-welcome" aria-label="VoltFriq home">
-            <img class="brand-logo" src="/assets/voltfriq-logo.png" alt="VoltFriq logo" onerror="this.style.display='none';this.parentElement.classList.add('logo-is-missing');" />
+            <img class="brand-logo" src="/assets/voltfriq-logo.svg" alt="VoltFriq logo" onerror="this.style.display='none';this.parentElement.classList.add('logo-is-missing');" />
           </a>
 
-          <nav class="site-nav" aria-label="Primary">
-            <a class="site-nav-link is-active" href="#screen-welcome">Home</a>
-            <a class="site-nav-link" href="#landing-trust">Services</a>
-            <a class="site-nav-link" href="#landing-why">How It Works</a>
-            <a class="site-nav-link" href="/privacy">Privacy</a>
-            <a class="site-nav-link" href="/terms">Terms</a>
-          </nav>
-
           <div class="site-header-actions">
-            <button class="btn-ghost welcome-link" id="btn-track-job">Track Job</button>
             <button class="btn-ghost welcome-link" id="btn-open-dashboard" style="display:none;">Dashboard</button>
-            <button class="btn-ghost welcome-link" id="btn-welcome-signup">Create Account</button>
-            <button class="btn-ghost welcome-login-link" id="btn-welcome-login">Sign In</button>
             <button class="btn-primary nav-cta" id="btn-begin-area-nav">
               <span>Find an Electrician</span>
-            </button>
-            <button class="menu-toggle" type="button" id="btn-mobile-menu" aria-label="Open navigation menu" aria-controls="mobile-menu-panel" aria-expanded="false">
-              <span></span><span></span><span></span>
             </button>
           </div>
         </div>
       </header>
-
-      <div class="mobile-menu-backdrop" id="mobile-menu-backdrop" hidden>
-        <aside class="mobile-menu-panel" id="mobile-menu-panel" aria-label="Mobile navigation">
-          <div class="mobile-menu-head">
-            <a class="brand-lockup mobile-menu-brand" href="#screen-welcome" aria-label="VoltFriq home">
-              <img class="brand-logo" src="/assets/voltfriq-logo.png" alt="VoltFriq logo" onerror="this.style.display='none';this.parentElement.classList.add('logo-is-missing');" />
-            </a>
-            <button class="btn-icon mobile-menu-close" id="btn-mobile-menu-close" aria-label="Close navigation menu">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
-            </button>
-          </div>
-          <div class="mobile-menu-actions">
-            <button class="btn-primary btn-full" id="btn-begin-area-mobile">Book an Electrician</button>
-            <button class="btn-secondary btn-full" id="btn-mobile-track">Track Job</button>
-            <button class="btn-secondary btn-full" id="btn-mobile-login">Sign In</button>
-            <button class="btn-secondary btn-full" id="btn-mobile-dashboard" style="display:none;">Dashboard</button>
-            <a href="/electricians/apply" class="mobile-menu-apply" id="link-mobile-apply">Apply as a VoltFriq</a>
-          </div>
-        </aside>
-      </div>
 
       <main class="landing-main">
         <section class="hero-shell">
@@ -104,12 +70,7 @@
                 </button>
                 <button class="btn-secondary hero-secondary-btn" id="btn-open-dashboard-hero" style="display:none;">Open Dashboard</button>
               </div>
-              <div class="hero-mobile-links">
-                <button class="btn-secondary hero-mobile-link" id="btn-mobile-track-inline">Track Job</button>
-                <button class="btn-secondary hero-mobile-link" id="btn-mobile-login-inline">Sign In</button>
-                <button class="btn-secondary hero-mobile-link" id="btn-mobile-dashboard-inline" style="display:none;">Dashboard</button>
-                <a href="/electricians/apply" class="hero-mobile-apply">Apply as a VoltFriq</a>
-              </div>
+              <div class="trust-line trust-line-hero">Verified electricians • Manual payment verification • Track every step</div>
             </div>
 
             <div class="hero-visual-panel">
@@ -240,8 +201,8 @@
     </div>
     <div class="screen-body">
       <div class="flow-progress">
-        <span>Step 1 of 6</span>
-        <div class="flow-progress-bar"><span style="width:16.66%"></span></div>
+        <span>Step 1 of 4</span>
+        <div class="flow-progress-bar"><span style="width:25%"></span></div>
       </div>
 
       <div class="flow-card card">
@@ -306,8 +267,8 @@
     </div>
     <div class="screen-body">
       <div class="flow-progress">
-        <span>Step 2 of 6</span>
-        <div class="flow-progress-bar"><span style="width:33.33%"></span></div>
+        <span>Step 2 of 4</span>
+        <div class="flow-progress-bar"><span style="width:50%"></span></div>
       </div>
 
       <div class="issue-picker-panel card">
@@ -335,37 +296,6 @@
     </div>
   </div>
 
-  <div id="screen-urgency" class="screen">
-    <div class="screen-header">
-      <button class="btn-icon" onclick="goBack()" aria-label="Back">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-      </button>
-      <div class="screen-header-title">Urgency</div>
-    </div>
-    <div class="screen-body">
-      <div class="flow-progress">
-        <span>Step 3 of 6</span>
-        <div class="flow-progress-bar"><span style="width:50%"></span></div>
-      </div>
-
-      <div class="flow-card card">
-        <div class="flow-kicker">Urgency</div>
-        <h2>How urgent?</h2>
-        <p>Pick when you need help.</p>
-      </div>
-
-      <div class="form-group">
-        <div class="urgency-selector" id="urgency-selector">
-          <button class="urgency-chip" data-urgency="emergency">Emergency</button>
-          <button class="urgency-chip active" data-urgency="today">Today</button>
-          <button class="urgency-chip" data-urgency="scheduled">Scheduled</button>
-        </div>
-      </div>
-
-      <button class="btn-primary btn-large" id="btn-urgency-continue">Continue</button>
-    </div>
-  </div>
-
   <div id="screen-details" class="screen">
     <div class="screen-header">
       <button class="btn-icon" onclick="goBack()" aria-label="Back">
@@ -375,14 +305,22 @@
     </div>
     <div class="screen-body">
       <div class="flow-progress">
-        <span>Step 4 of 6</span>
-        <div class="flow-progress-bar"><span style="width:66.66%"></span></div>
+        <span>Step 3 of 4</span>
+        <div class="flow-progress-bar"><span style="width:75%"></span></div>
       </div>
 
       <div class="flow-card card">
-        <div class="flow-kicker">Details</div>
-        <h2>Add details</h2>
-        <p>A short note or photo helps the VoltFriq prepare.</p>
+        <div class="flow-kicker">Urgency &amp; Details</div>
+        <h2>When do you need help?</h2>
+        <p>Pick the urgency, then add a note or photo if it helps.</p>
+      </div>
+
+      <div class="form-group">
+        <div class="urgency-selector" id="urgency-selector">
+          <button class="urgency-chip" data-urgency="emergency">Emergency</button>
+          <button class="urgency-chip active" data-urgency="today">Today</button>
+          <button class="urgency-chip" data-urgency="scheduled">Scheduled</button>
+        </div>
       </div>
 
       <div class="form-group">
@@ -400,38 +338,7 @@
         </div>
       </div>
 
-      <button class="btn-primary btn-large" id="btn-details-review">Continue</button>
-    </div>
-  </div>
-
-  <div id="screen-guest-contact" class="screen">
-    <div class="screen-header">
-      <button class="btn-icon" onclick="goBack()" aria-label="Back">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-      </button>
-      <div class="screen-header-title">Phone Number</div>
-    </div>
-    <div class="screen-body">
-      <div class="flow-progress">
-        <span>Step 5 of 6</span>
-        <div class="flow-progress-bar"><span style="width:83.33%"></span></div>
-      </div>
-
-      <div class="flow-card card">
-        <div class="flow-kicker">Contact</div>
-        <h2>Your phone number</h2>
-        <p>We use this for booking updates. No account is required.</p>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Mobile number</label>
-        <input type="tel" class="form-input" id="guest-phone" inputmode="tel" autocomplete="tel" placeholder="0800 000 0000" />
-        <div class="helper-note guest-contact-note" id="guest-contact-note"></div>
-      </div>
-
-      <div class="guest-location-confirm card" id="guest-location-confirm"></div>
-
-      <button class="btn-primary btn-large" id="btn-guest-continue" disabled>Review Booking</button>
+      <button class="btn-primary btn-large" id="btn-details-review">Review Booking</button>
     </div>
   </div>
 
@@ -556,27 +463,23 @@
     </div>
     <div class="screen-body">
       <div class="flow-progress">
-        <span>Step 6 of 6</span>
+        <span>Step 4 of 4</span>
           <div class="flow-progress-bar"><span style="width:100%"></span></div>
       </div>
 
-      <div class="match-summary-card card" id="match-summary-card"></div>
-
-      <div class="match-electrician-card card" id="match-electrician-card">
-        <div class="match-electrician-head">
-          <div class="match-electrician-avatar" id="match-avatar">⚡</div>
-          <div>
-            <div class="match-electrician-name" id="match-name">--</div>
-            <div class="match-electrician-specialty" id="match-specialty">--</div>
-          </div>
+      <div class="flow-card card review-contact-card" id="review-contact-card">
+        <div class="flow-kicker">Contact</div>
+        <h2>Where should we send updates?</h2>
+        <p>We only use your mobile number for booking updates and verification.</p>
+        <div class="form-group" id="review-phone-group">
+          <label class="form-label">Mobile number</label>
+          <input type="tel" class="form-input" id="review-phone" inputmode="tel" autocomplete="tel" placeholder="0800 000 0000" />
+          <div class="helper-note review-contact-note" id="review-contact-note"></div>
         </div>
-        <div class="elec-stats">
-          <span class="badge badge-yellow">&#11088; <span id="match-rating">--</span></span>
-          <span class="badge badge-blue">&#128188; <span id="match-jobs">--</span> jobs</span>
-          <span class="badge badge-green">&#128205; <span id="match-distance">--</span> km</span>
-        </div>
-        <div class="match-reason" id="match-reason">--</div>
       </div>
+
+      <div class="match-summary-card card" id="match-summary-card"></div>
+      <div class="trust-line">Payment is manually verified • No work starts without your approval • Track every step</div>
 
       <div class="transparency-card card" id="transparency-card"></div>
 
@@ -944,6 +847,6 @@
   <script src="/js/store.js?v=20260503-ia3"></script>
   <script src="/js/navigation.js?v=20260503-ia3"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/customer.js?v=20260503-ia3"></script>
+  <script src="/js/customer.js?v=20260505-flow4"></script>
 </body>
 </html>

@@ -1,0 +1,6 @@
+<svg width="300" height="72" viewBox="0 0 300 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
+  <title id="title">VoltFriq</title>
+  <path d="M39 8L14 42H32L26 64L59 25H39L39 8Z" fill="#FFB800"/>
+  <path d="M45.5 13.5L32 32H44L36.5 51.5L58 25H43L45.5 13.5Z" fill="#FFE18A" fill-opacity="0.7"/>
+  <text x="78" y="47" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="900" letter-spacing="0" fill="#F8FBFF">Volt<tspan fill="#FFB800">Friq</tspan></text>
+</svg>

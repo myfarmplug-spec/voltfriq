@@ -485,8 +485,7 @@
 }
 
 .detected-location-card,
-.issue-estimate-card,
-.guest-location-confirm {
+.issue-estimate-card {
   border: 1.5px solid #E5E7EB;
   border-radius: 14px;
   background: #FAFAFB;
@@ -1506,15 +1505,15 @@
   line-height: 1.5;
 }
 
-.guest-contact-note {
+.review-contact-note {
   margin-top: 10px;
 }
 
-.guest-contact-note.is-warning {
+.review-contact-note.is-warning {
   color: #fbbf24;
 }
 
-.guest-contact-note.is-success {
+.review-contact-note.is-success {
   color: #34d399;
 }
 
@@ -1614,52 +1613,6 @@
   line-height: 1.6;
   font-size: 14px;
   color: var(--dark);
-}
-
-.match-electrician-card {
-  border: 1.5px solid rgba(255,184,0,0.28);
-  background: linear-gradient(180deg, #FFFFFF 0%, #FFFCF2 100%);
-}
-
-.match-electrician-head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-
-.match-electrician-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--yellow-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  flex-shrink: 0;
-}
-
-.match-electrician-name {
-  font-size: 20px;
-  font-weight: 900;
-  margin-bottom: 2px;
-}
-
-.match-electrician-specialty {
-  font-size: 13px;
-  color: var(--mid);
-}
-
-.match-reason {
-  margin-top: 14px;
-  padding: 14px;
-  border-radius: 14px;
-  background: rgba(59,130,246,0.07);
-  color: #1E40AF;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.5;
 }
 
 .transparency-card,
@@ -2284,9 +2237,7 @@
 /* Full-app dark theme unification */
 #screen-service-area .screen-body,
 #screen-problem .screen-body,
-#screen-urgency .screen-body,
 #screen-details .screen-body,
-#screen-guest-contact .screen-body,
 #screen-login .screen-body,
 #screen-match .screen-body,
 #screen-payment .screen-body,
@@ -2313,7 +2264,6 @@
 .report-helper,
 .payment-note,
 .tracking-note,
-.guest-location-confirm p,
 .flow-ready-line,
 .review-note {
   color: var(--text-secondary);
@@ -2321,7 +2271,6 @@
 
 .flow-card,
 .issue-picker-panel,
-.guest-location-confirm,
 .saved-address-empty,
 .history-card,
 .report-card,
@@ -2345,7 +2294,6 @@
 .saved-address-card,
 .address-mode,
 .photo-preview,
-.guest-location-confirm,
 .review-summary-row,
 .tracking-step,
 .match-meta-card,
@@ -2523,7 +2471,6 @@
 
 /* Readability upgrades for review, tracking, and summaries */
 .match-summary-card,
-.match-electrician-card,
 .transparency-card,
 .issue-summary,
 .timeline-card,
@@ -2535,7 +2482,6 @@
 .confirm-elec-status,
 .payment-amount-card,
 .bank-card,
-.guest-location-confirm,
 .detected-location-card,
 .saved-address-card,
 .saved-address-empty,
@@ -2550,17 +2496,11 @@
   border-color: rgba(255, 184, 0, 0.2);
 }
 
-.match-electrician-card {
-  border-color: rgba(255, 184, 0, 0.16);
-}
-
-.match-electrician-avatar,
 .elec-avatar {
   background: rgba(255, 184, 0, 0.12);
   color: var(--yellow);
 }
 
-.match-electrician-name,
 .elec-name,
 .summary-strip-value,
 .transparency-value,
@@ -2590,7 +2530,6 @@
 .mini-meta-label,
 .issue-summary-title,
 .dashboard-panel-copy,
-.match-electrician-specialty,
 .elec-specialty,
 .status-line-sub,
 .history-card-sub,
@@ -2611,12 +2550,6 @@
 .quot-item,
 .confirm-item {
   border-color: rgba(255, 255, 255, 0.08);
-}
-
-.match-reason {
-  background: rgba(255, 184, 0, 0.08);
-  color: #ffe18e;
-  border: 1px solid rgba(255, 184, 0, 0.12);
 }
 
 .history-card {
@@ -2648,11 +2581,11 @@
   color: #fff6d9;
 }
 
-.guest-contact-note.is-warning {
+.review-contact-note.is-warning {
   color: #ffd978;
 }
 
-.guest-contact-note.is-success {
+.review-contact-note.is-success {
   color: #7ff0c0;
 }
 

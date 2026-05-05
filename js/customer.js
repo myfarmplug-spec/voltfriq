@@ -62,9 +62,7 @@
     welcome: 'VoltFriq | Port Harcourt Electricians',
     'service-area': 'VoltFriq | Book | Location',
     problem: 'VoltFriq | Book | Issue',
-    urgency: 'VoltFriq | Book | Urgency',
     details: 'VoltFriq | Book | Details',
-    'guest-contact': 'VoltFriq | Book | Contact',
     'customer-auth': 'VoltFriq | Customer Access',
     match: 'VoltFriq | Review Booking',
     'appearance-fee': 'VoltFriq | Assessment Fee',
@@ -213,14 +211,17 @@
       persistDraftState();
     });
 
-    document.getElementById('urgency-selector').addEventListener('click', (event) => {
-      const chip = event.target.closest('.urgency-chip');
-      if (!chip) return;
-      document.querySelectorAll('#urgency-selector .urgency-chip').forEach((item) => item.classList.remove('active'));
-      chip.classList.add('active');
-      draft.urgency = chip.dataset.urgency;
-      persistDraftState();
-    });
+    const urgencySelector = document.getElementById('urgency-selector');
+    if (urgencySelector) {
+      urgencySelector.addEventListener('click', (event) => {
+        const chip = event.target.closest('.urgency-chip');
+        if (!chip) return;
+        urgencySelector.querySelectorAll('.urgency-chip').forEach((item) => item.classList.remove('active'));
+        chip.classList.add('active');
+        draft.urgency = chip.dataset.urgency;
+        persistDraftState();
+      });
+    }
 
     on('photo-add-btn', 'click', () => document.getElementById('photo-input').click());
     on('photo-input', 'change', handlePhotoSelect);
@@ -229,16 +230,15 @@
         showError('Select the issue before continuing.');
         return;
       }
-      goTo('urgency');
+      goTo('details');
     });
-    on('btn-urgency-continue', 'click', () => goTo('details'));
     on('btn-details-review', 'click', handleDetailsContinue);
-    on('guest-phone', 'input', () => {
-      draft.guestPhone = normalizePhoneInput(document.getElementById('guest-phone').value);
+    on('review-phone', 'input', () => {
+      draft.guestPhone = normalizePhoneInput(document.getElementById('review-phone').value);
       persistDraftState();
-      updateGuestContactButton();
+      updateReviewContactState();
+      renderMatchTransparency();
     });
-    on('btn-guest-continue', 'click', () => previewMatch('btn-guest-continue'));
     on('btn-guest-create-account', 'click', () => openCustomerAuthScreen('claim-guest', 'register'));
 
     on('tab-login', 'click', () => setAuthMode('login'));
@@ -394,9 +394,9 @@
       const map = {
         location: 'service-area',
         issue: 'problem',
-        urgency: 'urgency',
+        urgency: 'details',
         details: 'details',
-        contact: 'guest-contact',
+        contact: 'match',
         review: 'match'
       };
       return { screen: map[step] || 'service-area' };
@@ -410,9 +410,7 @@
     if (screen === 'welcome') return '/';
     if (screen === 'service-area') return '/book/location';
     if (screen === 'problem') return '/book/issue';
-    if (screen === 'urgency') return '/book/urgency';
     if (screen === 'details') return '/book/details';
-    if (screen === 'guest-contact') return '/book/contact';
     if (screen === 'customer-auth') return authMode === 'register' ? '/signup' : '/login';
     if (screen === 'match') return '/book/review';
     if (screen === 'dashboard') return '/dashboard';
@@ -524,32 +522,12 @@
       return;
     }
 
-    if (targetScreen === 'urgency') {
-      goTo('urgency', { replace: options && options.replace });
-      return;
-    }
-
     if (targetScreen === 'details') {
       goTo('details', { replace: options && options.replace });
       return;
     }
 
-    if (targetScreen === 'guest-contact') {
-      if (Store.getCurrentProfile()) {
-        previewMatch('btn-details-review');
-        return;
-      }
-      renderGuestContact();
-      goTo('guest-contact', { replace: options && options.replace });
-      return;
-    }
-
     if (targetScreen === 'match') {
-      if (!Store.getCurrentProfile() && !isValidPhone(draft.guestPhone)) {
-        renderGuestContact();
-        goTo('guest-contact', { replace: options && options.replace });
-        return;
-      }
       renderMatch();
       goTo('match', { replace: options && options.replace });
       return;
@@ -963,45 +941,51 @@
       goTo('problem');
       return;
     }
-    if (!Store.getCurrentProfile()) {
-      renderGuestContact();
-      goTo('guest-contact');
-      return;
-    }
     previewMatch('btn-details-review');
   }
 
-  function renderGuestContact() {
+  function renderReviewContact() {
     const profile = Store.getCurrentProfile();
-    const knownPhone = (profile && profile.phone) || draft.guestPhone || '';
-    if (knownPhone) {
-      document.getElementById('guest-phone').value = knownPhone;
-      draft.guestPhone = normalizePhoneInput(knownPhone);
+    const card = document.getElementById('review-contact-card');
+    const phoneGroup = document.getElementById('review-phone-group');
+    const phoneInput = document.getElementById('review-phone');
+    if (!card) return;
+
+    card.style.display = profile ? 'none' : '';
+    if (phoneGroup) phoneGroup.style.display = profile ? 'none' : '';
+    if (profile) {
+      updateReviewContactState();
+      return;
     }
-    document.getElementById('guest-location-confirm').innerHTML = [
-      ['Location', draft.locationLabel || draft.serviceArea || 'Not set'],
-      ['GPS', draft.latitude && draft.longitude ? 'Captured' : 'Manual area only']
-    ].map(renderMiniMetaRow).join('');
-    updateGuestContactButton();
+
+    if (phoneInput && document.activeElement !== phoneInput) {
+      phoneInput.value = draft.guestPhone || '';
+    }
+    updateReviewContactState();
   }
 
-  function updateGuestContactButton() {
-    const button = document.getElementById('btn-guest-continue');
-    const note = document.getElementById('guest-contact-note');
-    if (!button) return;
+  function updateReviewContactState() {
+    const button = document.getElementById('btn-continue-match');
+    const note = document.getElementById('review-contact-note');
+    const profile = Store.getCurrentProfile();
+    if (profile) {
+      if (button) button.disabled = false;
+      return true;
+    }
+
     const phoneValid = isValidPhone(draft.guestPhone);
     const hasGps = Boolean(draft.latitude && draft.longitude);
 
-    button.disabled = !phoneValid;
+    if (button) button.disabled = !phoneValid;
 
-    if (!note) return;
+    if (!note) return phoneValid;
     note.classList.remove('is-warning', 'is-success');
 
     if (!draft.guestPhone) {
       note.textContent = hasGps
         ? 'GPS captured successfully. Enter your mobile number to continue.'
         : 'Enter your mobile number to continue. You can still book with your area if GPS is unavailable.';
-      return;
+      return false;
     }
 
     if (!phoneValid) {
@@ -1009,13 +993,14 @@
         ? 'GPS captured successfully. Enter a valid 10+ digit mobile number to review your booking.'
         : 'Enter a valid 10+ digit mobile number to review your booking.';
       note.classList.add('is-warning');
-      return;
+      return false;
     }
 
     note.textContent = hasGps
       ? 'GPS captured successfully. Your contact details are ready for review.'
       : 'Your contact details are ready. VoltFriq will use your selected area for routing.';
     note.classList.add('is-success');
+    return true;
   }
 
   async function previewMatch(sourceButtonId) {
@@ -1028,19 +1013,12 @@
 
   function renderMatch() {
     const summary = document.getElementById('match-summary-card');
-    const card = document.getElementById('match-electrician-card');
     const transparency = document.getElementById('transparency-card');
     const submitButton = document.getElementById('btn-continue-match');
-    const stats = card.querySelector('.elec-stats');
-    const phone = Store.getCurrentProfile()
-      ? ((Store.getCurrentProfile() && Store.getCurrentProfile().phone) || 'Account phone on file')
-      : draft.guestPhone;
 
-    card.style.display = 'none';
-    if (stats) stats.style.display = 'none';
-    transparency.style.display = '';
-    submitButton.disabled = false;
-    submitButton.textContent = 'Submit Booking';
+    renderReviewContact();
+    if (transparency) transparency.style.display = '';
+    if (submitButton) submitButton.textContent = 'Submit Booking';
 
     summary.innerHTML = [
       '<div class="issue-summary-title">Review your booking</div>',
@@ -1055,20 +1033,28 @@
       const feeAmount = Store.formatCurrency((Store.getSettings() && Store.getSettings().assessment_fee) || 0);
       summary.innerHTML += '<div class="flow-fee-note"><strong>Assessment visit:</strong> ' + escapeHtml(feeAmount) + '. This covers site visit and diagnosis before final workmanship pricing is confirmed.</div>';
     }
-    document.getElementById('match-avatar').textContent = '⚡';
-    document.getElementById('match-name').textContent = 'What happens next';
-    document.getElementById('match-specialty').textContent = 'Approved, available, nearby VoltFriqs only';
-    document.getElementById('match-reason').textContent = 'Matching begins after submission using issue fit, location, urgency, availability, response rate, and completed-job performance. Admin can step in manually whenever a faster or better dispatch decision is needed.';
+    renderMatchTransparency();
+    updateReviewContactState();
+  }
 
+  function renderMatchTransparency() {
+    const transparency = document.getElementById('transparency-card');
+    if (!transparency) return;
     transparency.innerHTML = [
       ['Location', draft.locationLabel || draft.serviceArea],
       ['Issue type', draft.issueLabel || draft.issueCategory],
       ['Estimated workmanship range', getIssueEstimate(draft.issueCategory, draft.issueLabel)],
       ['Urgency', formatUrgencyLabel(draft.urgency)],
-      ['Contact', phone || '--'],
+      ['Contact', getBookingContactLabel()],
       ['Description', draft.note || 'No extra description added'],
       ['Photos', uploadedFiles.length ? String(uploadedFiles.length) + ' attached' : 'No photo attached']
     ].map(renderKeyValueRow).join('');
+  }
+
+  function getBookingContactLabel() {
+    const profile = Store.getCurrentProfile();
+    if (profile) return profile.phone || 'Customer account';
+    return draft.guestPhone || '--';
   }
 
   function renderSpecialistSheet() {
@@ -1106,11 +1092,8 @@
   function applySpecialistSelection() {
     const selected = draft.matches.find((match) => match.id === draft.selectedElectricianId);
     if (selected) {
-      document.getElementById('match-name').textContent = selected.name;
-      document.getElementById('match-specialty').textContent = selected.serviceAreas.join(', ');
-      document.getElementById('match-rating').textContent = selected.rating ? selected.rating.toFixed(1) : '--';
-      document.getElementById('match-jobs').textContent = selected.jobsCompleted || 0;
-      document.getElementById('match-distance').textContent = selected.distance;
+      draft.selectedElectricianId = selected.id;
+      renderMatchTransparency();
     }
     closeSpecialistSheet();
   }
@@ -1190,20 +1173,24 @@
   }
 
   async function continueFromMatch() {
+    if (!hasDraftLocation()) {
+      goTo('service-area');
+      showError('Choose a location before submitting.');
+      return;
+    }
+    if (!draft.issueCategory) {
+      goTo('problem');
+      showError('Select the issue before submitting.');
+      return;
+    }
+    if (!Store.getCurrentProfile() && !isValidPhone(draft.guestPhone)) {
+      renderMatch();
+      goTo('match');
+      showError('Enter your mobile number before submitting.');
+      return;
+    }
+
     await withButtonLoading('btn-continue-match', 'Creating Booking...', async () => {
-      if (!hasDraftLocation()) {
-        goTo('service-area');
-        throw new Error('Choose a location before submitting.');
-      }
-      if (!draft.issueCategory) {
-        goTo('problem');
-        throw new Error('Select the issue before submitting.');
-      }
-      if (!Store.getCurrentProfile() && !isValidPhone(draft.guestPhone)) {
-        renderGuestContact();
-        goTo('guest-contact');
-        throw new Error('Enter your mobile number before submitting.');
-      }
       const bookingPayload = {
         serviceArea: draft.serviceArea || draft.locationLabel,
         locationLabel: draft.locationLabel || draft.serviceArea,
@@ -1802,7 +1789,7 @@
     document.getElementById('manual-location-input').value = '';
     document.getElementById('problem-category').value = '';
     document.getElementById('problem-desc').value = '';
-    if (document.getElementById('guest-phone')) document.getElementById('guest-phone').value = '';
+    if (document.getElementById('review-phone')) document.getElementById('review-phone').value = '';
     if (document.getElementById('detected-location-card')) document.getElementById('detected-location-card').style.display = 'none';
     if (document.getElementById('map-location-card')) document.getElementById('map-location-card').style.display = 'none';
     if (document.getElementById('btn-use-map-location')) document.getElementById('btn-use-map-location').disabled = true;
