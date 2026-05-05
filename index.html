@@ -25,9 +25,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/css/shared.css?v=20260503-ia3" />
-  <link rel="stylesheet" href="/css/customer.css?v=20260505-flow4" />
+  <link rel="stylesheet" href="/css/customer.css?v=20260505-polish2" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
-  <link rel="stylesheet" href="/css/home.css?v=20260503-ia3" />
+  <link rel="stylesheet" href="/css/home.css?v=20260505-polish2" />
 </head>
 <body>
   <div id="screen-welcome" class="screen active">
@@ -39,6 +39,7 @@
           </a>
 
           <div class="site-header-actions">
+            <button class="btn-ghost welcome-login-link" id="btn-welcome-login">Login</button>
             <button class="btn-ghost welcome-link" id="btn-open-dashboard" style="display:none;">Dashboard</button>
             <button class="btn-primary nav-cta" id="btn-begin-area-nav">
               <span>Find an Electrician</span>
@@ -55,35 +56,38 @@
                 <span class="location-badge-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s7-4.5 7-10a7 7 0 10-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
                 </span>
-                <span>Now live in Port Harcourt</span>
+                <span>Live in Port Harcourt</span>
               </div>
               <h1 class="welcome-title">
                 <span class="title-line">Book an</span>
                 <span class="title-line title-highlight">electrician</span>
-                <span class="title-line">near you.</span>
+                <span class="title-line">near you</span>
               </h1>
-              <p class="welcome-sub">Fast, verified, nearby help for homes and businesses in Port Harcourt.</p>
+              <p class="welcome-sub">Fast, verified help.</p>
               <div class="hero-actions">
                 <button class="btn-primary hero-primary-btn" id="btn-begin-area">
+                  <span class="hero-primary-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+                  </span>
                   <span>Find an Electrician</span>
                   <span class="hero-primary-icon" aria-hidden="true">→</span>
                 </button>
-                <button class="btn-secondary hero-secondary-btn" id="btn-open-dashboard-hero" style="display:none;">Open Dashboard</button>
               </div>
-              <div class="trust-line trust-line-hero">Verified electricians • Manual payment verification • Track every step</div>
+              <div class="trust-line trust-line-hero">
+                <span class="trust-line-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M12 15v2"/></svg>
+                </span>
+                <span>Manual payment verification</span>
+              </div>
             </div>
 
             <div class="hero-visual-panel">
-              <div class="hero-bridge-backdrop" aria-hidden="true">
-                <div class="bridge-tower"></div>
-                <div class="bridge-road"></div>
-                <div class="bridge-cable bridge-cable-left"></div>
-                <div class="bridge-cable bridge-cable-right"></div>
-                <div class="bridge-reflection"></div>
-              </div>
-              <div class="hero-lightning" aria-hidden="true"></div>
               <figure class="hero-figure">
-                <img src="/assets/voltfriq-home-hero.png?v=20260429-stability" alt="VoltFriq electrician ready to help in Port-Harcourt" />
+                <picture>
+                  <source media="(min-width: 768px)" srcset="/assets/voltfriq-home-desktop-hero.png" />
+                  <source media="(max-width: 767px)" srcset="/assets/voltfriq-home-mobile-hero.png" />
+                  <img src="/assets/voltfriq-home-desktop-hero.png" alt="VoltFriq electrician ready to help in Port-Harcourt" />
+                </picture>
               </figure>
             </div>
           </div>
@@ -91,12 +95,9 @@
         </section>
       </main>
 
-      <div class="mobile-sticky-cta">
-        <button class="btn-primary mobile-sticky-btn" id="btn-begin-area-sticky">Find an Electrician</button>
-      </div>
-
       <footer class="home-powered-footer" id="landing-footer">
         <span>&copy; 2026 VoltFriq. All rights reserved.</span>
+        <span class="footer-powered-by">Powered by Nuchapta Electricals</span>
         <span class="footer-legal-links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a></span>
       </footer>
     </div>
@@ -107,7 +108,7 @@
       <button class="btn-icon" onclick="goBack()" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
-      <div class="screen-header-title">Send VoltFriq To</div>
+      <div class="screen-header-title">Location</div>
     </div>
     <div class="screen-body">
       <div class="flow-progress">
@@ -115,40 +116,63 @@
         <div class="flow-progress-bar"><span style="width:25%"></span></div>
       </div>
 
-      <div class="flow-card card">
-        <div class="flow-kicker">Location</div>
-        <h2>Where should we send the VoltFriq?</h2>
-        <p>Choose a saved address, GPS, map, or enter it yourself.</p>
+      <div class="booking-step-hero">
+        <h2>Where should we send the <span>electrician?</span></h2>
       </div>
 
       <select class="form-select" id="service-area-select" style="display:none;">
         <option value="">Select a service area</option>
       </select>
 
-      <div class="address-mode-tabs" id="address-mode-tabs" role="tablist" aria-label="Choose location method">
-        <button class="address-mode active" type="button" data-address-mode="saved">Saved Address</button>
-        <button class="address-mode" type="button" data-address-mode="gps">Current Location</button>
-        <button class="address-mode" type="button" data-address-mode="manual">Enter Address</button>
-        <button class="address-mode" type="button" data-address-mode="map">Use Map</button>
+      <div class="booking-location-options" id="address-mode-tabs" role="tablist" aria-label="Choose location method">
+        <button class="location-option-card active" type="button" data-address-mode="gps" id="location-option-gps">
+          <span class="location-option-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M12 21s7-4.5 7-10a7 7 0 10-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
+          </span>
+          <span class="location-option-copy">
+            <strong>Use current location</strong>
+            <span id="detected-location-text">Finding your location...</span>
+          </span>
+          <span class="location-option-state" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+          </span>
+        </button>
+
+        <div class="booking-step-divider"><span>or</span></div>
+
+        <button class="location-option-card location-option-card-secondary" type="button" data-address-mode="manual" id="location-option-manual">
+          <span class="location-option-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="m4 20 4.5-1 9.9-9.9a1.8 1.8 0 0 0 0-2.5l-1-1a1.8 1.8 0 0 0-2.5 0L5 15.5 4 20Z"/><path d="m13.5 6.5 4 4"/></svg>
+          </span>
+          <span class="location-option-copy">
+            <strong>Enter address</strong>
+            <span id="manual-location-summary">Type your estate, street, or area</span>
+          </span>
+          <span class="location-option-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+          </span>
+        </button>
       </div>
 
-      <div class="location-mode-panel saved-address-panel" id="saved-address-panel"></div>
-
-      <div class="location-mode-panel" id="gps-location-panel" style="display:none;">
-        <button class="btn-secondary btn-full" id="btn-use-location">Use Current Location</button>
-        <div class="detected-location-card" id="detected-location-card" style="display:none;">
-          <span class="detected-location-label">Detected location</span>
-          <strong id="detected-location-text">Finding your location...</strong>
-        </div>
-        <div class="helper-note" id="location-helper-note">Location helps route the nearest available VoltFriq.</div>
-      </div>
-
-      <div class="location-mode-panel" id="manual-location-panel" style="display:none;">
+      <div class="manual-location-sheet" id="manual-location-sheet" style="display:none;">
         <div class="form-group">
           <label class="form-label">Address or area</label>
           <input type="text" class="form-input" id="manual-location-input" placeholder="Enter your estate, street, area, or city" />
         </div>
       </div>
+
+      <div class="location-mode-panel saved-address-panel" id="saved-address-panel" style="display:none;"></div>
+
+      <div class="location-mode-panel" id="gps-location-panel" style="display:none;">
+        <button class="btn-secondary btn-full" id="btn-use-location">Use Current Location</button>
+        <div class="detected-location-card" id="detected-location-card" style="display:none;">
+          <span class="detected-location-label">Detected location</span>
+          <strong id="detected-location-fallback">Finding your location...</strong>
+        </div>
+        <div class="helper-note" id="location-helper-note">Location helps route the nearest available VoltFriq.</div>
+      </div>
+
+      <div class="location-mode-panel" id="manual-location-panel" style="display:none;"></div>
 
       <div class="location-mode-panel map-picker-panel" id="map-picker-panel" style="display:none;">
         <div class="address-map" id="address-map"></div>
@@ -159,12 +183,15 @@
         <button class="btn-secondary btn-full" id="btn-use-map-location" disabled>Use This Map Location</button>
       </div>
 
-      <div class="flow-ready-line" id="availability-card">
+      <div class="flow-ready-line" id="availability-card" style="display:none;">
         <span id="availability-count">Waiting</span>
         <span id="availability-meta">Enter an area or use current location.</span>
       </div>
 
-      <button class="btn-primary btn-large" id="btn-area-continue" disabled>Continue</button>
+      <button class="btn-primary btn-large booking-step-cta" id="btn-area-continue" disabled>
+        <span>Continue</span>
+        <span class="booking-step-cta-icon" aria-hidden="true">→</span>
+      </button>
     </div>
   </div>
 
@@ -194,6 +221,11 @@
           <select class="form-select" id="problem-category">
             <option value="">Select the issue</option>
           </select>
+        </div>
+        <div class="form-group" id="issue-other-group" style="display:none;">
+          <label class="form-label">Describe the issue</label>
+          <textarea class="form-input" id="issue-other-input" rows="3" maxlength="160" placeholder="Describe the issue so VoltFriq can review and add it to the issue list"></textarea>
+          <div class="helper-note">This will be shared with admin as a suggestion for the issue list.</div>
         </div>
         <div class="issue-estimate-card" id="issue-estimate-card" style="display:none;">
           <span>Estimated Workmanship Fee</span>
@@ -377,23 +409,27 @@
           <div class="flow-progress-bar"><span style="width:100%"></span></div>
       </div>
 
-      <div class="flow-card card review-contact-card" id="review-contact-card">
-        <div class="flow-kicker">Contact</div>
-        <h2>Where should we send updates?</h2>
-        <p>We only use your mobile number for booking updates and verification.</p>
-        <div class="form-group" id="review-phone-group">
-          <label class="form-label">Mobile number</label>
-          <input type="tel" class="form-input" id="review-phone" inputmode="tel" autocomplete="tel" placeholder="0800 000 0000" />
-          <div class="helper-note review-contact-note" id="review-contact-note"></div>
-        </div>
+      <div class="booking-step-hero booking-step-hero-review">
+        <h2>Almost done!</h2>
+        <p>Please confirm your booking details.</p>
       </div>
 
       <div class="match-summary-card card" id="match-summary-card"></div>
-      <div class="trust-line">Payment is manually verified • No work starts without your approval • Track every step</div>
+      <div class="review-trust-strip">
+        <span><span class="review-trust-icon" aria-hidden="true">🛡️</span>Manual verification</span>
+        <span class="review-trust-divider" aria-hidden="true"></span>
+        <span><span class="review-trust-icon" aria-hidden="true">🔒</span>No work starts without approval</span>
+      </div>
 
       <div class="transparency-card card" id="transparency-card"></div>
 
-      <button class="btn-primary btn-large" id="btn-continue-match">Submit Booking</button>
+      <div class="review-contact-note" id="review-contact-note" style="display:none;"></div>
+
+      <button class="btn-primary btn-large booking-step-cta" id="btn-continue-match">
+        <span class="booking-step-cta-bolt" aria-hidden="true">⚡</span>
+        <span>Submit Booking</span>
+        <span class="booking-step-cta-icon" aria-hidden="true">→</span>
+      </button>
       <p class="booking-legal-note">By booking, you agree to VoltFriq&apos;s <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
     </div>
   </div>
@@ -413,6 +449,15 @@
       </div>
 
       <div class="snapshot-card card" id="assessment-snapshot"></div>
+
+      <div class="issue-summary card trust-assurance-card">
+        <div class="issue-summary-title">Why this step is protected</div>
+        <div class="mini-meta-list">
+          <div class="mini-meta-row"><span class="mini-meta-label">Manual verification</span><span class="mini-meta-value">Payment is manually verified before the visit continues</span></div>
+          <div class="mini-meta-row"><span class="mini-meta-label">Customer control</span><span class="mini-meta-value">No work starts without your approval</span></div>
+          <div class="mini-meta-row"><span class="mini-meta-label">Issue support</span><span class="mini-meta-value">Report any issue instantly from tracking</span></div>
+        </div>
+      </div>
 
       <div class="bank-card card" id="fee-bank-card">
         <div class="bank-label" id="fee-bank-label">Transfer to</div>
@@ -464,6 +509,11 @@
       <div class="timeline-card card">
         <div class="issue-summary-title">Status</div>
         <div class="status-lines" id="status-lines"></div>
+      </div>
+
+      <div class="issue-summary card trust-assurance-card" id="tracking-trust-card">
+        <div class="issue-summary-title">Customer Protection</div>
+        <div class="mini-meta-list" id="tracking-trust-list"></div>
       </div>
 
       <div class="issue-summary card">
@@ -561,6 +611,15 @@
       </div>
 
       <div class="snapshot-card card" id="payment-snapshot"></div>
+
+      <div class="issue-summary card trust-assurance-card">
+        <div class="issue-summary-title">Before work starts</div>
+        <div class="mini-meta-list">
+          <div class="mini-meta-row"><span class="mini-meta-label">Payment check</span><span class="mini-meta-value">Manual verification by VoltFriq admin</span></div>
+          <div class="mini-meta-row"><span class="mini-meta-label">Work start</span><span class="mini-meta-value">No work starts without your approval</span></div>
+          <div class="mini-meta-row"><span class="mini-meta-label">Support</span><span class="mini-meta-value">Report any issue instantly from your tracking screen</span></div>
+        </div>
+      </div>
 
       <div class="bank-card card" id="pay-bank-card">
         <div class="bank-label" id="pay-bank-label">Transfer to</div>
@@ -757,6 +816,6 @@
   <script src="/js/store.js?v=20260503-ia3"></script>
   <script src="/js/navigation.js?v=20260503-ia3"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/customer.js?v=20260505-flow4"></script>
+  <script src="/js/customer.js?v=20260505-polish2"></script>
 </body>
 </html>

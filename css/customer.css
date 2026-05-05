@@ -2607,6 +2607,21 @@
   color: #ffe5a8;
 }
 
+.trust-assurance-card {
+  border-color: rgba(255, 184, 0, 0.18);
+  background: linear-gradient(180deg, rgba(15, 29, 48, 0.98) 0%, rgba(7, 16, 28, 0.98) 100%);
+}
+
+#screen-match .btn-large,
+#screen-appearance-fee .btn-large,
+#screen-payment .btn-large,
+#screen-confirm-work .btn-large {
+  position: sticky;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 6;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28);
+}
+
 .status-line-dot {
   background: rgba(255, 255, 255, 0.22);
 }
@@ -2617,6 +2632,21 @@
 
 .status-line-title {
   color: #f8fbff;
+}
+
+.status-lines.is-updating .status-line {
+  animation: tracking-status-fade 260ms ease;
+}
+
+@keyframes tracking-status-fade {
+  from {
+    opacity: 0.55;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .auth-body {

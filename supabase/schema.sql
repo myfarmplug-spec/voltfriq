@@ -777,8 +777,16 @@ begin
   end if;
 
   select * into job_row from public.jobs where id = p_job_id for update;
+  if not found then
+    raise exception 'Job not found';
+  end if;
+
   if job_row.assigned_electrician_id is distinct from electrician_row.id then
     raise exception 'Job is not assigned to this electrician';
+  end if;
+
+  if job_row.status <> 'assigned' then
+    raise exception 'Only assigned jobs can be accepted';
   end if;
 
   update public.jobs
@@ -2138,6 +2146,8 @@ CREATE TABLE "public"."job_payments" (
 
 ALTER TABLE "public"."job_payments" OWNER TO "postgres";
 
+CREATE UNIQUE INDEX "job_payments_one_submitted_per_job_idx" ON "public"."job_payments" USING "btree" ("job_id") WHERE ("status" = 'submitted'::"public"."payment_status");
+
 --
 -- Name: submit_guest_payment_proof("uuid", "text", "public"."payment_type", numeric, "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
@@ -2160,6 +2170,18 @@ begin
 
   if not found then
     raise exception 'Guest job not found';
+  end if;
+
+  if job_row.status in ('electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated', 'cancelled') then
+    raise exception 'Payment proof cannot be submitted after the job has moved past payment stages';
+  end if;
+
+  if exists (
+    select 1 from public.job_payments
+    where job_id = p_job_id
+      and status = 'submitted'
+  ) then
+    raise exception 'A payment proof is already waiting for manual verification for this job';
   end if;
 
   if p_payment_type = 'assessment_fee' then
@@ -2248,6 +2270,7 @@ CREATE FUNCTION "public"."submit_job_quote"("p_job_id" "uuid", "p_findings" "tex
     AS $$
 declare
   electrician_row public.electricians;
+  job_row public.jobs;
   quote_row public.job_quotes;
   item jsonb;
   labor_total_value numeric := 0;
@@ -2258,6 +2281,26 @@ begin
   select * into electrician_row from public.electricians where profile_id = auth.uid();
   if not found then
     raise exception 'Electrician profile not found';
+  end if;
+
+  select * into job_row
+  from public.jobs
+  where id = p_job_id
+  for update;
+
+  if not found then
+    raise exception 'Job not found';
+  end if;
+
+  if job_row.assigned_electrician_id is distinct from electrician_row.id then
+    raise exception 'You can only quote jobs assigned to you';
+  end if;
+
+  if not (
+    job_row.status = 'on_site'
+    or (job_row.status = 'accepted' and not job_row.requires_assessment)
+  ) then
+    raise exception 'Quotes can only be submitted after arrival on site or after remote acceptance for non-assessment jobs';
   end if;
 
   insert into public.job_quotes (job_id, electrician_id, findings, measurements)
@@ -2344,6 +2387,18 @@ begin
     raise exception 'You can only submit payment proof for your own job';
   end if;
 
+  if job_row.status in ('electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated', 'cancelled') then
+    raise exception 'Payment proof cannot be submitted after the job has moved past payment stages';
+  end if;
+
+  if exists (
+    select 1 from public.job_payments
+    where job_id = p_job_id
+      and status = 'submitted'
+  ) then
+    raise exception 'A payment proof is already waiting for manual verification for this job';
+  end if;
+
   if p_payment_type = 'assessment_fee' then
     if job_row.status <> 'assessment_fee_pending' then
       raise exception 'Assessment fee proof can only be submitted when the job is awaiting the assessment fee';
@@ -2422,6 +2477,10 @@ begin
 
   if job_row.customer_id is distinct from customer_row.id then
     raise exception 'You can only rate your own job';
+  end if;
+
+  if job_row.status <> 'payout_complete' then
+    raise exception 'Ratings open after admin closeout is complete';
   end if;
 
   if job_row.assigned_electrician_id is null then

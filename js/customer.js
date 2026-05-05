@@ -113,7 +113,6 @@
     on('btn-begin-area', 'click', startBooking);
     on('btn-begin-area-nav', 'click', startBooking);
     on('btn-begin-area-mobile', 'click', startBooking);
-    on('btn-begin-area-sticky', 'click', startBooking);
     on('btn-welcome-signup', 'click', () => openCustomerAuthScreen('dashboard', 'register'));
     on('btn-mobile-signup-inline', 'click', () => openCustomerAuthScreen('dashboard', 'register'));
     on('btn-mobile-signup', 'click', () => {
@@ -449,6 +448,7 @@
 
     if (route.screen === 'welcome') {
       goTo('welcome', { replace: route.source !== 'popstate', routeData: route.data || null });
+      focusCustomerScreen('welcome');
       return;
     }
 
@@ -501,6 +501,7 @@
 
     if (!hasDraftLocation()) {
       goTo('service-area', { replace: options && options.replace });
+      focusCustomerScreen('service-area');
       if (targetScreen !== 'service-area') {
         persistDraftState();
       }
@@ -509,27 +510,32 @@
 
     if (targetScreen === 'service-area') {
       goTo('service-area', { replace: options && options.replace });
+      focusCustomerScreen('service-area');
       return;
     }
 
     if (!draft.issueCategory) {
       goTo('problem', { replace: options && options.replace });
+      focusCustomerScreen('problem');
       return;
     }
 
     if (targetScreen === 'problem') {
       goTo('problem', { replace: options && options.replace });
+      focusCustomerScreen('problem');
       return;
     }
 
     if (targetScreen === 'details') {
       goTo('details', { replace: options && options.replace });
+      focusCustomerScreen('details');
       return;
     }
 
     if (targetScreen === 'match') {
       renderMatch();
       goTo('match', { replace: options && options.replace });
+      focusCustomerScreen('match');
       return;
     }
   }
@@ -559,6 +565,7 @@
     closeMobileMenu();
     resetDraft();
     goTo('service-area');
+    focusCustomerScreen('service-area');
     await loadSavedAddresses();
     if (savedAddresses.length) {
       setAddressMode('saved');
@@ -1027,6 +1034,7 @@
         '<li>No work starts until you approve the next step.</li>' +
         '<li>Payment proofs are manually verified.</li>' +
         '<li>You can track every update after submission.</li>' +
+        '<li>Report any issue instantly from tracking.</li>' +
       '</ul>'
     ].join('');
     if (draft.requiresAssessment) {
@@ -1368,6 +1376,12 @@
       ['Assessment', job.requiresAssessment ? 'Required' : 'Remote quote first'],
       ['Materials', job.materialHandling === 'self_procured' ? 'Customer supplied' : 'VoltFriq supplied']
     ].map(renderMiniMetaRow).join('');
+    document.getElementById('tracking-trust-list').innerHTML = [
+      ['Payment', 'Manually verified before work starts'],
+      ['Approval', 'No work starts without your approval'],
+      ['Tracking', 'Every step is visible in this screen'],
+      ['Support', job.isGuest ? 'Create an account later and keep this ticket safe for support' : 'Report any issue instantly from this screen']
+    ].map(renderMiniMetaRow).join('');
     document.getElementById('btn-view-quote').style.display = job.quote && job.quote.id ? '' : 'none';
     document.getElementById('btn-open-chat').style.display = job.isGuest ? 'none' : '';
     document.getElementById('btn-report-issue-assigned').style.display = job.isGuest ? 'none' : '';
@@ -1401,7 +1415,11 @@
       statusLine('Work in progress', ['en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Track arrival, on-site work, and completion from this screen.'),
       statusLine('Awaiting customer confirmation', ['electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Confirm completion, then rate the finished job when the closeout steps are done.')
     ];
-    document.getElementById('status-lines').innerHTML = lines.join('');
+    const container = document.getElementById('status-lines');
+    container.innerHTML = lines.join('');
+    container.classList.remove('is-updating');
+    void container.offsetWidth;
+    container.classList.add('is-updating');
   }
 
   function statusLine(title, done, sub) {
@@ -1426,6 +1444,7 @@
       ? 'Payment Proof Submitted'
       : 'Submit Assessment Payment Proof';
     document.getElementById('btn-fee-paid').disabled = job.status === 'assessment_payment_pending_verification';
+    focusCustomerScreen('appearance-fee');
   }
 
   function renderQuoteScreen(job) {
@@ -1458,7 +1477,8 @@
       ? 'Payment Proof Submitted'
       : 'Submit Payment Proof';
     document.getElementById('btn-payment-paid').disabled = job.status === 'work_payment_pending_verification';
-    document.getElementById('payment-reference').value = '';
+    document.getElementById('payment-reference').value = job.ticket || '';
+    focusCustomerScreen('payment');
   }
 
   function renderConfirmScreen(job) {
@@ -1482,6 +1502,7 @@
     document.getElementById('confirm-checkbox').checked = false;
     document.getElementById('confirm-checkbox').disabled = disabled;
     document.getElementById('btn-confirm-complete').disabled = true;
+    focusCustomerScreen('confirm-work');
   }
 
   function renderRatingScreen(job) {
@@ -1492,6 +1513,7 @@
     selectedRatingTags = [];
     document.querySelectorAll('#rating-tags [data-rating-tag]').forEach((tag) => tag.classList.remove('active'));
     updateStars();
+    focusCustomerScreen('rating');
   }
 
   function renderDoneScreen(job) {
@@ -1873,7 +1895,7 @@
     const historyButton = document.getElementById('btn-assigned-history');
 
     if (loginButton) {
-      loginButton.textContent = profile ? 'Dashboard' : 'Sign In';
+      loginButton.textContent = profile ? 'Dashboard' : 'Login';
     }
     if (mobileLoginButton) {
       mobileLoginButton.textContent = profile ? 'Open Dashboard' : 'Sign In';
@@ -2132,6 +2154,34 @@
   function on(id, event, handler) {
     const element = document.getElementById(id);
     if (element) element.addEventListener(event, handler);
+  }
+
+  function focusCustomerScreen(screen) {
+    window.setTimeout(() => {
+      let target = null;
+      if (screen === 'service-area') {
+        target = addressMode === 'manual'
+          ? document.getElementById('manual-location-input')
+          : document.getElementById('service-area-select');
+      } else if (screen === 'problem') {
+        target = document.getElementById('problem-desc');
+      } else if (screen === 'details') {
+        target = document.getElementById('btn-details-review');
+      } else if (screen === 'match') {
+        target = document.getElementById('review-phone') || document.getElementById('btn-continue-match');
+      } else if (screen === 'appearance-fee') {
+        target = document.getElementById('assessment-receipt-upload');
+      } else if (screen === 'payment') {
+        target = document.getElementById('payment-reference');
+      } else if (screen === 'confirm-work') {
+        target = document.getElementById('confirm-checkbox');
+      } else if (screen === 'rating') {
+        target = document.getElementById('rating-comment');
+      }
+      if (target && typeof target.focus === 'function') {
+        target.focus({ preventScroll: true });
+      }
+    }, 90);
   }
 
   async function withButtonLoading(buttonId, loadingText, work) {

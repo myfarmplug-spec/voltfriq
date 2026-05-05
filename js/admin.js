@@ -256,6 +256,20 @@
     todayStart.setHours(0, 0, 0, 0);
 
     const alerts = buildAlerts();
+    const actionSummary = [
+      currentPayments.length ? currentPayments.length + ' payment' + (currentPayments.length === 1 ? '' : 's') + ' pending' : null,
+      currentElectricians.filter((electrician) => electrician.status === 'pending').length
+        ? currentElectricians.filter((electrician) => electrician.status === 'pending').length + ' electrician' + (currentElectricians.filter((electrician) => electrician.status === 'pending').length === 1 ? '' : 's') + ' pending approval'
+        : null,
+      currentJobs.filter(isStuckJob).length ? currentJobs.filter(isStuckJob).length + ' stuck job' + (currentJobs.filter(isStuckJob).length === 1 ? '' : 's') : null,
+      currentDisputes.filter((dispute) => dispute.status === 'open').length ? currentDisputes.filter((dispute) => dispute.status === 'open').length + ' open dispute' + (currentDisputes.filter((dispute) => dispute.status === 'open').length === 1 ? '' : 's') : null
+    ].filter(Boolean);
+
+    if ($('#admin-action-banner')) {
+      $('#admin-action-banner').textContent = actionSummary.length
+        ? 'ACTION REQUIRED: ' + actionSummary.join(' • ')
+        : 'ACTION REQUIRED: No urgent items right now';
+    }
 
     $('#pending-count').textContent = String(alerts.length);
     $('#admin-pending-actions').innerHTML = alerts.length
