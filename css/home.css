@@ -981,3 +981,241 @@ body.mobile-menu-open {
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
 }
+
+/* Homepage alignment refresh */
+#screen-welcome .site-header,
+#screen-welcome .landing-main,
+#screen-welcome .home-powered-footer {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+#screen-welcome .site-header {
+  padding: 32px 48px 0;
+}
+
+#screen-welcome .site-header-inner {
+  padding: 0;
+}
+
+#screen-welcome .site-header-actions {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+#screen-welcome .welcome-login-link {
+  display: inline-flex !important;
+  min-height: 44px;
+  padding: 0 18px !important;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
+  font-size: 0.96rem;
+  font-weight: 800;
+}
+
+#screen-welcome .welcome-login-link::after {
+  display: none;
+}
+
+#screen-welcome .welcome-link,
+#screen-welcome .nav-cta {
+  display: none !important;
+}
+
+#screen-welcome .landing-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 32px 48px;
+}
+
+#screen-welcome .hero-shell {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
+
+#screen-welcome .hero-grid {
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(340px, 1fr);
+  align-items: center;
+  gap: 56px;
+}
+
+#screen-welcome .hero-copy-panel {
+  position: relative;
+  max-width: 540px;
+  padding: 0;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 20px;
+}
+
+#screen-welcome .location-badge,
+#screen-welcome .trust-line-hero {
+  position: static;
+  inset: auto;
+}
+
+#screen-welcome .welcome-title {
+  max-width: 540px;
+  font-size: clamp(4rem, 6vw, 5.8rem);
+  line-height: 0.97;
+}
+
+#screen-welcome .welcome-sub {
+  max-width: 420px;
+  font-size: 1.22rem;
+}
+
+#screen-welcome .hero-actions {
+  width: 100%;
+  margin: 0;
+  align-items: flex-start;
+}
+
+#screen-welcome .hero-primary-btn {
+  width: min(100%, 380px);
+  min-height: 64px;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  padding: 0 22px;
+  border-radius: 18px;
+  font-size: 1rem;
+}
+
+#screen-welcome .hero-primary-mark,
+#screen-welcome .hero-primary-icon {
+  width: 32px;
+  height: 32px;
+  font-size: 1.8rem;
+}
+
+#screen-welcome .hero-visual-panel {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+  border-radius: 0;
+  justify-self: end;
+}
+
+#screen-welcome .hero-figure {
+  position: relative;
+  width: min(100%, 500px);
+  aspect-ratio: 0.88;
+  margin: 0 0 0 auto;
+  overflow: hidden;
+  border-radius: 28px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32);
+}
+
+#screen-welcome .hero-figure img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+}
+
+#screen-welcome .home-powered-footer {
+  padding: 0 48px 28px;
+  align-items: center;
+}
+
+@media (min-width: 768px) {
+  #screen-welcome .welcome-bg {
+    background-image:
+      radial-gradient(circle at 80% 14%, rgba(255, 184, 0, 0.13), transparent 24%),
+      linear-gradient(135deg, #06111f 0%, #081322 58%, #040913 100%);
+    background-repeat: no-repeat, no-repeat;
+    background-position: center, center;
+    background-size: cover, cover;
+  }
+
+  #screen-welcome .home-powered-footer > span {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 767px) {
+  #screen-welcome .site-header {
+    padding: calc(20px + env(safe-area-inset-top)) 24px 0;
+  }
+
+  #screen-welcome .site-header-inner {
+    align-items: center;
+  }
+
+  #screen-welcome .brand-logo {
+    width: 188px;
+    max-width: 54vw;
+  }
+
+  #screen-welcome .landing-main {
+    display: block;
+    padding: 30px 24px 20px;
+  }
+
+  #screen-welcome .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  #screen-welcome .hero-copy-panel {
+    max-width: none;
+    gap: 18px;
+  }
+
+  #screen-welcome .welcome-title {
+    max-width: 100%;
+    font-size: clamp(3.4rem, 17vw, 5.2rem);
+  }
+
+  #screen-welcome .welcome-sub {
+    max-width: 22rem;
+    font-size: 1.08rem;
+  }
+
+  #screen-welcome .hero-primary-btn {
+    width: 100%;
+  }
+
+  #screen-welcome .hero-visual-panel {
+    margin: 0;
+  }
+
+  #screen-welcome .hero-figure {
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 1.12;
+    margin: 0 auto;
+    border-radius: 24px;
+  }
+
+  #screen-welcome .trust-line-hero {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  #screen-welcome .home-powered-footer {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 12px 24px calc(24px + env(safe-area-inset-bottom));
+    text-align: center;
+  }
+
+  #screen-welcome .home-powered-footer > span,
+  #screen-welcome .home-powered-footer > span:not(.footer-powered-by) {
+    display: inline-flex;
+  }
+}

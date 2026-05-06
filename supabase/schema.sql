@@ -3903,7 +3903,7 @@ CREATE TABLE "public"."admin_settings" (
     "ranking_weights" "jsonb" DEFAULT '{"rating": 50, "distance": 20, "skill_match": 70, "availability": 20, "completed_jobs": 30}'::"jsonb" NOT NULL,
     "platform_bank_name" "text" DEFAULT 'First Bank of Nigeria'::"text" NOT NULL,
     "platform_account_number" "text" DEFAULT '3012845678'::"text" NOT NULL,
-    "platform_account_name" "text" DEFAULT 'Voltfriq Services Ltd'::"text" NOT NULL,
+    "platform_account_name" "text" DEFAULT 'CHAPTA ELECTRICAL SERVICES LTD'::"text" NOT NULL,
     "workmanship_prices" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
@@ -5785,9 +5785,9 @@ CREATE POLICY "voltfriq electrician docs update" ON "storage"."objects" FOR UPDA
 -- Name: objects voltfriq electrician docs write; Type: POLICY; Schema: storage; Owner: supabase_storage_admin
 --
 
-CREATE POLICY "voltfriq electrician docs write" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'electrician-documents'::"text") AND ("public"."is_admin"() OR (EXISTS ( SELECT 1
+CREATE POLICY "voltfriq electrician docs write" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'electrician-documents'::"text") AND ("public"."is_admin"() OR (("owner" = "auth"."uid"()) AND (("split_part"("objects"."name", '/'::"text", 1) = ("auth"."uid"())::"text") OR ("split_part"("objects"."name", '/'::"text", 1) = 'appeals'::"text") OR (EXISTS ( SELECT 1
    FROM "public"."electricians" "e"
-  WHERE (("e"."profile_id" = "auth"."uid"()) AND (("split_part"("objects"."name", '/'::"text", 1) = ("e"."id")::"text") OR ("split_part"("objects"."name", '/'::"text", 1) = 'appeals'::"text"))))))));
+  WHERE (("e"."profile_id" = "auth"."uid"()) AND ("split_part"("objects"."name", '/'::"text", 1) = ("e"."id")::"text"))))))))));
 
 
 --

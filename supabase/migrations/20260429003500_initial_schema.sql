@@ -122,7 +122,7 @@ create table if not exists public.admin_settings (
   ranking_weights jsonb not null default '{"distance":20,"rating":50,"availability":20,"completed_jobs":30,"skill_match":70}'::jsonb,
   platform_bank_name text not null default 'First Bank of Nigeria',
   platform_account_number text not null default '3012845678',
-  platform_account_name text not null default 'Voltfriq Services Ltd',
+  platform_account_name text not null default 'CHAPTA ELECTRICAL SERVICES LTD',
   workmanship_prices jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

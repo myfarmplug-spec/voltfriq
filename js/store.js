@@ -666,7 +666,7 @@ const Store = (() => {
         if (typeof payload.onDocumentUploadProgress === 'function') {
           payload.onDocumentUploadProgress(documentItem.type, { status: 'uploading', progress: 20 });
         }
-        filePath = await uploadFile('electricianDocuments', documentItem.file, electricianId + '/' + index);
+        filePath = await uploadFile('electricianDocuments', documentItem.file, profileId + '/' + electricianId + '/' + index);
         fileUrl = filePath;
         if (typeof payload.onDocumentUploadProgress === 'function') {
           payload.onDocumentUploadProgress(documentItem.type, { status: 'uploaded', progress: 100 });
@@ -883,7 +883,7 @@ const Store = (() => {
     const filePath = prefix + '-' + Date.now() + ext;
     const uploadResult = await client.storage.from(bucket).upload(filePath, file, {
       cacheControl: '3600',
-      upsert: true
+      upsert: false
     });
     if (uploadResult.error) throw normalizeError(uploadResult.error, 'File upload failed.');
     return uploadResult.data.path;
