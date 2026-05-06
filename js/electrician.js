@@ -1669,10 +1669,15 @@ const ElecApp = (() => {
 
   function renderDashboardLoading() {
     const stack = '<div class="skeleton-card"></div><div class="skeleton-card"></div>';
-    const stats = document.getElementById('dash-stats');
-    if (stats) {
-      stats.innerHTML = stack;
-    }
+    [
+      ['stat-jobs-month', '...'],
+      ['stat-earnings', '...'],
+      ['stat-rating', '--'],
+      ['stat-payouts', '...']
+    ].forEach(([id, value]) => {
+      const stat = document.getElementById(id);
+      if (stat) stat.textContent = value;
+    });
     ['dash-progress-jobs', 'dash-new-assignments', 'dash-accepted-jobs', 'dash-completed-jobs'].forEach((id) => {
       const container = document.getElementById(id);
       if (container) container.innerHTML = stack;
