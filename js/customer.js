@@ -184,8 +184,8 @@
     on('manual-location-input', 'input', () => {
       const manualLocation = document.getElementById('manual-location-input').value.trim();
       draft.addressSource = 'manual';
-      draft.locationLabel = manualLocation || draft.serviceArea;
-      draft.serviceArea = manualLocation || draft.serviceArea;
+      draft.locationLabel = manualLocation;
+      draft.serviceArea = manualLocation;
       if (manualLocation) {
         draft.latitude = null;
         draft.longitude = null;
@@ -614,6 +614,7 @@
 
     togglePanel('saved-address-panel', addressMode === 'saved');
     togglePanel('gps-location-panel', addressMode === 'gps');
+    togglePanel('manual-location-sheet', addressMode === 'manual');
     togglePanel('manual-location-panel', addressMode === 'manual');
     togglePanel('map-picker-panel', addressMode === 'map');
 
@@ -725,6 +726,7 @@
         button.disabled = false;
         button.textContent = originalText || 'Use Current Location';
       }
+      setAddressMode('manual');
       updateAvailabilityCard();
     }, {
       enableHighAccuracy: true,
@@ -1022,24 +1024,38 @@
     const summary = document.getElementById('match-summary-card');
     const transparency = document.getElementById('transparency-card');
     const submitButton = document.getElementById('btn-continue-match');
+    const issueEstimate = getIssueEstimate(draft.issueCategory, draft.issueLabel);
+    const urgencyLabel = formatUrgencyLabel(draft.urgency || 'emergency');
+    const assessmentValue = Store.formatCurrency(0);
 
     renderReviewContact();
     if (transparency) transparency.style.display = '';
-    if (submitButton) submitButton.textContent = 'Submit Booking';
+    if (submitButton) {
+      submitButton.innerHTML = '<span class="booking-step-cta-bolt" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg></span><span>Submit Booking</span><span class="booking-step-cta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg></span>';
+    }
 
     summary.innerHTML = [
-      '<div class="issue-summary-title">Review your booking</div>',
-      '<div class="helper-note">Check the details below, then submit once. VoltFriq will route the nearest approved electrician after your booking is created.</div>' +
-      '<ul class="trust-inline-list">' +
-        '<li>No work starts until you approve the next step.</li>' +
-        '<li>Payment proofs are manually verified.</li>' +
-        '<li>You can track every update after submission.</li>' +
-        '<li>Report any issue instantly from tracking.</li>' +
-      '</ul>'
+      '<div class="review-summary-list">',
+        '<div class="review-summary-row">',
+          '<span class="review-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg></span>',
+          '<div class="review-summary-copy"><strong>' + escapeHtml(draft.issueLabel || draft.issueCategory || 'Issue') + ' <span class="review-summary-dot">•</span> ' + escapeHtml(urgencyLabel) + '</strong></div>',
+        '</div>',
+        '<div class="review-summary-row">',
+          '<span class="review-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M12 21s7-4.5 7-10a7 7 0 1 0-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg></span>',
+          '<div class="review-summary-copy"><strong>' + escapeHtml(draft.locationLabel || draft.serviceArea || '--') + '</strong></div>',
+        '</div>',
+        '<div class="review-summary-row">',
+          '<span class="review-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18"/><path d="M6 4h12l2 3v13H4V7l2-3Z"/><path d="M7 11h10"/><path d="M7 15h6"/></svg></span>',
+          '<div class="review-summary-copy"><strong>' + escapeHtml(issueEstimate + ' estimate') + '</strong><span>Final price after assessment</span></div>',
+        '</div>',
+        '<div class="review-summary-row">',
+          '<span class="review-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8l-1.3 1.3a16 16 0 0 0 6.4 6.4l1.3-1.3a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9Z"/></svg></span>',
+          '<div class="review-summary-copy"><strong>' + escapeHtml(getBookingContactLabel()) + '</strong></div>',
+        '</div>',
+      '</div>'
     ].join('');
-    if (draft.requiresAssessment) {
-      const feeAmount = Store.formatCurrency((Store.getSettings() && Store.getSettings().assessment_fee) || 0);
-      summary.innerHTML += '<div class="flow-fee-note"><strong>Assessment visit:</strong> ' + escapeHtml(feeAmount) + '. This covers site visit and diagnosis before final workmanship pricing is confirmed.</div>';
+    if (transparency) {
+      transparency.innerHTML = '<div class="review-assessment-row"><span class="review-assessment-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></span><span class="review-assessment-label">Assessment visit: ' + escapeHtml(assessmentValue) + '</span><span class="review-assessment-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></div>';
     }
     renderMatchTransparency();
     updateReviewContactState();
@@ -1048,15 +1064,9 @@
   function renderMatchTransparency() {
     const transparency = document.getElementById('transparency-card');
     if (!transparency) return;
-    transparency.innerHTML = [
-      ['Location', draft.locationLabel || draft.serviceArea],
-      ['Issue type', draft.issueLabel || draft.issueCategory],
-      ['Estimated workmanship range', getIssueEstimate(draft.issueCategory, draft.issueLabel)],
-      ['Urgency', formatUrgencyLabel(draft.urgency)],
-      ['Contact', getBookingContactLabel()],
-      ['Description', draft.note || 'No extra description added'],
-      ['Photos', uploadedFiles.length ? String(uploadedFiles.length) + ' attached' : 'No photo attached']
-    ].map(renderKeyValueRow).join('');
+    if (!transparency.innerHTML.trim()) {
+      transparency.innerHTML = '<div class="review-assessment-row"><span class="review-assessment-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></span><span class="review-assessment-label">Assessment visit: ' + escapeHtml(Store.formatCurrency(0)) + '</span><span class="review-assessment-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></div>';
+    }
   }
 
   function getBookingContactLabel() {
@@ -1146,12 +1156,22 @@
       }
       if (authMode === 'register') {
         if (!name) throw new Error('Enter your full name to create the account.');
-        await Store.signUpCustomer({
+        const signupResult = await Store.signUpCustomer({
           email: email,
           password: password,
           fullName: name,
+          phone: draft.guestPhone || '',
+          primaryServiceArea: draft.serviceArea || draft.locationLabel || '',
+          latitude: draft.latitude,
+          longitude: draft.longitude,
           referralCode: referralCode
         });
+        if (signupResult && signupResult.user && !signupResult.session) {
+          setAuthMode('login');
+          applyAuthScreenContext();
+          showNotice('Account created. Sign in to continue.');
+          return;
+        }
       } else {
         await Store.signIn(email, password);
       }
@@ -1160,7 +1180,7 @@
         await continueFromMatch();
         return;
       }
-      if (authScreenIntent === 'tracking') {
+      if (authScreenIntent === 'tracking' || authScreenIntent === 'dashboard') {
         await openDashboard();
         return;
       }
@@ -1812,6 +1832,8 @@
     document.getElementById('problem-desc').value = '';
     if (document.getElementById('review-phone')) document.getElementById('review-phone').value = '';
     if (document.getElementById('detected-location-card')) document.getElementById('detected-location-card').style.display = 'none';
+    if (document.getElementById('detected-location-text')) document.getElementById('detected-location-text').textContent = 'Finding your location...';
+    if (document.getElementById('manual-location-sheet')) document.getElementById('manual-location-sheet').style.display = 'none';
     if (document.getElementById('map-location-card')) document.getElementById('map-location-card').style.display = 'none';
     if (document.getElementById('btn-use-map-location')) document.getElementById('btn-use-map-location').disabled = true;
     pendingMapLocation = null;

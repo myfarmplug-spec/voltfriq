@@ -467,7 +467,10 @@ const Store = (() => {
         data: {
           requested_role: 'customer',
           full_name: payload.fullName,
-          phone: payload.phone || ''
+          phone: payload.phone || '',
+          primary_service_area: payload.primaryServiceArea || '',
+          latitude: payload.latitude == null ? null : payload.latitude,
+          longitude: payload.longitude == null ? null : payload.longitude
         }
       }
     });
@@ -512,7 +515,20 @@ const Store = (() => {
         data: {
           requested_role: 'electrician',
           full_name: payload.fullName,
-          phone: payload.phone || ''
+          phone: payload.phone || '',
+          location_label: payload.locationLabel || '',
+          years_experience: payload.yearsExperience || 0,
+          availability_status: payload.availabilityStatus || 'available',
+          service_areas: payload.serviceAreas || [],
+          latitude: payload.latitude == null ? null : payload.latitude,
+          longitude: payload.longitude == null ? null : payload.longitude,
+          bank_name: payload.bankName || '',
+          bank_account_number: payload.bankAccountNumber || '',
+          bank_account_name: payload.bankAccountName || '',
+          onboarding_score: payload.onboardingValidationScore || 0,
+          onboarding_review_status: payload.onboardingReviewStatus || 'pending',
+          onboarding_feedback: payload.onboardingFeedback || null,
+          onboarding_answers: payload.onboardingAnswers || []
         }
       }
     });
@@ -697,21 +713,17 @@ const Store = (() => {
 
   async function ensureProfile(user) {
     const client = ensureClient();
-    const existing = await client
-      .from('profiles')
-      .select('id')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (existing.error) throw normalizeError(existing.error, 'Could not load your profile.');
-    if (existing.data) return existing.data;
-
     const profilePayload = {
       id: user.id,
       role: (user.user_metadata && user.user_metadata.requested_role) || 'customer',
       full_name: (user.user_metadata && user.user_metadata.full_name) || user.email || '',
       phone: (user.user_metadata && user.user_metadata.phone) || null
     };
-    const result = await client.rpc('ensure_profile_for_current_user');
+
+    let result = await client.rpc('ensure_app_account_for_current_user');
+    if (result.error && isMissingSchemaError(result.error)) {
+      result = await client.rpc('ensure_profile_for_current_user');
+    }
     if (result.error) throw normalizeError(result.error, 'Could not load your profile.');
     return result.data || profilePayload;
   }
@@ -807,7 +819,7 @@ const Store = (() => {
         ),
         guest_customer:guest_customers(*),
         job_photos(*),
-        job_quotes(*, quote_items(*)),
+        job_quotes:job_quotes!job_quotes_job_id_fkey(*, quote_items(*)),
         job_payments(*),
         job_timeline(*),
         ratings(*)
@@ -831,7 +843,7 @@ const Store = (() => {
         customer:customers(*, profile:profiles(full_name, phone)),
         guest_customer:guest_customers(*),
         job_photos(*),
-        job_quotes(*, quote_items(*)),
+        job_quotes:job_quotes!job_quotes_job_id_fkey(*, quote_items(*)),
         job_payments(*),
         job_timeline(*),
         ratings(*)
@@ -856,7 +868,7 @@ const Store = (() => {
           *,
           profile:profiles(full_name, phone, avatar_url)
         ),
-        job_quotes(*, quote_items(*)),
+        job_quotes:job_quotes!job_quotes_job_id_fkey(*, quote_items(*)),
         job_payments(*),
         job_timeline(*),
         ratings(*)
@@ -887,7 +899,7 @@ const Store = (() => {
           electrician_documents(*)
         ),
         job_photos(*),
-        job_quotes(*, quote_items(*)),
+        job_quotes:job_quotes!job_quotes_job_id_fkey(*, quote_items(*)),
         job_payments(*),
         job_timeline(*),
         ratings(*)

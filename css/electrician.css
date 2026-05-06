@@ -76,7 +76,7 @@
 .logo-text {
   font-size: 28px; font-weight: 800;
   color: var(--yellow);
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
 }
 
 .elec-login-subtitle {
@@ -357,6 +357,151 @@
   background: var(--red);
   border-radius: 50%;
   border: 2px solid var(--white);
+}
+
+/* Final electrician portal unification */
+.elec-login-shell,
+.elec-appeal-card,
+.photo-placeholder,
+.elec-job-item,
+.elec-alert-card,
+.elec-info-card,
+.elec-hist-card,
+.elec-profile-card,
+.elec-trust-card,
+.elec-confirm-card,
+.doc-field-card,
+.certification-card,
+.elec-question-card {
+  border-radius: 22px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+}
+
+.progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.progress-fill {
+  background: linear-gradient(90deg, #ffc52d, #ffb800);
+  box-shadow: 0 0 18px rgba(255, 184, 0, 0.22);
+}
+
+.progress-label {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.photo-placeholder {
+  min-height: 88px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(10, 20, 35, 0.86), rgba(5, 10, 20, 0.92));
+  color: var(--text-secondary);
+}
+
+.photo-placeholder:hover {
+  box-shadow:
+    0 0 0 1px rgba(255, 184, 0, 0.16),
+    0 0 20px rgba(255, 184, 0, 0.12),
+    0 18px 45px rgba(0, 0, 0, 0.28);
+}
+
+.photo-icon {
+  font-size: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  background: rgba(255, 184, 0, 0.1);
+  border: 1px solid rgba(255, 184, 0, 0.3);
+  position: relative;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(255, 184, 0, 0.2));
+}
+
+.photo-icon::before {
+  content: "";
+  position: absolute;
+  inset: 13px;
+  border: 2px solid currentColor;
+  border-radius: 10px;
+  color: var(--yellow);
+}
+
+.photo-icon::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  top: 14px;
+  right: 14px;
+  color: var(--yellow);
+}
+
+.photo-icon.is-uploaded::before {
+  inset: 15px 13px 17px 15px;
+  width: 20px;
+  height: 12px;
+  border: solid currentColor;
+  border-width: 0 0 3px 3px;
+  border-radius: 0;
+  transform: rotate(-45deg);
+}
+
+.photo-icon.is-uploaded::after {
+  content: none;
+}
+
+.elec-reg-note,
+.elec-pending-sub,
+.elec-pending-note,
+.document-group-meta,
+.doc-field-help,
+.elec-job-desc,
+.elec-info-label,
+.elec-hist-cat {
+  color: var(--text-secondary) !important;
+}
+
+.elec-appeal-card {
+  background: linear-gradient(180deg, rgba(10, 20, 35, 0.86), rgba(5, 10, 20, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.elec-pending-ref {
+  background: rgba(255, 184, 0, 0.12);
+  color: #ffd978;
+}
+
+.elec-top-bar {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.elec-top-avatar {
+  background: rgba(255, 184, 0, 0.1);
+  border: 1px solid rgba(255, 184, 0, 0.22);
+  color: var(--yellow);
+  filter: drop-shadow(0 0 8px rgba(255, 184, 0, 0.2));
+}
+
+.elec-login-subtitle,
+.form-label-light {
+  color: var(--text-secondary);
+}
+
+.elec-apply-link {
+  color: var(--text-secondary) !important;
+  font-weight: 600;
+}
+
+.elec-apply-link:hover {
+  color: var(--yellow) !important;
 }
 
 .elec-dash-scroll {

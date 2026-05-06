@@ -378,7 +378,7 @@ const ElecApp = (() => {
 
     createHiddenFileInput('reg-photo-input').onchange = (event) => {
       pendingProfilePhoto = event.target.files && event.target.files[0] ? event.target.files[0] : null;
-      document.getElementById('reg-photo').innerHTML = '<span class="photo-icon">✓</span><span>' + (pendingProfilePhoto ? pendingProfilePhoto.name : 'Tap to upload photo') + '</span>';
+      document.getElementById('reg-photo').innerHTML = '<span class="photo-icon' + (pendingProfilePhoto ? ' is-uploaded' : '') + '">✓</span><span>' + (pendingProfilePhoto ? pendingProfilePhoto.name : 'Tap to upload photo') + '</span>';
     };
 
     if (!selectedExpertise.length) {
@@ -715,7 +715,7 @@ const ElecApp = (() => {
 
       const validation = computeValidationResult();
 
-      await Store.signUpElectrician({
+      const signupResult = await Store.signUpElectrician({
         fullName: document.getElementById('reg-name').value.trim(),
         phone: document.getElementById('reg-phone').value.trim(),
         email: document.getElementById('reg-email').value.trim(),
@@ -742,7 +742,11 @@ const ElecApp = (() => {
         onDocumentUploadProgress: handleDocumentUploadProgress
       });
 
-      document.getElementById('pending-ref-id').textContent = (Store.getCurrentElectrician() || { id: 'pending' }).id.slice(0, 8).toUpperCase();
+      const pendingAccount = Store.getCurrentElectrician() || { id: (signupResult && signupResult.user && signupResult.user.id) || 'pending' };
+      document.getElementById('pending-ref-id').textContent = pendingAccount.id.slice(0, 8).toUpperCase();
+      if (signupResult && signupResult.user && !signupResult.session) {
+        document.querySelector('.elec-pending-note').textContent = 'Account created. Sign in after confirmation to finish uploads and track approval.';
+      }
       goTo('elec-pending');
     });
   }

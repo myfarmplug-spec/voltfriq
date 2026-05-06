@@ -24,10 +24,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/css/shared.css?v=20260503-ia3" />
-  <link rel="stylesheet" href="/css/customer.css?v=20260505-polish2" />
+  <link rel="stylesheet" href="/css/shared.css?v=20260506-apply-test" />
+  <link rel="stylesheet" href="/css/customer.css?v=20260506-apply-test" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
-  <link rel="stylesheet" href="/css/home.css?v=20260505-polish2" />
+  <link rel="stylesheet" href="/css/home.css?v=20260506-apply-test" />
 </head>
 <body>
   <div id="screen-welcome" class="screen active">
@@ -323,7 +323,7 @@
         <button class="btn-primary btn-full" id="btn-auth-submit">Login</button>
       </div>
 
-      <a href="/electricians/apply" class="auth-elec-link">Apply as a VoltFriq</a>
+      <a href="/electricians/login" class="auth-elec-link">Join or Sign In as VoltFriq</a>
       <div class="portal-legal-links">
         <a href="/terms">Terms</a>
         <span aria-hidden="true">.</span>
@@ -401,7 +401,7 @@
       <button class="btn-icon" onclick="goBack()" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
-      <div class="screen-header-title">Review Booking</div>
+      <div class="screen-header-title">Review</div>
     </div>
     <div class="screen-body">
       <div class="flow-progress">
@@ -416,9 +416,9 @@
 
       <div class="match-summary-card card" id="match-summary-card"></div>
       <div class="review-trust-strip">
-        <span><span class="review-trust-icon" aria-hidden="true">🛡️</span>Manual verification</span>
+        <span><span class="review-trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 5 6v6c0 5 3.4 8 7 9 3.6-1 7-4 7-9V6l-7-3Z"/><path d="m9.5 12 1.7 1.7 3.3-3.7"/></svg></span>Manual verification</span>
         <span class="review-trust-divider" aria-hidden="true"></span>
-        <span><span class="review-trust-icon" aria-hidden="true">🔒</span>No work starts without approval</span>
+        <span><span class="review-trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 1 1 8 0v3"/></svg></span>No work starts without approval</span>
       </div>
 
       <div class="transparency-card card" id="transparency-card"></div>
@@ -426,9 +426,9 @@
       <div class="review-contact-note" id="review-contact-note" style="display:none;"></div>
 
       <button class="btn-primary btn-large booking-step-cta" id="btn-continue-match">
-        <span class="booking-step-cta-bolt" aria-hidden="true">⚡</span>
+        <span class="booking-step-cta-bolt" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg></span>
         <span>Submit Booking</span>
-        <span class="booking-step-cta-icon" aria-hidden="true">→</span>
+        <span class="booking-step-cta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg></span>
       </button>
       <p class="booking-legal-note">By booking, you agree to VoltFriq&apos;s <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
     </div>
@@ -813,9 +813,9 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/api/env.js?v=20260505-hardening"></script>
   <script src="/js/config.js?v=20260505-hardening"></script>
-  <script src="/js/store.js?v=20260503-ia3"></script>
+  <script src="/js/store.js?v=20260506-apply-test"></script>
   <script src="/js/navigation.js?v=20260503-ia3"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/customer.js?v=20260505-polish2"></script>
+  <script src="/js/customer.js?v=20260506-apply-test"></script>
 </body>
 </html>
