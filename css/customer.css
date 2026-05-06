@@ -1509,6 +1509,15 @@
   margin-top: 10px;
 }
 
+.review-contact-card {
+  display: grid;
+  gap: 12px;
+}
+
+.review-contact-card .dashboard-panel-copy {
+  margin: -4px 0 0;
+}
+
 .review-contact-note.is-warning {
   color: #fbbf24;
 }

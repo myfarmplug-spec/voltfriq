@@ -133,6 +133,12 @@
   margin-bottom: 16px;
 }
 
+.elec-inline-error.is-success {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.22);
+}
+
 .elec-apply-link {
   color: var(--yellow) !important;
   font-size: 15px !important;
@@ -256,6 +262,39 @@
 .elec-pending-note {
   font-size: 13px; color: var(--mid);
   margin-top: 16px; line-height: 1.5;
+}
+
+.elec-pending-card {
+  width: 100%;
+  max-width: 520px;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1.5px solid #F3F4F6;
+  border-radius: 14px;
+  background: var(--white);
+  text-align: left;
+}
+
+.elec-pending-card-title {
+  margin-bottom: 12px;
+  color: var(--dark);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.elec-pending-actions {
+  width: 100%;
+  max-width: 520px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+@media (max-width: 520px) {
+  .elec-pending-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .elec-appeal-card {
@@ -1586,6 +1625,7 @@
 
 .photo-placeholder,
 .elec-appeal-card,
+.elec-pending-card,
 .elec-job-item,
 .elec-job-card {
   background: linear-gradient(180deg, rgba(12, 24, 41, 0.96) 0%, rgba(8, 17, 31, 0.98) 100%);

@@ -212,7 +212,7 @@
       return;
     }
     await withButtonLoading('btn-admin-forgot', 'Sending Reset Link...', async () => {
-      await Store.requestPasswordReset(email, window.location.origin + '/admin/login?reset=1');
+      await Store.requestPasswordReset(email, '/admin/login?reset=1');
       showLoginNotice('Reset link sent. Open it on this device, then choose a new password.');
     });
   }

@@ -4,6 +4,7 @@ let currentScreen = null;
 let screenHistory = [];
 let routeConfig = null;
 let routePopstateBound = false;
+let handlingRoutePopstate = false;
 
 function getScreenKey(element) {
   if (!element || !element.id) return null;
@@ -126,7 +127,7 @@ function activateScreen(id, options) {
 
 function goTo(id, options) {
   activateScreen(id, options || {});
-  if (routeConfig && !(options && options.skipRoute)) {
+  if (routeConfig && !handlingRoutePopstate && !(options && options.skipRoute)) {
     syncRoute(id, options || {});
   }
 }
@@ -152,10 +153,13 @@ function handleRoutePopstate(event) {
   }
 
   if (typeof routeConfig.onRouteActivated === 'function') {
-    routeConfig.onRouteActivated({
+    handlingRoutePopstate = true;
+    Promise.resolve(routeConfig.onRouteActivated({
       screen: route.screen,
       data: route.data || null,
       source: 'popstate'
+    })).finally(() => {
+      handlingRoutePopstate = false;
     });
   }
 }

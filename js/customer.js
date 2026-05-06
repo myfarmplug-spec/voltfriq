@@ -20,6 +20,7 @@
   let authScreenIntent = 'default';
   let pendingCustomerRoute = null;
   let currentTrackedTicket = null;
+  let pendingCustomerSignup = null;
 
   const ISSUE_OPTIONS = [
     { issue_type: 'Socket / Switch', value: 'Socket repair', description: 'Faulty socket, switch, or new socket point.', estimated_fee_min: 5000, estimated_fee_max: 8000 },
@@ -243,6 +244,7 @@
     on('tab-login', 'click', () => setAuthMode('login'));
     on('tab-register', 'click', () => setAuthMode('register'));
     on('btn-auth-forgot', 'click', handleCustomerPasswordResetRequest);
+    on('btn-auth-resend', 'click', handleCustomerSignupResend);
     on('btn-auth-submit', 'click', handleAuthSubmit);
 
     on('btn-continue-match', 'click', continueFromMatch);
@@ -960,9 +962,14 @@
     const phoneInput = document.getElementById('review-phone');
     if (!card) return;
 
-    card.style.display = profile ? 'none' : '';
-    if (phoneGroup) phoneGroup.style.display = profile ? 'none' : '';
-    if (profile) {
+    if (profile && profile.phone && !draft.guestPhone) {
+      draft.guestPhone = normalizePhoneInput(profile.phone);
+    }
+
+    const needsPhone = !profile || !isValidPhone(profile.phone);
+    card.style.display = needsPhone ? '' : 'none';
+    if (phoneGroup) phoneGroup.style.display = needsPhone ? '' : 'none';
+    if (!needsPhone) {
       updateReviewContactState();
       return;
     }
@@ -977,8 +984,10 @@
     const button = document.getElementById('btn-continue-match');
     const note = document.getElementById('review-contact-note');
     const profile = Store.getCurrentProfile();
-    if (profile) {
+    const needsPhone = !profile || !isValidPhone(profile.phone);
+    if (!needsPhone) {
       if (button) button.disabled = false;
+      if (note) note.style.display = 'none';
       return true;
     }
 
@@ -988,19 +997,24 @@
     if (button) button.disabled = !phoneValid;
 
     if (!note) return phoneValid;
+    note.style.display = 'block';
     note.classList.remove('is-warning', 'is-success');
 
     if (!draft.guestPhone) {
-      note.textContent = hasGps
-        ? 'GPS captured successfully. Enter your mobile number to continue.'
-        : 'Enter your mobile number to continue. You can still book with your area if GPS is unavailable.';
+      note.textContent = profile
+        ? 'Add your mobile number to finish this booking.'
+        : hasGps
+          ? 'GPS captured successfully. Enter your mobile number to continue.'
+          : 'Enter your mobile number to continue. You can still book with your area if GPS is unavailable.';
       return false;
     }
 
     if (!phoneValid) {
-      note.textContent = hasGps
-        ? 'GPS captured successfully. Enter a valid 10+ digit mobile number to review your booking.'
-        : 'Enter a valid 10+ digit mobile number to review your booking.';
+      note.textContent = profile
+        ? 'Enter a valid 10+ digit mobile number to finish this booking.'
+        : hasGps
+          ? 'GPS captured successfully. Enter a valid 10+ digit mobile number to review your booking.'
+          : 'Enter a valid 10+ digit mobile number to review your booking.';
       note.classList.add('is-warning');
       return false;
     }
@@ -1071,7 +1085,7 @@
 
   function getBookingContactLabel() {
     const profile = Store.getCurrentProfile();
-    if (profile) return profile.phone || 'Customer account';
+    if (profile) return profile.phone || draft.guestPhone || 'Add phone number';
     return draft.guestPhone || '--';
   }
 
@@ -1118,13 +1132,20 @@
 
   function setAuthMode(mode) {
     authMode = mode;
+    const isVerify = mode === 'verify';
     document.getElementById('tab-login').classList.toggle('active', mode === 'login');
     document.getElementById('tab-register').classList.toggle('active', mode === 'register');
+    document.querySelector('.auth-tabs').style.display = isVerify ? 'none' : '';
     document.getElementById('auth-name-group').style.display = mode === 'register' ? 'block' : 'none';
     document.getElementById('auth-referral-group').style.display = mode === 'register' ? 'block' : 'none';
+    document.getElementById('auth-password').closest('.form-group').style.display = isVerify ? 'none' : 'block';
+    document.getElementById('auth-token-group').style.display = isVerify ? 'block' : 'none';
     document.getElementById('btn-auth-forgot').style.display = mode === 'login' ? '' : 'none';
+    document.getElementById('btn-auth-resend').style.display = isVerify ? '' : 'none';
     document.getElementById('btn-auth-submit').textContent = mode === 'register'
       ? 'Create Account'
+      : isVerify
+        ? 'Verify Email'
       : mode === 'reset'
         ? 'Update Password'
         : 'Login';
@@ -1137,7 +1158,12 @@
     const name = document.getElementById('auth-name').value.trim();
     const referralCode = document.getElementById('auth-referral-code').value.trim();
 
-    await withButtonLoading('btn-auth-submit', authMode === 'register' ? 'Creating Account...' : authMode === 'reset' ? 'Updating Password...' : 'Signing In...', async () => {
+    await withButtonLoading('btn-auth-submit', authMode === 'register' ? 'Creating Account...' : authMode === 'verify' ? 'Verifying Email...' : authMode === 'reset' ? 'Updating Password...' : 'Signing In...', async () => {
+      if (authMode === 'verify') {
+        await verifyCustomerSignupCode();
+        return;
+      }
+
       if (authMode === 'reset') {
         if (!password) {
           throw new Error('Enter your new password to finish the reset.');
@@ -1156,7 +1182,7 @@
       }
       if (authMode === 'register') {
         if (!name) throw new Error('Enter your full name to create the account.');
-        const signupResult = await Store.signUpCustomer({
+        pendingCustomerSignup = {
           email: email,
           password: password,
           fullName: name,
@@ -1165,27 +1191,64 @@
           latitude: draft.latitude,
           longitude: draft.longitude,
           referralCode: referralCode
-        });
+        };
+        const signupResult = await Store.signUpCustomer(pendingCustomerSignup);
         if (signupResult && signupResult.user && !signupResult.session) {
-          setAuthMode('login');
+          setAuthMode('verify');
           applyAuthScreenContext();
-          showNotice('Account created. Sign in to continue.');
+          document.getElementById('auth-password').value = '';
+          document.getElementById('auth-token').value = '';
+          showNotice('We sent a 6-digit code to your email. Enter it here to continue.');
           return;
         }
       } else {
         await Store.signIn(email, password);
       }
 
-      if (hasDraftLocation() && draft.issueCategory) {
-        await continueFromMatch();
-        return;
-      }
-      if (authScreenIntent === 'tracking' || authScreenIntent === 'dashboard') {
-        await openDashboard();
-        return;
-      }
-      await resumeLatestJob();
+      await continueAfterCustomerAuth();
     });
+  }
+
+  async function verifyCustomerSignupCode() {
+    const payload = pendingCustomerSignup || {};
+    const email = (payload.email || document.getElementById('auth-contact').value).trim();
+    const token = document.getElementById('auth-token').value.replace(/\D/g, '');
+    if (!email || token.length !== 6) {
+      throw new Error('Enter the 6-digit code from your email.');
+    }
+    await Store.verifySignupOtp(email, token);
+    if (pendingCustomerSignup) {
+      await Store.finishCustomerSignup(pendingCustomerSignup);
+    }
+    pendingCustomerSignup = null;
+    document.getElementById('auth-token').value = '';
+    showNotice('Email verified. Opening your account...');
+    await continueAfterCustomerAuth();
+  }
+
+  async function handleCustomerSignupResend() {
+    const payload = pendingCustomerSignup || {};
+    const email = (payload.email || document.getElementById('auth-contact').value).trim();
+    if (!email) {
+      showError('Enter your email first so we can resend the code.');
+      return;
+    }
+    await withButtonLoading('btn-auth-resend', 'Resending...', async () => {
+      await Store.resendSignupOtp(email, '/login?verify=signup');
+      showNotice('A fresh 6-digit code has been sent to your email.');
+    });
+  }
+
+  async function continueAfterCustomerAuth() {
+    if (hasDraftLocation() && draft.issueCategory) {
+      await continueFromMatch();
+      return;
+    }
+    if (authScreenIntent === 'tracking' || authScreenIntent === 'dashboard' || authScreenIntent === 'claim-guest') {
+      await openDashboard();
+      return;
+    }
+    await resumeLatestJob();
   }
 
   async function handleCustomerPasswordResetRequest() {
@@ -1195,7 +1258,7 @@
       return;
     }
     await withButtonLoading('btn-auth-forgot', 'Sending Reset Link...', async () => {
-      await Store.requestPasswordReset(email, window.location.origin + '/login?reset=1');
+      await Store.requestPasswordReset(email, '/login?reset=1');
       showNotice('Reset link sent. Open the email on this device, then choose a new password.');
     });
   }
@@ -1211,7 +1274,9 @@
       showError('Select the issue before submitting.');
       return;
     }
-    if (!Store.getCurrentProfile() && !isValidPhone(draft.guestPhone)) {
+    const profile = Store.getCurrentProfile();
+    const profileHasPhone = profile && isValidPhone(profile.phone);
+    if (!profileHasPhone && !isValidPhone(draft.guestPhone)) {
       renderMatch();
       goTo('match');
       showError('Enter your mobile number before submitting.');
@@ -1219,6 +1284,9 @@
     }
 
     await withButtonLoading('btn-continue-match', 'Creating Booking...', async () => {
+      if (profile && !profileHasPhone) {
+        await Store.updateProfile({ phone: draft.guestPhone });
+      }
       const bookingPayload = {
         serviceArea: draft.serviceArea || draft.locationLabel,
         locationLabel: draft.locationLabel || draft.serviceArea,
@@ -1632,6 +1700,12 @@
     const sub = document.getElementById('auth-sub');
     const title = document.getElementById('customer-auth-title');
     if (!heading || !sub) return;
+    if (authMode === 'verify') {
+      if (title) title.textContent = 'Verify Email';
+      heading.textContent = 'Enter your email code';
+      sub.textContent = 'Use the 6-digit code from your email to finish your account on this page.';
+      return;
+    }
     if (authMode === 'reset') {
       if (title) title.textContent = 'Reset Password';
       heading.textContent = 'Choose your new password';

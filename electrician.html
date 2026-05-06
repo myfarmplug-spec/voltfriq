@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/shared.css?v=20260506-apply-test" />
-  <link rel="stylesheet" href="/css/electrician.css?v=20260506-apply-test" />
+  <link rel="stylesheet" href="/css/electrician.css?v=20260506-auth-booking" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
 </head>
 <body>
@@ -250,22 +250,39 @@
   </div>
 
   <!-- ─── SCREEN: Application Pending ─────────────────────────────── -->
-  <div id="screen-elec-pending" class="screen">
-    <div class="elec-pending-wrap">
-      <div class="elec-pending-anim">
-        <div class="pending-ring r1"></div>
-        <div class="pending-ring r2"></div>
-        <div class="pending-icon">✓</div>
+      <div id="screen-elec-pending" class="screen">
+        <div class="elec-pending-wrap">
+          <div class="elec-pending-anim">
+            <div class="pending-ring r1"></div>
+            <div class="pending-ring r2"></div>
+            <div class="pending-icon">✓</div>
+          </div>
+          <h2 class="elec-pending-title">Pending Dashboard</h2>
+          <p class="elec-pending-sub">Your VoltFriq account is under review. You can stay signed in here while admin completes approval.</p>
+          <div class="elec-pending-ref">
+            Reference: <strong id="pending-ref-id">PENDING</strong>
+          </div>
+          <div class="elec-pending-card" id="pending-dashboard-card">
+            <div class="elec-pending-card-title">Account Status</div>
+            <div class="elec-info-list" id="pending-dashboard-summary"></div>
+          </div>
+          <div class="elec-pending-card" id="pending-verify-card" style="display:none;">
+            <div class="elec-pending-card-title">Verify Email</div>
+            <p class="elec-pending-note">Enter the 6-digit code from your email to finish your application here.</p>
+            <div class="form-group">
+              <label class="form-label">Email Code</label>
+              <input type="text" class="form-input" id="pending-token" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" />
+            </div>
+            <button class="btn-primary btn-full" id="btn-pending-verify">Verify Email</button>
+            <button class="btn-ghost elec-inline-link" id="btn-pending-resend" type="button">Resend code</button>
+          </div>
+          <p class="elec-pending-note" id="pending-status-note">You&apos;ll be notified once approved so you can start earning from nearby requests.</p>
+          <div class="elec-pending-actions">
+            <button class="btn-secondary btn-full" id="btn-pending-refresh">Refresh Status</button>
+            <button class="btn-ghost btn-full" id="btn-pending-back">Sign Out</button>
+          </div>
+        </div>
       </div>
-      <h2 class="elec-pending-title">Application Submitted</h2>
-      <p class="elec-pending-sub">You&apos;re almost ready to receive jobs. We&apos;ll review your application within <strong>24–48 hours</strong>.</p>
-      <div class="elec-pending-ref">
-        Reference: <strong id="pending-ref-id">PENDING</strong>
-      </div>
-      <p class="elec-pending-note">You’ll be notified once approved so you can start earning from nearby requests.</p>
-      <button class="btn-secondary btn-full" id="btn-pending-back" style="margin-top:24px">Back to Login</button>
-    </div>
-  </div>
 
   <!-- ─── SCREEN: Suspension Appeal ──────────────────────────────── -->
   <div id="screen-elec-appeal" class="screen">
@@ -700,11 +717,11 @@
   </div>
 
   <script src="/vendor/supabase.min.js"></script>
-  <script src="/api/env.js?v=20260505-hardening"></script>
-  <script src="/js/config.js?v=20260505-hardening"></script>
-  <script src="/js/store.js?v=20260506-apply-test"></script>
-  <script src="/js/navigation.js?v=20260503-ia3"></script>
+  <script src="/api/env.js?v=20260506-auth-booking"></script>
+  <script src="/js/config.js?v=20260506-auth-booking"></script>
+  <script src="/js/store.js?v=20260506-auth-booking"></script>
+  <script src="/js/navigation.js?v=20260506-auth-booking"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/electrician.js?v=20260506-apply-test"></script>
+  <script src="/js/electrician.js?v=20260506-auth-booking"></script>
 </body>
 </html>

@@ -18,6 +18,7 @@ const ElecApp = (() => {
   let documentUploads = {};
   let validationAnswers = {};
   let pendingElectricianRoute = null;
+  let pendingElectricianSignupPayload = null;
 
   function wantsPasswordReset() {
     const query = new URLSearchParams(window.location.search || '');
@@ -164,7 +165,8 @@ const ElecApp = (() => {
   function resolveElectricianPath(screen, routeData) {
     if (screen === 'elec-login') return '/electricians/login';
     if (['elec-reg-1', 'elec-reg-2', 'elec-reg-3', 'elec-reg-4', 'elec-reg-5'].includes(screen)) return '/electricians/apply';
-    if (screen === 'elec-pending' || screen === 'elec-appeal') return '/electricians/pending';
+    if (screen === 'elec-pending') return '/electricians/dashboard';
+    if (screen === 'elec-appeal') return '/electricians/pending';
     if (screen === 'elec-dashboard') return '/electricians/dashboard';
     if (screen === 'elec-history') return '/electricians/history';
     if (screen === 'elec-profile') return '/electricians/profile';
@@ -202,6 +204,7 @@ const ElecApp = (() => {
     }
 
     if (electrician.status === 'pending' || electrician.status === 'rejected') {
+      renderPendingDashboard(electrician);
       goTo('elec-pending', { replace: route.source !== 'popstate' });
       return;
     }
@@ -252,6 +255,9 @@ const ElecApp = (() => {
     document.getElementById('btn-reg-next-4').addEventListener('click', nextRegistrationStepFour);
     document.getElementById('btn-submit-application').addEventListener('click', submitApplication);
     document.getElementById('btn-add-certification').addEventListener('click', addCertificationEntry);
+    document.getElementById('btn-pending-verify').addEventListener('click', verifyPendingElectricianSignup);
+    document.getElementById('btn-pending-resend').addEventListener('click', resendPendingElectricianSignupCode);
+    document.getElementById('btn-pending-refresh').addEventListener('click', refreshPendingDashboard);
     document.getElementById('btn-pending-back').addEventListener('click', handleLogout);
     document.getElementById('btn-appeal-logout').addEventListener('click', handleLogout);
     document.getElementById('btn-submit-appeal').addEventListener('click', submitAppeal);
@@ -300,7 +306,7 @@ const ElecApp = (() => {
     }
 
     if (electrician.status === 'pending') {
-      document.getElementById('pending-ref-id').textContent = electrician.id.slice(0, 8).toUpperCase();
+      renderPendingDashboard(electrician);
       goTo('elec-pending', { replace: true });
       return;
     }
@@ -310,10 +316,7 @@ const ElecApp = (() => {
       return;
     }
     if (electrician.status === 'rejected') {
-      document.getElementById('pending-ref-id').textContent = electrician.id.slice(0, 8).toUpperCase();
-      document.querySelector('.elec-pending-title').textContent = 'Application Needs Review';
-      document.querySelector('.elec-pending-sub').textContent = 'Your onboarding has not been approved yet. VoltFriq support will contact you.';
-      document.querySelector('.elec-pending-note').textContent = 'Contact VoltFriq support if you need help with your application or account status.';
+      renderPendingDashboard(electrician);
       goTo('elec-pending', { replace: true });
       return;
     }
@@ -351,7 +354,7 @@ const ElecApp = (() => {
       return;
     }
     await withButtonLoading('btn-login-forgot', 'Sending Reset Link...', async () => {
-      await Store.requestPasswordReset(email, window.location.origin + '/electricians/login?reset=1');
+      await Store.requestPasswordReset(email, '/electricians/login?reset=1');
       showNotice('Reset link sent. Open it on this device, then choose a new password.');
     });
   }
@@ -715,7 +718,7 @@ const ElecApp = (() => {
 
       const validation = computeValidationResult();
 
-      const signupResult = await Store.signUpElectrician({
+      pendingElectricianSignupPayload = {
         fullName: document.getElementById('reg-name').value.trim(),
         phone: document.getElementById('reg-phone').value.trim(),
         email: document.getElementById('reg-email').value.trim(),
@@ -740,15 +743,94 @@ const ElecApp = (() => {
         onboardingFeedback: validation.percentage >= VALIDATION_PASS_THRESHOLD ? 'Good understanding of safety practices' : 'Needs review',
         onboardingAnswers: validation.answers,
         onDocumentUploadProgress: handleDocumentUploadProgress
-      });
+      };
+      const signupResult = await Store.signUpElectrician(pendingElectricianSignupPayload);
 
       const pendingAccount = Store.getCurrentElectrician() || { id: (signupResult && signupResult.user && signupResult.user.id) || 'pending' };
-      document.getElementById('pending-ref-id').textContent = pendingAccount.id.slice(0, 8).toUpperCase();
       if (signupResult && signupResult.user && !signupResult.session) {
-        document.querySelector('.elec-pending-note').textContent = 'Account created. Sign in after confirmation to finish uploads and track approval.';
+        renderPendingDashboard({
+          id: pendingAccount.id,
+          status: 'pending',
+          service_areas: pendingElectricianSignupPayload.serviceAreas,
+          availability_status: pendingElectricianSignupPayload.availabilityStatus
+        }, { verificationRequired: true });
+        goTo('elec-pending');
+        return;
       }
-      goTo('elec-pending');
+
+      pendingElectricianSignupPayload = null;
+      await resumeSession({ screen: 'elec-dashboard', data: null, source: 'signup' });
     });
+  }
+
+  async function verifyPendingElectricianSignup() {
+    const payload = pendingElectricianSignupPayload;
+    if (!payload || !payload.email) {
+      showError('Restart the application so we can verify the right email.');
+      return;
+    }
+    await withButtonLoading('btn-pending-verify', 'Verifying...', async () => {
+      const token = document.getElementById('pending-token').value.replace(/\D/g, '');
+      if (token.length !== 6) throw new Error('Enter the 6-digit code from your email.');
+      await Store.verifySignupOtp(payload.email, token);
+      await Store.finishElectricianSignup(payload);
+      pendingElectricianSignupPayload = null;
+      document.getElementById('pending-token').value = '';
+      await resumeSession({ screen: 'elec-dashboard', data: null, source: 'signup' });
+    });
+  }
+
+  async function resendPendingElectricianSignupCode() {
+    const payload = pendingElectricianSignupPayload;
+    if (!payload || !payload.email) {
+      showError('Restart the application so we can resend the right email code.');
+      return;
+    }
+    await withButtonLoading('btn-pending-resend', 'Resending...', async () => {
+      await Store.resendSignupOtp(payload.email, '/electricians/login?verify=signup');
+      showNotice('A fresh 6-digit code has been sent to your email.');
+    });
+  }
+
+  async function refreshPendingDashboard() {
+    await withButtonLoading('btn-pending-refresh', 'Refreshing...', async () => {
+      await Store.init();
+      await resumeSession({ screen: 'elec-dashboard', data: null, source: 'refresh' });
+    });
+  }
+
+  function renderPendingDashboard(electrician, options) {
+    const profile = Store.getCurrentProfile() || {};
+    const payload = pendingElectricianSignupPayload || {};
+    const row = electrician || {};
+    const isRejected = row.status === 'rejected';
+    const verifyCard = document.getElementById('pending-verify-card');
+    const summary = document.getElementById('pending-dashboard-summary');
+    const note = document.getElementById('pending-status-note');
+    const ref = document.getElementById('pending-ref-id');
+
+    document.querySelector('.elec-pending-title').textContent = isRejected ? 'Application Needs Review' : 'Pending Dashboard';
+    document.querySelector('.elec-pending-sub').textContent = isRejected
+      ? 'Your onboarding has not been approved yet. VoltFriq support will contact you.'
+      : 'Your VoltFriq account is under review. You can stay signed in here while admin completes approval.';
+    if (ref) ref.textContent = String(row.id || 'pending').slice(0, 8).toUpperCase();
+    if (verifyCard) verifyCard.style.display = options && options.verificationRequired ? 'block' : 'none';
+    if (note) {
+      note.textContent = options && options.verificationRequired
+        ? 'Verify your email to complete setup. Your dashboard will remain pending until admin approval.'
+        : isRejected
+          ? 'Contact VoltFriq support if you need help with your application or account status.'
+          : 'You will be able to receive nearby requests after admin approval.';
+    }
+    if (summary) {
+      summary.innerHTML = [
+        ['Name', profile.full_name || payload.fullName || '--'],
+        ['Phone', profile.phone || payload.phone || '--'],
+        ['Status', row.status || 'pending'],
+        ['Availability', row.availability_status || payload.availabilityStatus || 'available'],
+        ['Service areas', (row.service_areas || payload.serviceAreas || []).join(', ') || '--']
+      ].map(profileRow).join('');
+    }
   }
 
   async function loadDashboard() {
@@ -1513,6 +1595,7 @@ const ElecApp = (() => {
       const target = screen.querySelector('.elec-reg-body, .elec-job-scroll, .elec-dash-scroll, .elec-pending-wrap, .elec-login-content, .elec-confirm-scroll, .elec-profile-scroll, .elec-history-scroll, .elec-appeal-wrap') || screen;
       target.insertBefore(banner, target.firstChild);
     }
+    banner.classList.remove('is-success');
     banner.textContent = message;
     banner.style.display = 'block';
     if (typeof banner.scrollIntoView === 'function') {
@@ -1528,6 +1611,7 @@ const ElecApp = (() => {
       error.style.display = 'none';
     }
     document.querySelectorAll('.elec-inline-error').forEach((banner) => {
+      banner.classList.remove('is-success');
       banner.textContent = '';
       banner.style.display = 'none';
     });
@@ -1537,6 +1621,21 @@ const ElecApp = (() => {
 
   function showNotice(message) {
     const loginError = document.getElementById('login-error');
+    if (currentScreen !== 'elec-login') {
+      const screen = document.querySelector('.screen.active') || document.getElementById('screen-elec-login');
+      if (!screen) return;
+      let banner = screen.querySelector('.elec-inline-error');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.className = 'elec-inline-error';
+        const target = screen.querySelector('.elec-reg-body, .elec-job-scroll, .elec-dash-scroll, .elec-pending-wrap, .elec-login-content, .elec-confirm-scroll, .elec-profile-scroll, .elec-history-scroll, .elec-appeal-wrap') || screen;
+        target.insertBefore(banner, target.firstChild);
+      }
+      banner.classList.add('is-success');
+      banner.textContent = message;
+      banner.style.display = 'block';
+      return;
+    }
     if (!loginError) return;
     loginError.classList.add('is-success');
     loginError.textContent = message;

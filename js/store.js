@@ -91,6 +91,20 @@ const Store = (() => {
     return window.VOLTFRIQ_CONFIG || {};
   }
 
+  function getPublicSiteUrl() {
+    const configured = String(config().publicSiteUrl || '').trim();
+    const fallback = (typeof window !== 'undefined' && window.location && window.location.origin)
+      ? window.location.origin
+      : 'https://www.voltfriq.com';
+    return (configured || fallback).replace(/\/+$/, '');
+  }
+
+  function siteUrlForPath(path) {
+    const value = String(path || '/').trim() || '/';
+    if (/^https?:\/\//i.test(value)) return value;
+    return getPublicSiteUrl() + (value.charAt(0) === '/' ? value : '/' + value);
+  }
+
   function loadGuestAccess() {
     try {
       const raw = window.localStorage.getItem(GUEST_ACCESS_KEY);
@@ -458,12 +472,58 @@ const Store = (() => {
     return '/dashboard';
   }
 
+  function customerSignupRedirectUrl() {
+    return siteUrlForPath('/login?verify=signup');
+  }
+
+  function electricianSignupRedirectUrl() {
+    return siteUrlForPath('/electricians/login?verify=signup');
+  }
+
+  async function finishCustomerSignup(payload, userId) {
+    const client = requireClient();
+    await hydrateSession();
+    const profileId = userId || (state.session && state.session.user && state.session.user.id) || (state.profile && state.profile.id);
+    if (!profileId) throw new Error('Verify your email before finishing this account.');
+
+    const profileUpdate = await client
+      .from('profiles')
+      .update({
+        role: 'customer',
+        full_name: payload.fullName,
+        phone: payload.phone || null
+      })
+      .eq('id', profileId);
+    if (profileUpdate.error) throw normalizeError(profileUpdate.error, 'Could not save your profile.');
+
+    await ensureCustomerRecord(profileId);
+    const customerUpdate = await client.from('customers')
+      .update({
+        primary_service_area: payload.primaryServiceArea || null,
+        latitude: payload.latitude || null,
+        longitude: payload.longitude || null
+      })
+      .eq('profile_id', profileId);
+    if (customerUpdate.error) throw normalizeError(customerUpdate.error, 'Could not update your customer record.');
+
+    await hydrateSession();
+    if (payload.referralCode) {
+      await linkReferralCode(payload.referralCode);
+      await hydrateSession();
+    }
+    return {
+      profile: state.profile,
+      customer: state.customer
+    };
+  }
+
   async function signUpCustomer(payload) {
     const client = requireClient();
     const signUp = await client.auth.signUp({
       email: payload.email,
       password: payload.password,
       options: {
+        emailRedirectTo: customerSignupRedirectUrl(),
         data: {
           requested_role: 'customer',
           full_name: payload.fullName,
@@ -476,72 +536,30 @@ const Store = (() => {
     });
     if (signUp.error) throw normalizeError(signUp.error, 'Customer signup failed.');
     if (signUp.data.user && signUp.data.session) {
-      await hydrateSession();
-      if (state.profile) {
-        const profileUpdate = await client
-          .from('profiles')
-          .update({
-            role: 'customer',
-            full_name: payload.fullName,
-            phone: payload.phone || null
-          })
-          .eq('id', state.profile.id);
-        if (profileUpdate.error) throw normalizeError(profileUpdate.error, 'Could not save your profile.');
-      }
-      await ensureCustomerRecord(signUp.data.user.id);
-      const customerUpdate = await client.from('customers')
-        .update({
-          primary_service_area: payload.primaryServiceArea || null,
-          latitude: payload.latitude || null,
-          longitude: payload.longitude || null
-        })
-        .eq('profile_id', signUp.data.user.id);
-      if (customerUpdate.error) throw normalizeError(customerUpdate.error, 'Could not update your customer record.');
-      await hydrateSession();
-      if (payload.referralCode) {
-        await linkReferralCode(payload.referralCode);
-        await hydrateSession();
-      }
+      await finishCustomerSignup(payload, signUp.data.user.id);
     }
     return signUp.data;
   }
 
-  async function signUpElectrician(payload) {
+  async function finishElectricianSignup(payload, userId) {
     const client = requireClient();
-    const signUp = await client.auth.signUp({
+    await hydrateSession();
+    const profileId = userId || (state.session && state.session.user && state.session.user.id) || (state.profile && state.profile.id);
+    if (!profileId) throw new Error('Verify your email before finishing this application.');
+
+    await ensureProfile({
+      id: profileId,
       email: payload.email,
-      password: payload.password,
-      options: {
-        data: {
-          requested_role: 'electrician',
-          full_name: payload.fullName,
-          phone: payload.phone || '',
-          location_label: payload.locationLabel || '',
-          years_experience: payload.yearsExperience || 0,
-          availability_status: payload.availabilityStatus || 'available',
-          service_areas: payload.serviceAreas || [],
-          latitude: payload.latitude == null ? null : payload.latitude,
-          longitude: payload.longitude == null ? null : payload.longitude,
-          bank_name: payload.bankName || '',
-          bank_account_number: payload.bankAccountNumber || '',
-          bank_account_name: payload.bankAccountName || '',
-          onboarding_score: payload.onboardingValidationScore || 0,
-          onboarding_review_status: payload.onboardingReviewStatus || 'pending',
-          onboarding_feedback: payload.onboardingFeedback || null,
-          onboarding_answers: payload.onboardingAnswers || []
-        }
+      user_metadata: {
+        requested_role: 'electrician',
+        full_name: payload.fullName,
+        phone: payload.phone || ''
       }
     });
-    if (signUp.error) throw normalizeError(signUp.error, 'Electrician signup failed.');
-    if (!signUp.data.user) return signUp.data;
-
-    if (!signUp.data.session) return signUp.data;
-
-    await ensureProfile(signUp.data.user);
 
     let avatarUrl = null;
     if (payload.profilePhoto) {
-      avatarUrl = await uploadFile('avatars', payload.profilePhoto, signUp.data.user.id + '/profile');
+      avatarUrl = await uploadFile('avatars', payload.profilePhoto, profileId + '/profile');
     }
 
     const profileUpdate = await client.from('profiles')
@@ -551,11 +569,11 @@ const Store = (() => {
         phone: payload.phone || '',
         avatar_url: avatarUrl
       })
-      .eq('id', signUp.data.user.id);
+      .eq('id', profileId);
     if (profileUpdate.error) throw normalizeError(profileUpdate.error, 'Could not save the electrician profile.');
 
     const electricianPayload = {
-      profile_id: signUp.data.user.id,
+      profile_id: profileId,
       status: 'pending',
       years_experience: payload.yearsExperience || 0,
       service_areas: payload.serviceAreas || [],
@@ -654,6 +672,43 @@ const Store = (() => {
     }
 
     await hydrateSession();
+    return {
+      profile: state.profile,
+      electrician: state.electrician
+    };
+  }
+
+  async function signUpElectrician(payload) {
+    const client = requireClient();
+    const signUp = await client.auth.signUp({
+      email: payload.email,
+      password: payload.password,
+      options: {
+        emailRedirectTo: electricianSignupRedirectUrl(),
+        data: {
+          requested_role: 'electrician',
+          full_name: payload.fullName,
+          phone: payload.phone || '',
+          location_label: payload.locationLabel || '',
+          years_experience: payload.yearsExperience || 0,
+          availability_status: payload.availabilityStatus || 'available',
+          service_areas: payload.serviceAreas || [],
+          latitude: payload.latitude == null ? null : payload.latitude,
+          longitude: payload.longitude == null ? null : payload.longitude,
+          bank_name: payload.bankName || '',
+          bank_account_number: payload.bankAccountNumber || '',
+          bank_account_name: payload.bankAccountName || '',
+          onboarding_score: payload.onboardingValidationScore || 0,
+          onboarding_review_status: payload.onboardingReviewStatus || 'pending',
+          onboarding_feedback: payload.onboardingFeedback || null,
+          onboarding_answers: payload.onboardingAnswers || []
+        }
+      }
+    });
+    if (signUp.error) throw normalizeError(signUp.error, 'Electrician signup failed.');
+    if (signUp.data.user && signUp.data.session) {
+      await finishElectricianSignup(payload, signUp.data.user.id);
+    }
     return signUp.data;
   }
 
@@ -668,9 +723,34 @@ const Store = (() => {
   async function requestPasswordReset(email, redirectTo) {
     const client = requireClient();
     const result = await client.auth.resetPasswordForEmail(email, {
-      redirectTo: redirectTo || (window.location.origin + '/login?reset=1')
+      redirectTo: siteUrlForPath(redirectTo || '/login?reset=1')
     });
     if (result.error) throw normalizeError(result.error, 'Could not send the reset link.');
+    return true;
+  }
+
+  async function verifySignupOtp(email, token) {
+    const client = requireClient();
+    const result = await client.auth.verifyOtp({
+      email: String(email || '').trim(),
+      token: String(token || '').replace(/\D/g, ''),
+      type: 'signup'
+    });
+    if (result.error) throw normalizeError(result.error, 'Could not verify this email code.');
+    await hydrateSession();
+    return result.data;
+  }
+
+  async function resendSignupOtp(email, redirectTo) {
+    const client = requireClient();
+    const result = await client.auth.resend({
+      type: 'signup',
+      email: String(email || '').trim(),
+      options: {
+        emailRedirectTo: siteUrlForPath(redirectTo || '/login?verify=signup')
+      }
+    });
+    if (result.error) throw normalizeError(result.error, 'Could not resend the email code.');
     return true;
   }
 
@@ -1857,6 +1937,8 @@ const Store = (() => {
     getCurrentWallet,
     getGuestAccess,
     clearGuestAccess,
+    getPublicSiteUrl,
+    siteUrlForPath,
     listSavedAddresses,
     saveCustomerAddress,
     selectDraftAddress,
@@ -1868,9 +1950,13 @@ const Store = (() => {
     getPublicStorageUrl,
     createSignedStorageUrl,
     signUpCustomer,
+    finishCustomerSignup,
     signUpElectrician,
+    finishElectricianSignup,
     signIn,
     requestPasswordReset,
+    verifySignupOtp,
+    resendSignupOtp,
     updatePassword,
     signOut,
     updateProfile,
