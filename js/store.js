@@ -324,12 +324,27 @@ const Store = (() => {
     };
   }
 
-  async function hydrateSession() {
+  async function hydrateSession(seed) {
     const client = ensureClient();
     if (!client) return null;
 
-    const sessionResult = await client.auth.getSession();
-    state.session = sessionResult.data.session || null;
+    const seedSession = seed && seed.access_token
+      ? seed
+      : seed && seed.session && seed.session.access_token
+        ? seed.session
+        : null;
+    const seedUser = seed && seed.user
+      ? seed.user
+      : seedSession && seedSession.user
+        ? seedSession.user
+        : null;
+
+    if (seedSession) {
+      state.session = seedSession;
+    } else {
+      const sessionResult = await client.auth.getSession();
+      state.session = sessionResult.data.session || null;
+    }
     state.profile = null;
     state.customer = null;
     state.electrician = null;
@@ -337,8 +352,7 @@ const Store = (() => {
 
     if (!state.session) return null;
 
-    const userResult = await client.auth.getUser();
-    const user = userResult.data.user;
+    const user = seedUser || (await client.auth.getUser()).data.user;
     if (!user) return null;
 
     await ensureProfile(user);
@@ -716,7 +730,7 @@ const Store = (() => {
     const client = requireClient();
     const result = await client.auth.signInWithPassword({ email, password });
     if (result.error) throw normalizeError(result.error, 'Login failed.');
-    await hydrateSession();
+    await hydrateSession(result.data);
     return result.data;
   }
 
