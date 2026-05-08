@@ -2,7 +2,7 @@
   "name": "voltfriq-static-app",
   "version": "1.0.0",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "check": "npm run check:js && npm run check:backend",
     "check:js": "node --check js/store.js && node --check js/customer.js && node --check js/electrician.js && node --check js/admin.js",
