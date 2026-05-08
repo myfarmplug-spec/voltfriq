@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "node scripts/build-frontend-bundles.mjs --out . && vite --host 0.0.0.0",
     "build": "vite build && node scripts/build-frontend-bundles.mjs --out dist && node scripts/copy-vite-static.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "build:frontend": "node scripts/build-frontend-bundles.mjs --out .tmp/frontend-bundles",

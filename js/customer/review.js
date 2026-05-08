@@ -155,6 +155,10 @@
       showError('Enter your mobile number before submitting.');
       return;
     }
+    if (!profile && uploadedFiles.length) {
+      showError('Photos can be added after your booking is confirmed.');
+      return;
+    }
 
     bookingSubmitInFlight = true;
     try {
@@ -230,4 +234,3 @@
       toast.classList.remove('is-visible');
     }, 8500);
   }
-

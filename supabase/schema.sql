@@ -1521,7 +1521,7 @@ CREATE FUNCTION "public"."guest_public_timeline_note"("p_status" "public"."job_s
     AS $$
   select case p_status::text
     when 'requested' then 'Booking confirmed.'
-    when 'matching' then 'Finding a verified electrician near you.'
+    when 'matching' then 'Pairing you with a VoltFriq.'
     when 'assigned' then 'A verified VoltFriq has been assigned.'
     when 'accepted' then 'Your VoltFriq has accepted the booking.'
     when 'assessment_fee_pending' then 'Assessment payment is ready.'
@@ -1565,49 +1565,52 @@ begin
   select jsonb_strip_nulls(jsonb_build_object(
     'id', j.id,
     'ticket', j.ticket,
-    'is_guest', true,
-    'service_area', j.service_area,
-    'location_label', j.location_label,
+    'status', j.status,
     'issue_category', j.issue_category,
     'urgency', j.urgency,
-    'status', j.status,
+    'location_label', j.location_label,
     'created_at', j.created_at,
-    'updated_at', j.updated_at,
     'assigned_electrician', case when e.id is null then null else jsonb_build_object(
-      'profile', jsonb_build_object(
-        'full_name', coalesce(nullif(p.full_name, ''), 'VoltFriq'),
-        'avatar_url', p.avatar_url
-      ),
-      'average_rating', e.average_rating
+      'display_name', coalesce(nullif(p.full_name, ''), 'VoltFriq'),
+      'avatar_url', p.avatar_url,
+      'rating', e.average_rating
     ) end,
-    'job_timeline', coalesce((
+    'progress_timeline', coalesce((
       select jsonb_agg(jsonb_build_object(
         'status', timeline.status,
-        'note', public.guest_public_timeline_note(timeline.status),
+        'note', case
+          when lower(coalesce(timeline.note, '')) like any (array[
+            '%manual assignment required%',
+            '%admin assignment%',
+            '%admin manually assigned%',
+            '%no electrician available%',
+            '%dispatch failed%'
+          ]) then 'VoltFriq support is helping route your request.'
+          when timeline.status = 'matching' and timeline.created_at < now() - interval '10 minutes' then 'Still finding a verified VoltFriq near you.'
+          else public.guest_public_timeline_note(timeline.status)
+        end,
         'created_at', timeline.created_at
       ) order by timeline.created_at)
       from public.job_timeline timeline
       where timeline.job_id = j.id
     ), '[]'::jsonb),
-    'job_quotes', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'labor_total', q.labor_total,
-        'material_total', q.material_total,
-        'grand_total', q.grand_total,
+    'quote_summary', (
+      select jsonb_build_object(
+        'total', q.grand_total,
         'created_at', q.created_at
-      ) order by q.created_at)
+      )
       from public.job_quotes q
       where q.job_id = j.id
-    ), '[]'::jsonb),
-    'job_payments', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'payment_type', payment.payment_type,
-        'status', payment.status,
-        'created_at', payment.created_at
-      ) order by payment.created_at)
+      order by q.created_at desc
+      limit 1
+    ),
+    'payment_status', (
+      select payment.status
       from public.job_payments payment
       where payment.job_id = j.id
-    ), '[]'::jsonb)
+      order by payment.created_at desc
+      limit 1
+    )
   ))
   into payload
   from public.jobs j
@@ -6698,8 +6701,8 @@ GRANT SELECT ON TABLE "storage"."vector_indexes" TO "anon";
 --
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON SEQUENCES FROM "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON SEQUENCES FROM "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "service_role";
 
 
@@ -6708,8 +6711,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQ
 --
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" REVOKE ALL ON SEQUENCES FROM "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" REVOKE ALL ON SEQUENCES FROM "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "service_role";
 
 
@@ -6738,8 +6741,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL 
 --
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON TABLES FROM "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON TABLES FROM "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
 
 
@@ -6748,8 +6751,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 --
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" REVOKE ALL ON TABLES FROM "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" REVOKE ALL ON TABLES FROM "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
 
 
@@ -6791,6 +6794,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TA
 
 
 -- Final hardening function ACL overlay
+alter default privileges for role postgres in schema public revoke all on functions from public, anon, authenticated;
+alter default privileges for role postgres in schema public revoke all on tables from public, anon, authenticated;
+alter default privileges for role postgres in schema public revoke all on sequences from public, anon, authenticated;
+alter default privileges for role supabase_admin in schema public revoke all on functions from public, anon, authenticated;
+alter default privileges for role supabase_admin in schema public revoke all on tables from public, anon, authenticated;
+alter default privileges for role supabase_admin in schema public revoke all on sequences from public, anon, authenticated;
 revoke all on all functions in schema public from public;
 revoke all on all functions in schema public from anon;
 revoke all on all functions in schema public from authenticated;
@@ -6800,3 +6809,9 @@ grant execute on function public.get_guest_job(uuid,text) to anon, authenticated
 grant execute on function public.update_guest_job_status(uuid,text,public.job_status,text,jsonb) to anon, authenticated;
 grant execute on function public.submit_guest_payment_proof(uuid,text,public.payment_type,numeric,text,text) to anon, authenticated;
 grant execute on function public.attach_guest_job_photos(uuid,text,text[]) to service_role;
+revoke all on function public.process_dispatch_queue() from public, anon, authenticated;
+revoke all on function public.append_job_timeline(uuid,public.job_status,text,uuid) from public, anon, authenticated;
+revoke all on function public.create_notification(uuid,uuid,public.notification_event,text,text,jsonb) from public, anon, authenticated;
+grant execute on function public.process_dispatch_queue() to service_role;
+grant execute on function public.append_job_timeline(uuid,public.job_status,text,uuid) to service_role;
+grant execute on function public.create_notification(uuid,uuid,public.notification_event,text,text,jsonb) to service_role;

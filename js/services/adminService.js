@@ -385,6 +385,17 @@
   }
 
   function mapQuote(rawQuotes) {
+    if (rawQuotes && !Array.isArray(rawQuotes)) {
+      return {
+        id: rawQuotes.id || null,
+        findings: '',
+        measurements: '',
+        items: [],
+        laborTotal: Number(rawQuotes.labor_total || rawQuotes.laborTotal || 0),
+        materialTotal: Number(rawQuotes.material_total || rawQuotes.materialTotal || 0),
+        total: Number(rawQuotes.total || rawQuotes.grand_total || rawQuotes.grandTotal || 0)
+      };
+    }
     const quotes = rawQuotes || [];
     const current = quotes.length ? quotes[quotes.length - 1] : null;
     if (!current) {
@@ -420,10 +431,21 @@
   function normalizeJob(row) {
     const customerProfile = row.customer && row.customer.profile ? row.customer.profile : {};
     const guestCustomer = row.guest_customer || row.guestCustomer || null;
-    const electricianProfile = row.assigned_electrician && row.assigned_electrician.profile ? row.assigned_electrician.profile : {};
-    const quote = mapQuote(row.job_quotes);
-    const payments = (row.job_payments || []).slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const timeline = (row.job_timeline || []).slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const assignedElectricianRow = row.assigned_electrician || null;
+    const electricianProfile = assignedElectricianRow && assignedElectricianRow.profile ? assignedElectricianRow.profile : {};
+    const quote = mapQuote(row.quote_summary || row.job_quotes);
+    const paymentRows = Array.isArray(row.job_payments)
+      ? row.job_payments
+      : row.payment_status
+        ? [{ status: row.payment_status }]
+        : [];
+    const payments = paymentRows.slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    const timelineRows = Array.isArray(row.job_timeline)
+      ? row.job_timeline
+      : Array.isArray(row.progress_timeline)
+        ? row.progress_timeline
+        : [];
+    const timeline = timelineRows.slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
     const reviews = row.ratings || [];
     const electricianReview = reviews.find((rating) => rating.review_direction === 'customer_to_electrician') || reviews[0] || null;
     const customerReview = reviews.find((rating) => rating.review_direction === 'electrician_to_customer') || null;
@@ -491,26 +513,26 @@
       assignmentExpiresAt: row.assignment_expires_at,
       customerConfirmedAt: row.customer_confirmed_at,
       electricianCompletedAt: row.electrician_completed_at,
-      assignedElectrician: row.assigned_electrician ? {
-        id: row.assigned_electrician.id,
-        name: electricianProfile.full_name || 'VoltFriq',
+      assignedElectrician: assignedElectricianRow ? {
+        id: assignedElectricianRow.id || null,
+        name: assignedElectricianRow.display_name || assignedElectricianRow.name || electricianProfile.full_name || 'VoltFriq',
         phone: electricianProfile.phone || '',
-        avatar: electricianProfile.avatar_url || '',
-        rating: Number(row.assigned_electrician.average_rating || 0),
-        totalRatings: Number(row.assigned_electrician.total_ratings || 0),
-        responseRate: Number(row.assigned_electrician.response_rate || 0),
-        jobsCompleted: Number(row.assigned_electrician.completed_jobs || 0),
-        levelBadge: row.assigned_electrician.level_badge || 'Verified Pro',
-        watchlist: !!row.assigned_electrician.watchlist,
-        watchlistReason: row.assigned_electrician.watchlist_reason || '',
-        negativeRatingCount: Number(row.assigned_electrician.negative_rating_count || 0),
-        suspendedReason: row.assigned_electrician.suspended_reason || '',
-        serviceAreas: row.assigned_electrician.service_areas || [],
-        skills: (row.assigned_electrician.electrician_skills || []).map((skill) => skill.category),
-        latitude: row.assigned_electrician.latitude,
-        longitude: row.assigned_electrician.longitude,
-        locationLabel: row.assigned_electrician.location_label || '',
-        badges: buildTrustBadges(row.assigned_electrician)
+        avatar: assignedElectricianRow.avatar_url || electricianProfile.avatar_url || '',
+        rating: Number(assignedElectricianRow.rating || assignedElectricianRow.average_rating || 0),
+        totalRatings: Number(assignedElectricianRow.total_ratings || 0),
+        responseRate: Number(assignedElectricianRow.response_rate || 0),
+        jobsCompleted: Number(assignedElectricianRow.completed_jobs || 0),
+        levelBadge: assignedElectricianRow.level_badge || 'Verified Pro',
+        watchlist: !!assignedElectricianRow.watchlist,
+        watchlistReason: assignedElectricianRow.watchlist_reason || '',
+        negativeRatingCount: Number(assignedElectricianRow.negative_rating_count || 0),
+        suspendedReason: assignedElectricianRow.suspended_reason || '',
+        serviceAreas: assignedElectricianRow.service_areas || [],
+        skills: (assignedElectricianRow.electrician_skills || []).map((skill) => skill.category),
+        latitude: assignedElectricianRow.latitude,
+        longitude: assignedElectricianRow.longitude,
+        locationLabel: assignedElectricianRow.location_label || '',
+        badges: buildTrustBadges(assignedElectricianRow)
       } : null,
       photos: (row.job_photos || []).map((photo) => Object.assign({}, photo, {
         url: getPublicStorageUrl('jobPhotos', photo.file_path)

@@ -3,6 +3,7 @@
     const phone = String(input.phone || '').trim();
     if (!phone) throw new Error('Enter your mobile number before submitting.');
     const photos = Array.isArray(input.photos) ? input.photos : [];
+    if (photos.length) throw new Error('Photos can be added after your booking is confirmed.');
     if (photos.length > 3) throw new Error('Add up to 3 photos only.');
     const result = await withAuthLockRetry(() => client.rpc('create_guest_customer_job', {
       p_phone: phone,
@@ -32,9 +33,6 @@
     jobRow.is_guest = true;
     const normalized = await hydrateProtectedAssets(normalizeJob(jobRow));
     normalized.guestAccessToken = accessToken;
-    if (photos.length) {
-      normalized.photoUploadWarning = 'Your booking is saved. We will request photos later if the VoltFriq needs them.';
-    }
     return normalized;
   }
 
@@ -88,4 +86,3 @@
     if (result.error) throw normalizeError(result.error, 'Could not update the job status.');
     return getJob(result.data.id);
   }
-
