@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voltfriq-shell-v20260508-booking-flow-fix';
+const CACHE_NAME = 'voltfriq-shell-v20260508-production-checklist';
 const APP_SHELL = [
   '/offline.html',
   '/manifest.json',

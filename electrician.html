@@ -355,29 +355,24 @@
       <div class="elec-dash-stats" id="dash-stats">
         <div class="stat-card">
           <div class="stat-value" id="stat-jobs-month">0</div>
-          <div class="stat-label">Assigned jobs</div>
+          <div class="stat-label">Nearby requests</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-earnings">₦0</div>
-          <div class="stat-label">Tracked earnings</div>
+          <div class="stat-label">Paid earnings</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-rating">--</div>
-          <div class="stat-label">Avg rating</div>
+          <div class="stat-label">Accepted jobs</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-payouts">₦0</div>
-          <div class="stat-label">Pending payouts</div>
+          <div class="stat-label">Awaiting payout</div>
         </div>
       </div>
 
       <div class="elec-section">
-        <h3 class="elec-section-title">Active Jobs</h3>
-        <div id="dash-progress-jobs"></div>
-      </div>
-
-      <div class="elec-section">
-        <h3 class="elec-section-title">New Assignments</h3>
+        <h3 class="elec-section-title">Nearby Requests</h3>
         <div id="dash-new-assignments"></div>
       </div>
 
@@ -387,7 +382,12 @@
       </div>
 
       <div class="elec-section">
-        <h3 class="elec-section-title">Completed Jobs</h3>
+        <h3 class="elec-section-title">In Progress</h3>
+        <div id="dash-progress-jobs"></div>
+      </div>
+
+      <div class="elec-section">
+        <h3 class="elec-section-title">Completed &amp; Paid</h3>
         <div id="dash-completed-jobs"></div>
       </div>
     </div>
@@ -742,12 +742,12 @@
   </div>
 
   <script src="/vendor/supabase.min.js"></script>
-  <script src="/api/env.js?v=20260508-auditor-location-hotfix"></script>
-  <script src="/js/config.js?v=20260506-auth-booking"></script>
-  <script src="/js/store.js?v=20260508-booking-flow-fix"></script>
-  <script src="/js/navigation.js?v=20260506-auth-booking-2"></script>
+  <script src="/api/env.js?v=20260508-production-checklist"></script>
+  <script src="/js/config.js?v=20260508-production-checklist"></script>
+  <script src="/js/store.js?v=20260508-production-checklist"></script>
+  <script src="/js/navigation.js?v=20260508-production-checklist"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/electrician.js?v=20260508-auditor-location-hotfix"></script>
-  <script src="/js/sw-register.js?v=20260508-auditor-location-hotfix"></script>
+  <script src="/js/electrician.js?v=20260508-production-checklist"></script>
+  <script src="/js/sw-register.js?v=20260508-production-checklist"></script>
 </body>
 </html>

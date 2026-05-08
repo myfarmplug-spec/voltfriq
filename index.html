@@ -123,7 +123,6 @@
           </span>
           <span class="location-option-copy">
             <strong>Use current location</strong>
-            <span id="detected-location-text">Finding your location...</span>
           </span>
           <span class="location-option-state" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
@@ -138,7 +137,6 @@
           </span>
           <span class="location-option-copy">
             <strong>Enter address</strong>
-            <span id="manual-location-summary">Country, state, city, and street address</span>
           </span>
           <span class="location-option-arrow" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
@@ -180,13 +178,6 @@
             <option value="">Select a service area</option>
           </select>
         </div>
-      </div>
-
-      <div class="helper-note" id="location-helper-note">Location helps route the nearest available VoltFriq.</div>
-
-      <div class="flow-ready-line" id="availability-card" style="display:none;">
-        <span id="availability-count">Waiting</span>
-        <span id="availability-meta">Enter an area or use current location.</span>
       </div>
 
       <button class="btn-primary btn-large booking-step-cta" id="btn-area-continue" disabled>
@@ -418,14 +409,12 @@
 
       <div class="booking-step-hero booking-step-hero-review">
         <h2>Almost done!</h2>
-        <p>Please confirm your booking details.</p>
+        <p>You&apos;re booking with VoltFriq securely. Review the details below and we&apos;ll guide the rest.</p>
       </div>
 
       <div class="match-summary-card card" id="match-summary-card"></div>
       <div class="review-trust-strip">
-        <span><span class="review-trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 5 6v6c0 5 3.4 8 7 9 3.6-1 7-4 7-9V6l-7-3Z"/><path d="m9.5 12 1.7 1.7 3.3-3.7"/></svg></span>Manual verification</span>
-        <span class="review-trust-divider" aria-hidden="true"></span>
-        <span><span class="review-trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 1 1 8 0v3"/></svg></span>No work starts without approval</span>
+        <span><span class="review-trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 5 6v6c0 5 3.4 8 7 9 3.6-1 7-4 7-9V6l-7-3Z"/><path d="m9.5 12 1.7 1.7 3.3-3.7"/></svg></span>We verify the request, confirm the right VoltFriq, and keep you updated step by step.</span>
       </div>
 
       <div class="transparency-card card" id="transparency-card"></div>
@@ -825,12 +814,12 @@
   </div>
 
   <script src="/vendor/supabase.min.js"></script>
-  <script src="/api/env.js?v=20260508-auditor-location-hotfix"></script>
-  <script src="/js/config.js?v=20260506-auth-booking"></script>
-  <script src="/js/store.js?v=20260508-booking-flow-fix"></script>
-  <script src="/js/navigation.js?v=20260506-auth-booking-2"></script>
+  <script src="/api/env.js?v=20260508-production-checklist"></script>
+  <script src="/js/config.js?v=20260508-production-checklist"></script>
+  <script src="/js/store.js?v=20260508-production-checklist"></script>
+  <script src="/js/navigation.js?v=20260508-production-checklist"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/customer.js?v=20260508-booking-flow-fix"></script>
-  <script src="/js/sw-register.js?v=20260508-auditor-location-hotfix"></script>
+  <script src="/js/customer.js?v=20260508-production-checklist"></script>
+  <script src="/js/sw-register.js?v=20260508-production-checklist"></script>
 </body>
 </html>

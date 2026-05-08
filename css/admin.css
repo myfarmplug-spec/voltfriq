@@ -135,10 +135,10 @@
 
 .admin-action-banner {
   margin: 0 0 14px;
-  padding: 12px 14px;
+  padding: 13px 15px;
   border-radius: 14px;
   border: 1px solid rgba(255, 184, 0, 0.28);
-  background: rgba(255, 184, 0, 0.1);
+  background: linear-gradient(90deg, rgba(255, 184, 0, 0.14), rgba(255, 184, 0, 0.04));
   color: #ffd978;
   font-size: 12px;
   font-weight: 800;
@@ -280,6 +280,15 @@
   padding: 16px;
   cursor: pointer;
   transition: border-color 0.15s, transform 0.15s;
+}
+
+.admin-queue-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #ffd978;
+  margin-bottom: 8px;
 }
 
 .admin-queue-card:hover {

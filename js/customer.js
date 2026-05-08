@@ -20,6 +20,7 @@
   let trackingDetailsExpanded = false;
   let bookingSubmitInFlight = false;
   let bookingConfirmationTimer = null;
+  let savedAddresses = [];
 
   const ISSUE_OPTIONS = [
     { issue_type: 'Socket / Switch', value: 'Socket repair', description: 'Faulty socket, switch, or new socket point.', estimated_fee_min: 5000, estimated_fee_max: 8000 },
@@ -539,6 +540,15 @@
     await openBookingRoute(route.screen, { replace: route.source !== 'popstate' });
   }
 
+  async function loadSavedAddresses() {
+    try {
+      savedAddresses = await Store.listSavedAddresses();
+    } catch (error) {
+      savedAddresses = [];
+    }
+    return savedAddresses;
+  }
+
   async function openBookingRoute(targetScreen, options) {
     hydrateDraftState();
     await loadSavedAddresses();
@@ -820,14 +830,16 @@
   }
 
   async function useCurrentLocation(autoStarted) {
+    const helperNote = document.getElementById('location-helper-note');
     if (!navigator.geolocation) {
-      document.getElementById('location-helper-note').textContent = 'GPS is not available on this device. Enter your address to continue.';
+      if (helperNote) helperNote.textContent = 'GPS is not available on this device. Enter your address to continue.';
+      setAddressMode('manual');
       return;
     }
 
     const detectedText = document.getElementById('detected-location-text');
     if (detectedText) detectedText.textContent = 'Finding your location...';
-    document.getElementById('location-helper-note').textContent = 'Allow location access so VoltFriq can route the nearest available electrician.';
+    if (helperNote) helperNote.textContent = 'Allow location access so VoltFriq can route the nearest available electrician.';
 
     navigator.geolocation.getCurrentPosition(async (position) => {
       const latitude = position.coords.latitude;
@@ -842,10 +854,10 @@
         longitude
       }, 'gps');
       if (detectedText) detectedText.textContent = draft.locationLabel;
-      document.getElementById('location-helper-note').textContent = 'Confirm this location or edit the area before continuing.';
+      if (helperNote) helperNote.textContent = 'Confirm this location or edit the area before continuing.';
     }, () => {
       if (detectedText) detectedText.textContent = 'Location access was blocked.';
-      document.getElementById('location-helper-note').textContent = 'Enter your address to continue without GPS.';
+      if (helperNote) helperNote.textContent = 'Enter your address to continue without GPS.';
       setAddressMode('manual');
       updateAvailabilityCard();
     }, {
@@ -908,11 +920,16 @@
     }
     const bookingLocation = getFinalBookingLocation();
     const hasLocation = Boolean(bookingLocation.locationLabel);
-    document.getElementById('availability-count').textContent = hasLocation ? 'Ready' : 'Waiting';
-    document.getElementById('availability-meta').textContent = hasLocation
-      ? 'Location saved. You can continue without GPS.'
-      : 'Enter your street address or use current location.';
-    document.getElementById('btn-area-continue').disabled = !hasLocation;
+    const availabilityCount = document.getElementById('availability-count');
+    const availabilityMeta = document.getElementById('availability-meta');
+    const continueButton = document.getElementById('btn-area-continue');
+    if (availabilityCount) availabilityCount.textContent = hasLocation ? 'Ready' : 'Waiting';
+    if (availabilityMeta) {
+      availabilityMeta.textContent = hasLocation
+        ? 'Location saved. You can continue without GPS.'
+        : 'Enter your street address or use current location.';
+    }
+    if (continueButton) continueButton.disabled = !hasLocation;
     persistDraftState();
   }
 
@@ -1447,13 +1464,14 @@
       document.body.appendChild(toast);
     }
     const ticket = job && job.ticket ? 'Ticket ' + escapeHtml(job.ticket) + ' is now live.' : 'Your request is now live.';
+    const uploadNote = job && job.photoUploadWarning ? ' Your booking is saved; we could not attach the photos just now.' : '';
     toast.innerHTML = [
       '<span class="booking-confirmation-icon" aria-hidden="true">',
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.2 2.2 4.8-5"/></svg>',
       '</span>',
       '<span class="booking-confirmation-copy">',
         '<strong>Thank you. Your booking is confirmed.</strong>',
-        '<small>' + ticket + ' We are matching you with a verified VoltFriq now.</small>',
+        '<small>' + ticket + ' We are matching you with a verified VoltFriq now.' + escapeHtml(uploadNote) + '</small>',
       '</span>'
     ].join('');
     toast.classList.add('is-visible');
@@ -2051,7 +2069,7 @@
     const subtitle = job.assignedElectrician
       ? 'Assigned to ' + job.assignedElectrician.name
       : job.needsManualAssignment
-        ? 'Manual dispatch review'
+        ? 'VoltFriq is checking availability'
         : 'Automatic matching in progress';
     return '<div class="history-card dashboard-job-card" data-job-id="' + job.id + '">' +
       '<div class="history-card-date">' + escapeHtml(job.ticket) + '</div>' +

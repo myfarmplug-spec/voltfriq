@@ -109,6 +109,7 @@ const Store = (() => {
 
   const GUEST_ACCESS_KEY = 'voltfriq_guest_job_access';
   const GUEST_ADDRESSES_KEY = 'voltfriq_guest_saved_addresses';
+  const GUEST_DEVICE_KEY = 'voltfriq_guest_device_id';
 
   function config() {
     return window.VOLTFRIQ_CONFIG || {};
@@ -189,6 +190,24 @@ const Store = (() => {
 
   function clearGuestAccess() {
     return saveGuestAccess(null);
+  }
+
+  function getGuestDeviceId() {
+    try {
+      const existing = window.localStorage.getItem(GUEST_DEVICE_KEY);
+      if (existing) return existing;
+      const generated = window.crypto && window.crypto.randomUUID
+        ? window.crypto.randomUUID()
+        : 'guest-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      window.localStorage.setItem(GUEST_DEVICE_KEY, generated);
+      return generated;
+    } catch (error) {
+      return 'guest-session-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    }
+  }
+
+  function guestTokenPrefix(accessToken) {
+    return String(accessToken || '').slice(0, 16);
   }
 
   function normalizeAddress(address) {
@@ -1336,11 +1355,8 @@ const Store = (() => {
     const client = ensureClient();
     const phone = String(input.phone || '').trim();
     if (!phone) throw new Error('Enter your mobile number before submitting.');
-    const uploadId = (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Date.now().toString());
-    const photoPaths = [];
-    for (let index = 0; index < (input.photos || []).length; index += 1) {
-      photoPaths.push(await uploadFile('jobPhotos', input.photos[index], 'guest/' + uploadId + '/' + index));
-    }
+    const photos = Array.isArray(input.photos) ? input.photos : [];
+    if (photos.length > 3) throw new Error('Add up to 3 photos only.');
     const result = await withAuthLockRetry(() => client.rpc('create_guest_customer_job', {
       p_phone: phone,
       p_service_area: input.serviceArea,
@@ -1352,21 +1368,44 @@ const Store = (() => {
       p_customer_note: input.note || '',
       p_requires_assessment: !!input.requiresAssessment,
       p_material_handling: input.materialHandling || 'voltfriq_supplied',
-      p_photo_paths: photoPaths
+      p_photo_paths: [],
+      p_client_fingerprint: getGuestDeviceId()
     }));
     if (result.error) throw normalizeError(result.error, 'Could not create the guest booking.');
     const payload = result.data || {};
-    const jobRow = payload.job || payload;
+    let jobRow = payload.job || payload;
     const accessToken = payload.access_token || payload.accessToken;
     const jobId = payload.job_id || payload.jobId || (jobRow && jobRow.id);
     if (!jobRow || !jobId || !accessToken) {
       throw new Error('Booking was created, but tracking access was not returned.');
     }
+    saveGuestAccess({ jobId, accessToken, phone });
+
+    let photoUploadWarning = '';
+    if (photos.length) {
+      try {
+        const photoPaths = [];
+        const prefix = 'guest/' + jobId + '/' + guestTokenPrefix(accessToken);
+        for (let index = 0; index < photos.length; index += 1) {
+          photoPaths.push(await uploadFile('jobPhotos', photos[index], prefix + '/photo-' + index));
+        }
+        const attachResult = await client.rpc('attach_guest_job_photos', {
+          p_job_id: jobId,
+          p_access_token: accessToken,
+          p_photo_paths: photoPaths
+        });
+        if (attachResult.error) throw normalizeError(attachResult.error, 'Could not attach booking photos.');
+        jobRow = attachResult.data || jobRow;
+      } catch (error) {
+        photoUploadWarning = normalizeError(error, 'Booking is saved, but the photos could not be uploaded.').message;
+      }
+    }
+
     jobRow.id = jobRow.id || jobId;
     jobRow.is_guest = true;
-    saveGuestAccess({ jobId, accessToken, phone });
     const normalized = await hydrateProtectedAssets(normalizeJob(jobRow));
     normalized.guestAccessToken = accessToken;
+    if (photoUploadWarning) normalized.photoUploadWarning = photoUploadWarning;
     return normalized;
   }
 
@@ -1449,7 +1488,7 @@ const Store = (() => {
     let proofPath = null;
     if (payload.file) {
       const prefix = !state.profile && guest && guest.jobId === jobId
-        ? 'guest/' + jobId + '/' + payload.paymentType
+        ? 'guest/' + jobId + '/' + guestTokenPrefix(guest.accessToken) + '/' + payload.paymentType
         : 'payments/' + jobId + '/' + payload.paymentType;
       proofPath = await uploadFile('paymentProofs', payload.file, prefix);
     }

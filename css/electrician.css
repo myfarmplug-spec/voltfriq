@@ -556,6 +556,14 @@
   margin-bottom: 14px;
   border: 1px solid rgba(255,184,0,0.22);
 }
+.elec-hero-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
 .elec-level-pill {
   display: inline-flex;
   background: var(--yellow);
@@ -566,6 +574,23 @@
   font-weight: 800;
   margin-bottom: 10px;
 }
+.elec-availability-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  font-weight: 800;
+}
+.elec-availability-pill.is-live {
+  background: rgba(38, 194, 129, 0.12);
+  color: #9ff0c8;
+  border-color: rgba(38, 194, 129, 0.28);
+}
 .elec-trust-title {
   font-size: 17px;
   font-weight: 800;
@@ -575,6 +600,29 @@
   color: rgba(255,255,255,0.72);
   font-size: 13px;
   line-height: 1.5;
+}
+.elec-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 10px;
+}
+.elec-hero-stat {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.elec-hero-stat strong {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.elec-hero-stat span {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 .elec-trust-meter {
   height: 7px;
@@ -598,6 +646,36 @@
 .elec-watch-note {
   color: #FDE68A;
   margin-top: 8px;
+}
+.elec-hero-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+.elec-payout-hero {
+  margin-top: 12px;
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 184, 0, 0.08);
+  border: 1px solid rgba(255, 184, 0, 0.18);
+}
+.elec-payout-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #ffd978;
+  font-weight: 800;
+}
+.elec-payout-hero strong {
+  font-size: 24px;
+  font-weight: 800;
+}
+.elec-payout-hero small {
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .elec-dash-stats {
@@ -722,6 +800,9 @@
   animation: fadeSlideUp 0.4s ease;
 }
 .elec-alert-card .elec-job-item-name { color: #92400E; }
+.elec-alert-card .badge-red {
+  box-shadow: 0 0 0 1px rgba(239, 90, 90, 0.18);
+}
 
 /* Empty State */
 .elec-empty {
@@ -939,6 +1020,13 @@
   background: var(--yellow-light);
   border-radius: 14px;
   margin-bottom: 20px;
+}
+
+@media (max-width: 680px) {
+  .elec-hero-stats,
+  .elec-hero-actions {
+    grid-template-columns: 1fr;
+  }
 }
 .confirm-status-icon { font-size: 24px; }
 .confirm-status-text {
