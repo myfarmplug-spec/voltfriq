@@ -33,6 +33,8 @@
     jobRow.is_guest = true;
     const normalized = await hydrateProtectedAssets(normalizeJob(jobRow));
     normalized.guestAccessToken = accessToken;
+    normalized.dispatchOtpRequired = !!(payload.dispatch_otp_required || payload.dispatchOtpRequired);
+    normalized.dispatchVerification = payload.dispatch_verification || payload.dispatchVerification || null;
     return normalized;
   }
 
@@ -100,6 +102,44 @@
     });
     if (result.error) throw normalizeError(result.error, 'Could not verify the guest OTP.');
     return result.data || {};
+  }
+
+  async function prepareGuestDispatchOtp(jobId, phoneConfirmation, clientFingerprint) {
+    const guest = getGuestAccess();
+    if (!guest || guest.jobId !== jobId || !guest.accessToken) {
+      throw new Error('Open this booking from its tracking link before continuing.');
+    }
+    const response = await fetch('/api/guest-dispatch-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        accessToken: guest.accessToken,
+        phoneConfirmation: phoneConfirmation || guest.phone || '',
+        clientFingerprint: clientFingerprint || getGuestDeviceId()
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || 'Could not send dispatch verification code.');
+    }
+    return {
+      challenge_id: payload.challengeId || payload.challenge_id,
+      challengeId: payload.challengeId || payload.challenge_id,
+      masked_phone: payload.maskedPhone || payload.masked_phone,
+      maskedPhone: payload.maskedPhone || payload.masked_phone,
+      delivery_status: payload.deliveryStatus || payload.delivery_status || 'sent',
+      deliveryStatus: payload.deliveryStatus || payload.delivery_status || 'sent'
+    };
+  }
+
+  async function confirmGuestDispatchOtp(jobId, challengeId, otpCode) {
+    const guest = getGuestAccess();
+    if (!guest || guest.jobId !== jobId || !guest.accessToken) {
+      throw new Error('Open this booking from its tracking link before continuing.');
+    }
+    await verifyGuestOtp(jobId, 'dispatch_confirm', challengeId, otpCode);
+    return getGuestJob(jobId, guest.accessToken);
   }
 
   async function uploadGuestJobPhotos(jobId, files) {

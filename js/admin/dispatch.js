@@ -2,6 +2,7 @@
 	    const jobs = currentJobs.filter((job) => {
 	      if (currentFilter.requests === 'matching') return job.status === 'matching' && !job.needsManualAssignment;
 	      if (currentFilter.requests === 'manual') return job.needsManualAssignment || isStuckJob(job) || !job.assignedElectricianId;
+	      if (currentFilter.requests === 'failed') return job.status === 'matching' && Number(job.dispatchAttempts || 0) >= 3;
 	      if (currentFilter.requests === 'timeout') return isExpiredAssignment(job) || hasTimeoutTimeline(job);
 	      if (currentFilter.requests === 'rejected') return hasRejectedTimeline(job);
 	      return job.status === 'matching' || job.status === 'assigned' || job.needsManualAssignment || hasRejectedTimeline(job) || hasTimeoutTimeline(job) || isExpiredAssignment(job);

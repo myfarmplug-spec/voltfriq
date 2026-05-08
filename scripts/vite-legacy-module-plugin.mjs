@@ -1,10 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const virtualModulePrefix = '\0voltfriq:';
-
-const virtualModuleSources = {
-  'virtual:voltfriq-store': {
+const legacyModuleSources = {
+  store: {
+    entry: 'js/services/index.js',
     exportCode: 'export default Store;',
     parts: [
       'js/services/supabaseClient.js',
@@ -16,7 +15,8 @@ const virtualModuleSources = {
       'js/services/adminService.js'
     ]
   },
-  'virtual:voltfriq-customer': {
+  customer: {
+    entry: 'js/customer/index.js',
     exportCode: 'export {};',
     parts: [
       'js/customer/ui.js',
@@ -28,7 +28,8 @@ const virtualModuleSources = {
       'js/customer/dashboard.js'
     ]
   },
-  'virtual:voltfriq-electrician': {
+  electrician: {
+    entry: 'js/electrician/index.js',
     exportCode: 'export default ElecApp;',
     parts: [
       'js/electrician/auth.js',
@@ -38,7 +39,8 @@ const virtualModuleSources = {
       'js/electrician/payouts.js'
     ]
   },
-  'virtual:voltfriq-admin': {
+  admin: {
+    entry: 'js/admin/index.js',
     exportCode: 'export {};',
     parts: [
       'js/admin/dashboard.js',
@@ -51,6 +53,10 @@ const virtualModuleSources = {
   }
 };
 
+function normalizeId(id) {
+  return id.split('?')[0];
+}
+
 function virtualModuleSource(moduleConfig) {
   return moduleConfig.parts
     .map((part) => fs.readFileSync(path.resolve(part), 'utf8').replace(/\s*$/, '\n'))
@@ -58,23 +64,25 @@ function virtualModuleSource(moduleConfig) {
 }
 
 export function voltfriqLegacyModulesPlugin() {
+  const entriesByPath = new Map(Object.values(legacyModuleSources).map((moduleConfig) => [
+    path.resolve(moduleConfig.entry),
+    moduleConfig
+  ]));
+
   return {
     name: 'voltfriq-legacy-modules',
-    resolveId(id) {
-      if (virtualModuleSources[id]) return virtualModulePrefix + id;
-      return null;
-    },
     load(id) {
-      if (!id.startsWith(virtualModulePrefix)) return null;
-      const publicId = id.slice(virtualModulePrefix.length);
-      const moduleConfig = virtualModuleSources[publicId];
+      const moduleConfig = entriesByPath.get(normalizeId(id));
       return moduleConfig ? virtualModuleSource(moduleConfig) : null;
     },
     buildStart() {
-      for (const [moduleId, moduleConfig] of Object.entries(virtualModuleSources)) {
+      for (const moduleConfig of Object.values(legacyModuleSources)) {
+        if (!fs.existsSync(path.resolve(moduleConfig.entry))) {
+          throw new Error(`Missing legacy entry module ${moduleConfig.entry}.`);
+        }
         for (const part of moduleConfig.parts) {
           if (!fs.existsSync(path.resolve(part))) {
-            throw new Error(`Missing source module ${part} for ${moduleId}.`);
+            throw new Error(`Missing source module ${part} for ${moduleConfig.entry}.`);
           }
         }
       }

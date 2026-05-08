@@ -9,8 +9,10 @@ const serviceRoleOnly = new Set([
   'append_job_timeline',
   'attach_guest_job_photos',
   'consume_guest_action_token',
+  'create_guest_otp_delivery',
   'create_notification',
   'guest_job_payload',
+  'mark_guest_otp_delivery',
   'operational_alert_dedupe_key',
   'process_dispatch_queue'
 ]);
@@ -36,6 +38,9 @@ const internalOrAuthenticatedOnly = new Set([
   'create_notification',
   'admin_operational_summary',
   'admin_operational_queues',
+  'admin_reconcile_job_state',
+  'admin_resolve_operational_alert',
+  'admin_retry_dispatch_job',
   'dispatch_job',
   'electrician_accept_job',
   'electrician_reject_job',

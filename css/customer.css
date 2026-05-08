@@ -589,6 +589,81 @@
   line-height: 1.35;
 }
 
+.dispatch-otp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: none;
+  place-items: center;
+  padding: 18px;
+  background: rgba(3, 10, 18, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.dispatch-otp-panel {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid rgba(255, 184, 0, 0.22);
+  border-radius: 18px;
+  background: #0b1422;
+  box-shadow: 0 26px 72px rgba(0, 0, 0, 0.42);
+}
+
+.dispatch-otp-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.dispatch-otp-copy strong {
+  color: var(--text-primary);
+  font-size: 1.15rem;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.dispatch-otp-copy span {
+  color: var(--text-muted);
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+
+.dispatch-otp-input {
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-size: 1.6rem;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 0;
+  outline: none;
+}
+
+.dispatch-otp-input:focus {
+  border-color: rgba(255, 184, 0, 0.78);
+  box-shadow: 0 0 0 3px rgba(255, 184, 0, 0.14);
+}
+
+.dispatch-otp-input.has-error {
+  border-color: rgba(239, 90, 90, 0.78);
+  box-shadow: 0 0 0 3px rgba(239, 90, 90, 0.14);
+}
+
+.dispatch-otp-actions {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 10px;
+}
+
+.dispatch-otp-actions .btn-primary,
+.dispatch-otp-actions .btn-ghost {
+  min-height: 48px;
+}
+
 .booking-legal-note {
   color: var(--text-tertiary);
   font-size: 12px;

@@ -179,14 +179,89 @@
           photos: uploadedFiles,
           phone: draft.guestPhone
         };
-        const job = Store.getCurrentProfile()
+        let job = Store.getCurrentProfile()
           ? await Store.createBooking(bookingPayload)
           : await Store.createGuestBooking(bookingPayload);
+        if (!Store.getCurrentProfile() && job && job.dispatchOtpRequired) {
+          try {
+            job = await completeGuestDispatchVerification(job, bookingPayload.phone);
+          } catch (error) {
+            job.dispatchVerificationError = error && error.message ? error.message : 'Phone verification is still needed before dispatch.';
+            showError(error);
+          }
+        }
         finishNewBooking(job);
       });
     } finally {
       bookingSubmitInFlight = false;
     }
+  }
+
+  async function completeGuestDispatchVerification(job, phone) {
+    showNotice('Sending a verification code to your phone...');
+    const delivery = await Store.prepareGuestDispatchOtp(job.id, phone || '');
+    const challengeId = delivery.challengeId || delivery.challenge_id;
+    const maskedPhone = delivery.maskedPhone || delivery.masked_phone || 'your phone';
+    if (!challengeId) {
+      throw new Error('Could not start phone verification for dispatch.');
+    }
+    const code = await promptForDispatchOtp(maskedPhone);
+    showNotice('Verifying your phone...');
+    const verifiedJob = await Store.confirmGuestDispatchOtp(job.id, challengeId, code);
+    showNotice('Phone verified. Pairing you with a VoltFriq now.');
+    return verifiedJob || job;
+  }
+
+  function promptForDispatchOtp(maskedPhone) {
+    return new Promise((resolve, reject) => {
+      let modal = document.getElementById('dispatch-otp-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'dispatch-otp-modal';
+        modal.className = 'dispatch-otp-backdrop';
+        document.body.appendChild(modal);
+      }
+      modal.innerHTML = [
+        '<form class="dispatch-otp-panel" id="dispatch-otp-form">',
+          '<div class="dispatch-otp-copy">',
+            '<strong>Verify your phone</strong>',
+            '<span>Enter the 6-digit code sent to ' + escapeHtml(maskedPhone || 'your phone') + ' so we can start pairing you with a VoltFriq.</span>',
+          '</div>',
+          '<input id="dispatch-otp-code" class="dispatch-otp-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" aria-label="Dispatch verification code">',
+          '<div class="dispatch-otp-actions">',
+            '<button class="btn-ghost" type="button" id="dispatch-otp-cancel">Later</button>',
+            '<button class="btn-primary" type="submit">Verify</button>',
+          '</div>',
+        '</form>'
+      ].join('');
+      modal.style.display = 'grid';
+      const input = document.getElementById('dispatch-otp-code');
+      const form = document.getElementById('dispatch-otp-form');
+      const cancel = document.getElementById('dispatch-otp-cancel');
+      const cleanup = () => {
+        modal.style.display = 'none';
+        modal.innerHTML = '';
+      };
+      input.focus();
+      input.addEventListener('input', () => {
+        input.value = input.value.replace(/\D/g, '').slice(0, 6);
+      });
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const code = input.value.replace(/\D/g, '');
+        if (code.length !== 6) {
+          input.classList.add('has-error');
+          input.focus();
+          return;
+        }
+        cleanup();
+        resolve(code);
+      });
+      cancel.addEventListener('click', () => {
+        cleanup();
+        reject(new Error('Enter the 6-digit code to start dispatch.'));
+      });
+    });
   }
 
   function finishNewBooking(job) {
@@ -219,13 +294,16 @@
     }
     const ticket = job && job.ticket ? 'Ticket ' + escapeHtml(job.ticket) + ' is now live.' : 'Your request is now live.';
     const uploadNote = job && job.photoUploadWarning ? ' Your booking is saved; we could not attach the photos just now.' : '';
+    const pairingNote = job && job.dispatchOtpRequired && !job.guest_dispatch_verified_at && job.status === 'requested'
+      ? ' Verify your phone to start pairing.'
+      : ' We are matching you with a verified VoltFriq now.';
     toast.innerHTML = [
       '<span class="booking-confirmation-icon" aria-hidden="true">',
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.2 2.2 4.8-5"/></svg>',
       '</span>',
       '<span class="booking-confirmation-copy">',
         '<strong>Thank you. Your booking is confirmed.</strong>',
-        '<small>' + ticket + ' We are matching you with a verified VoltFriq now.' + escapeHtml(uploadNote) + '</small>',
+        '<small>' + ticket + escapeHtml(pairingNote) + escapeHtml(uploadNote) + '</small>',
       '</span>'
     ].join('');
     toast.classList.add('is-visible');

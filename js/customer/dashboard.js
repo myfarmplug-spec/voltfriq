@@ -757,6 +757,9 @@
     if (lower.includes('customer profile not found')) {
       return 'Your account setup is finishing. Please tap Submit Booking again in a moment.';
     }
+    if (lower.includes('sms provider') || lower.includes('dispatch verification code')) {
+      return 'We saved your booking, but could not send the phone verification code. Please try again in a moment.';
+    }
     return text || 'Something went wrong.';
   }
 

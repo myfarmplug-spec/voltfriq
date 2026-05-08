@@ -86,6 +86,37 @@
 	    return normalizeOperationalQueues(result.data || {});
 	  }
 
+	  async function retryDispatchJob(jobId) {
+	    requireRole('admin');
+	    const client = ensureClient();
+	    const result = await client.rpc('admin_retry_dispatch_job', {
+	      p_job_id: jobId
+	    });
+	    if (result.error) throw normalizeError(result.error, 'Could not retry dispatch safely.');
+	    return getJob(result.data.id);
+	  }
+
+	  async function reconcileJobState(jobId) {
+	    requireRole('admin');
+	    const client = ensureClient();
+	    const result = await client.rpc('admin_reconcile_job_state', {
+	      p_job_id: jobId
+	    });
+	    if (result.error) throw normalizeError(result.error, 'Could not reconcile job state.');
+	    return getJob(result.data.id);
+	  }
+
+	  async function resolveOperationalAlert(alertId, note) {
+	    requireRole('admin');
+	    const client = ensureClient();
+	    const result = await client.rpc('admin_resolve_operational_alert', {
+	      p_alert_id: alertId,
+	      p_note: note || null
+	    });
+	    if (result.error) throw normalizeError(result.error, 'Could not resolve operational alert.');
+	    return result.data;
+	  }
+
   async function resolveDispute(disputeId, status, resolutionAction, resolutionNote) {
     requireRole('admin');
     const client = ensureClient();
@@ -694,15 +725,24 @@
 	        pendingPayments: 0,
 	        pendingElectricians: 0,
 	        stuckPairingJobs: 0,
+	        failedPairingJobs: 0,
 	        openDisputes: 0,
-	        expiredAssignments: 0
+	        expiredAssignments: 0,
+	        snapshotDriftJobs: 0,
+	        criticalAlerts: 0
 	      },
 	      metrics: {
 	        averageTimeToAssignSeconds: 0,
 	        averageTimeToAcceptSeconds: 0,
 	        rejectionRate: 0,
 	        paymentVerificationDelaySeconds: 0,
-	        stuckJobsCount: 0
+	        stuckJobsCount: 0,
+	        dispatchRetries7d: 0,
+	        uploadFailures24h: 0,
+	        disputeRate30d: 0,
+	        electricianResponseQuality: 100,
+	        snapshotDriftJobs: 0,
+	        systemHealthScore: 100
 	      }
 	    };
 	  }
@@ -710,10 +750,15 @@
 	  function defaultOperationalQueues() {
 	    return {
 	      pendingPayments: [],
-	      pendingElectricians: [],
-	      stuckJobs: [],
-	      openDisputes: [],
-	      expiredAssignments: [],
+		      pendingElectricians: [],
+		      stuckJobs: [],
+		      failedPairingJobs: [],
+		      snapshotDriftJobs: [],
+		      paymentBacklog: [],
+		      openDisputes: [],
+		      expiredAssignments: [],
+	      highRejectionElectricians: [],
+	      uploadFailures: [],
 	      alerts: []
 	    };
 	  }
@@ -726,15 +771,24 @@
 	        pendingPayments: Number(rawQueues.pending_payments || rawQueues.pendingPayments || 0),
 	        pendingElectricians: Number(rawQueues.pending_electricians || rawQueues.pendingElectricians || 0),
 	        stuckPairingJobs: Number(rawQueues.stuck_pairing_jobs || rawQueues.stuckPairingJobs || 0),
+	        failedPairingJobs: Number(rawQueues.failed_pairing_jobs || rawQueues.failedPairingJobs || 0),
 	        openDisputes: Number(rawQueues.open_disputes || rawQueues.openDisputes || 0),
-	        expiredAssignments: Number(rawQueues.expired_assignments || rawQueues.expiredAssignments || 0)
+	        expiredAssignments: Number(rawQueues.expired_assignments || rawQueues.expiredAssignments || 0),
+	        snapshotDriftJobs: Number(rawQueues.snapshot_drift_jobs || rawQueues.snapshotDriftJobs || 0),
+	        criticalAlerts: Number(rawQueues.critical_alerts || rawQueues.criticalAlerts || 0)
 	      },
 	      metrics: {
 	        averageTimeToAssignSeconds: Number(rawMetrics.average_time_to_assign_seconds || rawMetrics.averageTimeToAssignSeconds || 0),
 	        averageTimeToAcceptSeconds: Number(rawMetrics.average_time_to_accept_seconds || rawMetrics.averageTimeToAcceptSeconds || 0),
 	        rejectionRate: Number(rawMetrics.rejection_rate || rawMetrics.rejectionRate || 0),
 	        paymentVerificationDelaySeconds: Number(rawMetrics.payment_verification_delay_seconds || rawMetrics.paymentVerificationDelaySeconds || 0),
-	        stuckJobsCount: Number(rawMetrics.stuck_jobs_count || rawMetrics.stuckJobsCount || 0)
+	        stuckJobsCount: Number(rawMetrics.stuck_jobs_count || rawMetrics.stuckJobsCount || 0),
+	        dispatchRetries7d: Number(rawMetrics.dispatch_retries_7d || rawMetrics.dispatchRetries7d || 0),
+	        uploadFailures24h: Number(rawMetrics.upload_failures_24h || rawMetrics.uploadFailures24h || 0),
+	        disputeRate30d: Number(rawMetrics.dispute_rate_30d || rawMetrics.disputeRate30d || 0),
+	        electricianResponseQuality: Number(rawMetrics.electrician_response_quality || rawMetrics.electricianResponseQuality || 0),
+	        snapshotDriftJobs: Number(rawMetrics.snapshot_drift_jobs || rawMetrics.snapshotDriftJobs || 0),
+	        systemHealthScore: Number(rawMetrics.system_health_score || rawMetrics.systemHealthScore || 0)
 	      }
 	    };
 	  }
@@ -742,10 +796,15 @@
 	  function normalizeOperationalQueues(payload) {
 	    return {
 	      pendingPayments: Array.isArray(payload.pending_payments) ? payload.pending_payments : [],
-	      pendingElectricians: Array.isArray(payload.pending_electricians) ? payload.pending_electricians : [],
-	      stuckJobs: Array.isArray(payload.stuck_jobs) ? payload.stuck_jobs : [],
+		      pendingElectricians: Array.isArray(payload.pending_electricians) ? payload.pending_electricians : [],
+		      stuckJobs: Array.isArray(payload.stuck_jobs) ? payload.stuck_jobs : [],
+		      failedPairingJobs: Array.isArray(payload.failed_pairing_jobs) ? payload.failed_pairing_jobs : [],
+		      snapshotDriftJobs: Array.isArray(payload.snapshot_drift_jobs) ? payload.snapshot_drift_jobs : [],
+		      paymentBacklog: Array.isArray(payload.payment_backlog) ? payload.payment_backlog : [],
 	      openDisputes: Array.isArray(payload.open_disputes) ? payload.open_disputes : [],
 	      expiredAssignments: Array.isArray(payload.expired_assignments) ? payload.expired_assignments : [],
+	      highRejectionElectricians: Array.isArray(payload.high_rejection_electricians) ? payload.high_rejection_electricians : [],
+	      uploadFailures: Array.isArray(payload.upload_failures) ? payload.upload_failures : [],
 	      alerts: Array.isArray(payload.alerts) ? payload.alerts : []
 	    };
 	  }
@@ -802,6 +861,8 @@
     issueGuestActionToken,
     requestGuestOtp,
     verifyGuestOtp,
+    prepareGuestDispatchOtp,
+    confirmGuestDispatchOtp,
     uploadGuestJobPhotos,
     previewMatches,
     createBooking,
@@ -827,10 +888,13 @@
 	    createDispute,
 	    listDisputes,
 	    getPublicJobEvents,
-	    getAdminJobEvents,
-	    getOperationalSummary,
-	    getOperationalQueues,
-	    resolveDispute,
+		    getAdminJobEvents,
+		    getOperationalSummary,
+		    getOperationalQueues,
+		    retryDispatchJob,
+		    reconcileJobState,
+		    resolveOperationalAlert,
+		    resolveDispute,
     listAppeals,
     submitElectricianAppeal,
     resolveElectricianAppeal,

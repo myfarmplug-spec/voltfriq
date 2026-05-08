@@ -39,7 +39,8 @@ const requiredTables = [
   'guest_action_tokens',
   'guest_otps',
   'operational_alerts',
-  'electrician_performance_snapshots'
+  'electrician_performance_snapshots',
+  'upload_failures'
 ];
 
 const missingRpcs = uniqueRpcNames.filter((name) => {

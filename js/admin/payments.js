@@ -760,15 +760,19 @@
     const autoButton = $('#btn-admin-auto-assign');
     const getSelected = () => document.querySelector('.admin-elec-option.selected');
 
-    if (autoButton) {
-      autoButton.addEventListener('click', async () => {
-        await withButtonLoading('btn-admin-auto-assign', 'Assigning...', async () => {
-          await Store.rerunAutomaticAssignment(job.id);
-          await loadData();
-          await openRequestDetail(job.id);
-        });
-      });
-    }
+	    if (autoButton) {
+	      autoButton.addEventListener('click', async () => {
+	        await withButtonLoading('btn-admin-auto-assign', 'Assigning...', async () => {
+	          if (Store.retryDispatchJob) {
+	            await Store.retryDispatchJob(job.id);
+	          } else {
+	            await Store.rerunAutomaticAssignment(job.id);
+	          }
+	          await loadData();
+	          await openRequestDetail(job.id);
+	        });
+	      });
+	    }
 
     if (assignButton) {
       assignButton.addEventListener('click', async () => {
@@ -975,21 +979,45 @@
 
 	  function buildAlerts() {
 	    const alerts = [];
+	    const summaryQueues = currentOperationalSummary && currentOperationalSummary.queues ? currentOperationalSummary.queues : {};
+	    const queueAlerts = currentOperationalQueues && Array.isArray(currentOperationalQueues.alerts) ? currentOperationalQueues.alerts : [];
+	    const criticalAlertCount = Number(summaryQueues.criticalAlerts || 0);
+	    const failedPairingCount = Number(summaryQueues.failedPairingJobs || 0);
+	    const snapshotDriftCount = Number(summaryQueues.snapshotDriftJobs || 0);
 	    const newBookingCount = currentJobs.filter((job) => ['requested', 'matching', 'assigned'].includes(job.status) || job.needsManualAssignment).length;
-    if (currentPayments.length) {
-      alerts.push({ tag: 'Finance', label: 'Pending payments', count: currentPayments.length + ' proof submission(s) need review', target: 'admin-finance' });
-    }
+	    queueAlerts.slice(0, 3).forEach((alert) => {
+	      alerts.push({
+	        tag: alert.severity === 'critical' ? 'Critical' : 'Ops',
+	        label: humanizeIssue(alert.alert_type || 'operational alert'),
+	        count: alert.message || 'Operational alert needs review',
+	        target: alert.job_id ? 'admin-requests' : 'admin-settings',
+	        filterKey: alert.action === 'retry_dispatch' ? 'requests' : '',
+	        filterValue: alert.action === 'retry_dispatch' ? 'manual' : ''
+	      });
+	    });
+	    if (criticalAlertCount && !queueAlerts.length) {
+	      alerts.push({ tag: 'Health', label: 'Critical operations', count: criticalAlertCount + ' alert(s) need immediate review', target: 'admin-requests' });
+	    }
+	    if (currentPayments.length) {
+	      alerts.push({ tag: 'Finance', label: 'Pending payments', count: currentPayments.length + ' proof submission(s) need review', target: 'admin-finance' });
+	    }
     const pendingElectricianCount = currentElectricians.filter((electrician) => electrician.status === 'pending').length;
     if (pendingElectricianCount) {
       alerts.push({ tag: 'Onboarding', label: 'Pending electricians', count: pendingElectricianCount + ' application(s) need review', target: 'admin-electricians', filterKey: 'electricians', filterValue: 'pending' });
     }
 	    const stuckCount = currentJobs.filter(isStuckJob).length;
-	    if (stuckCount) {
-	      alerts.push({ tag: 'Dispatch', label: 'Stuck pairing', count: stuckCount + ' job(s) need intervention', target: 'admin-requests', filterKey: 'requests', filterValue: 'manual' });
+		    if (stuckCount) {
+		      alerts.push({ tag: 'Dispatch', label: 'Stuck pairing', count: stuckCount + ' job(s) need intervention', target: 'admin-requests', filterKey: 'requests', filterValue: 'manual' });
+		    }
+	    if (failedPairingCount) {
+	      alerts.push({ tag: 'Dispatch', label: 'Failed pairing', count: failedPairingCount + ' job(s) have repeated dispatch retries', target: 'admin-requests', filterKey: 'requests', filterValue: 'manual' });
 	    }
-	    const expiredAssignmentCount = currentJobs.filter(isExpiredAssignment).length;
-	    if (expiredAssignmentCount) {
-	      alerts.push({ tag: 'Timeout', label: 'Expired assignments', count: expiredAssignmentCount + ' offer(s) need rematching', target: 'admin-requests', filterKey: 'requests', filterValue: 'timeout' });
+		    const expiredAssignmentCount = currentJobs.filter(isExpiredAssignment).length;
+		    if (expiredAssignmentCount) {
+		      alerts.push({ tag: 'Timeout', label: 'Expired assignments', count: expiredAssignmentCount + ' offer(s) need rematching', target: 'admin-requests', filterKey: 'requests', filterValue: 'timeout' });
+		    }
+	    if (snapshotDriftCount) {
+	      alerts.push({ tag: 'State', label: 'Snapshot drift', count: snapshotDriftCount + ' job snapshot(s) need reconciliation review', target: 'admin-jobs' });
 	    }
 	    const openDisputeCount = currentDisputes.filter((dispute) => (dispute.status || 'open') === 'open').length;
     if (openDisputeCount) {

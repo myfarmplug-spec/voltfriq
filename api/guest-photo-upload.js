@@ -23,17 +23,30 @@ export default async function handler(req, res) {
     return;
   }
 
+  let jobId = null;
+
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const jobId = String(body.jobId || '').trim();
+    jobId = String(body.jobId || '').trim();
     const accessToken = String(body.accessToken || '').trim();
     const files = Array.isArray(body.files) ? body.files : [];
 
     if (!/^[0-9a-f-]{36}$/i.test(jobId) || accessToken.length < 24) {
+      await recordUploadFailure(supabaseUrl, serviceRoleKey, {
+        jobId: /^[0-9a-f-]{36}$/i.test(jobId) ? jobId : null,
+        failureStage: 'token_validation',
+        errorMessage: 'Invalid booking upload token.'
+      });
       res.status(400).json({ ok: false, error: 'Invalid booking upload token.' });
       return;
     }
     if (!files.length || files.length > MAX_FILES) {
+      await recordUploadFailure(supabaseUrl, serviceRoleKey, {
+        jobId,
+        failureStage: 'file_count',
+        errorMessage: 'Invalid guest upload file count.',
+        metadata: { fileCount: files.length }
+      });
       res.status(400).json({ ok: false, error: 'Add up to 3 photos only.' });
       return;
     }
@@ -45,11 +58,26 @@ export default async function handler(req, res) {
       const originalName = String(file.name || 'photo').slice(0, 120);
       const data = String(file.data || '').replace(/^data:[^,]+,/, '');
       if (!ALLOWED_TYPES.has(contentType)) {
+        await recordUploadFailure(supabaseUrl, serviceRoleKey, {
+          jobId,
+          fileName: originalName,
+          contentType,
+          failureStage: 'content_type',
+          errorMessage: 'Unsupported guest photo type.'
+        });
         res.status(400).json({ ok: false, error: 'Only JPG, PNG, or WebP photos are allowed.' });
         return;
       }
       const buffer = Buffer.from(data, 'base64');
       if (!buffer.length || buffer.length > MAX_BYTES) {
+        await recordUploadFailure(supabaseUrl, serviceRoleKey, {
+          jobId,
+          fileName: originalName,
+          contentType,
+          fileSize: buffer.length,
+          failureStage: 'file_size',
+          errorMessage: 'Guest photo exceeded size limit.'
+        });
         res.status(400).json({ ok: false, error: 'Each photo must be under 2MB.' });
         return;
       }
@@ -70,6 +98,15 @@ export default async function handler(req, res) {
 
       if (!uploadResponse.ok) {
         const detail = await uploadResponse.text();
+        await recordUploadFailure(supabaseUrl, serviceRoleKey, {
+          jobId,
+          fileName: originalName,
+          contentType,
+          fileSize: buffer.length,
+          failureStage: 'storage_upload',
+          errorMessage: detail || 'Storage upload failed.',
+          metadata: { status: uploadResponse.status }
+        });
         res.status(uploadResponse.status).json({ ok: false, error: 'Photo upload failed.', detail });
         return;
       }
@@ -98,13 +135,50 @@ export default async function handler(req, res) {
       payload = text;
     }
     if (!attachResponse.ok) {
+      await recordUploadFailure(supabaseUrl, serviceRoleKey, {
+        jobId,
+        failureStage: 'attach_job_photos',
+        errorMessage: 'Could not attach photos to booking.',
+        metadata: { detail: payload }
+      });
       res.status(attachResponse.status).json({ ok: false, error: 'Could not attach photos to booking.', detail: payload });
       return;
     }
 
     res.status(200).json({ ok: true, photoPaths: uploadedPaths, job: payload });
   } catch (error) {
+    await recordUploadFailure(supabaseUrl, serviceRoleKey, {
+      jobId: /^[0-9a-f-]{36}$/i.test(String(jobId || '')) ? jobId : null,
+      failureStage: 'unexpected',
+      errorMessage: error && error.message ? error.message : 'Unexpected photo upload failure'
+    });
     res.status(500).json({ ok: false, error: error && error.message ? error.message : 'Unexpected photo upload failure' });
+  }
+}
+
+async function recordUploadFailure(supabaseUrl, serviceRoleKey, detail) {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/rpc/record_upload_failure`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        p_job_id: detail.jobId || null,
+        p_uploader_role: detail.uploaderRole || 'guest',
+        p_bucket: detail.bucket || 'job-photos',
+        p_file_name: detail.fileName || null,
+        p_content_type: detail.contentType || null,
+        p_file_size: Number.isFinite(detail.fileSize) ? detail.fileSize : null,
+        p_failure_stage: detail.failureStage || 'upload',
+        p_error_message: detail.errorMessage || 'Upload failed',
+        p_metadata: detail.metadata || {}
+      })
+    });
+  } catch (error) {
+    // Upload failure logging must never hide the user-facing upload error.
   }
 }
 

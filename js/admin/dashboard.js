@@ -10,6 +10,7 @@
 	  let currentDisputes = [];
 	  let currentAppeals = [];
 	  let currentOperationalSummary = null;
+	  let currentOperationalQueues = null;
   let selectedJob = null;
   let selectedElectrician = null;
   let portalSubscription = null;
@@ -234,15 +235,17 @@
     await activateAdminRoute(route && route.screen ? route : { screen: 'admin-dashboard', data: null, source: 'app' });
   }
 
-  async function loadData() {
-    const [
-      jobs,
-      electricians,
-      payments,
-      notifications,
-      disputes,
+	  async function loadData() {
+	    const [
+	      jobs,
+	      electricians,
+	      payments,
+	      notifications,
+	      disputes,
 	      appeals,
-	      operationalSummary
+	      expertiseCategories,
+	      operationalSummary,
+	      operationalQueues
 	    ] = await Promise.all([
 	      Store.listAdminJobs({ includeProtectedAssets: false }),
 	      Store.listElectricians('all', { includeDocumentUrls: false }),
@@ -251,15 +254,17 @@
 	      Store.listDisputes(),
 	      Store.listAppeals(),
 	      Store.loadExpertiseCategories(),
-	      Store.getOperationalSummary()
+	      Store.getOperationalSummary(),
+	      Store.getOperationalQueues()
 	    ]);
-    currentJobs = jobs || [];
-    currentElectricians = electricians || [];
-    currentPayments = payments || [];
-    currentNotifications = notifications || [];
+	    currentJobs = jobs || [];
+	    currentElectricians = electricians || [];
+	    currentPayments = payments || [];
+	    currentNotifications = notifications || [];
 	    currentDisputes = disputes || [];
 	    currentAppeals = appeals || [];
 	    currentOperationalSummary = operationalSummary || null;
+	    currentOperationalQueues = operationalQueues || null;
 	    clearLoginError();
 	  }
 
@@ -290,17 +295,28 @@
 	    const openDisputeCount = currentDisputes.filter((dispute) => (dispute.status || 'open') === 'open').length;
 	    const summaryQueues = currentOperationalSummary && currentOperationalSummary.queues ? currentOperationalSummary.queues : {};
 	    const summaryMetrics = currentOperationalSummary && currentOperationalSummary.metrics ? currentOperationalSummary.metrics : {};
-	    const operationalStuckCount = Number(summaryQueues.stuckPairingJobs || stuckJobCount || 0);
-	    const operationalExpiredCount = Number(summaryQueues.expiredAssignments || expiredAssignmentCount || 0);
-	    const actionSummary = [
-	      paymentVerificationCount ? paymentVerificationCount + ' payment' + (paymentVerificationCount === 1 ? '' : 's') + ' pending' : null,
-	      pendingElectricianCount
-	        ? pendingElectricianCount + ' electrician' + (pendingElectricianCount === 1 ? '' : 's') + ' pending approval'
-	        : null,
-	      operationalStuckCount ? operationalStuckCount + ' stuck job' + (operationalStuckCount === 1 ? '' : 's') : null,
-	      operationalExpiredCount ? operationalExpiredCount + ' expired assignment' + (operationalExpiredCount === 1 ? '' : 's') : null,
-	      openDisputeCount ? openDisputeCount + ' dispute' + (openDisputeCount === 1 ? '' : 's') + ' open' : null
-	    ].filter(Boolean);
+	    const operationalQueues = currentOperationalQueues || {};
+	    const queueCount = (key) => Array.isArray(operationalQueues[key]) ? operationalQueues[key].length : 0;
+		    const operationalPaymentCount = queueCount('pendingPayments') || paymentVerificationCount || Number(summaryQueues.pendingPayments || 0);
+		    const operationalElectricianCount = queueCount('pendingElectricians') || pendingElectricianCount || Number(summaryQueues.pendingElectricians || 0);
+		    const operationalStuckCount = queueCount('stuckJobs') || Number(summaryQueues.stuckPairingJobs || stuckJobCount || 0);
+		    const failedPairingCount = queueCount('failedPairingJobs') || Number(summaryQueues.failedPairingJobs || 0);
+		    const operationalExpiredCount = queueCount('expiredAssignments') || Number(summaryQueues.expiredAssignments || expiredAssignmentCount || 0);
+		    const snapshotDriftCount = queueCount('snapshotDriftJobs') || Number(summaryQueues.snapshotDriftJobs || 0);
+		    const operationalDisputeCount = queueCount('openDisputes') || openDisputeCount || Number(summaryQueues.openDisputes || 0);
+		    const criticalAlertCount = (Array.isArray(operationalQueues.alerts) ? operationalQueues.alerts.filter((alert) => alert.severity === 'critical').length : 0) || Number(summaryQueues.criticalAlerts || 0);
+		    const actionSummary = [
+		      criticalAlertCount ? criticalAlertCount + ' critical alert' + (criticalAlertCount === 1 ? '' : 's') : null,
+		      operationalPaymentCount ? operationalPaymentCount + ' payment' + (operationalPaymentCount === 1 ? '' : 's') + ' pending' : null,
+		      operationalElectricianCount
+		        ? operationalElectricianCount + ' electrician' + (operationalElectricianCount === 1 ? '' : 's') + ' pending approval'
+		        : null,
+		      operationalStuckCount ? operationalStuckCount + ' stuck job' + (operationalStuckCount === 1 ? '' : 's') : null,
+		      failedPairingCount ? failedPairingCount + ' failed pairing queue' + (failedPairingCount === 1 ? '' : 's') : null,
+		      operationalExpiredCount ? operationalExpiredCount + ' expired assignment' + (operationalExpiredCount === 1 ? '' : 's') : null,
+		      snapshotDriftCount ? snapshotDriftCount + ' snapshot drift' + (snapshotDriftCount === 1 ? '' : 's') : null,
+		      operationalDisputeCount ? operationalDisputeCount + ' dispute' + (operationalDisputeCount === 1 ? '' : 's') + ' open' : null
+		    ].filter(Boolean);
 
     if ($('#admin-action-banner')) {
       $('#admin-action-banner').textContent = actionSummary.length
@@ -319,25 +335,29 @@
 	    const stats = {
 	      assignTime: formatDuration(summaryMetrics.averageTimeToAssignSeconds || 0),
 	      acceptTime: formatDuration(summaryMetrics.averageTimeToAcceptSeconds || 0),
-	      rejectionRate: formatPercent(summaryMetrics.rejectionRate || 0),
-	      paymentDelay: formatDuration(summaryMetrics.paymentVerificationDelaySeconds || 0),
-	      stuckJobs: String(summaryMetrics.stuckJobsCount || operationalStuckCount || 0)
-	    };
+		      rejectionRate: formatPercent(summaryMetrics.rejectionRate || 0),
+		      paymentDelay: formatDuration(summaryMetrics.paymentVerificationDelaySeconds || 0),
+		      stuckJobs: String(summaryMetrics.stuckJobsCount || operationalStuckCount || 0),
+		      health: formatPercent(summaryMetrics.systemHealthScore == null ? 100 : summaryMetrics.systemHealthScore)
+		    };
 
-	    $('#admin-stats').innerHTML = [
-	      statCard('↗', stats.assignTime, 'Avg assign'),
-	      statCard('✓', stats.acceptTime, 'Avg accept'),
-	      statCard('%', stats.rejectionRate, 'Rejection rate'),
-	      statCard('₦', stats.paymentDelay, 'Payment delay'),
-	      statCard('!', stats.stuckJobs, 'Stuck jobs')
-	    ].join('');
+		    $('#admin-stats').innerHTML = [
+		      statCard('!', stats.health, 'System health'),
+		      statCard('↗', stats.assignTime, 'Avg assign'),
+		      statCard('✓', stats.acceptTime, 'Avg accept'),
+		      statCard('%', stats.rejectionRate, 'Rejection rate'),
+		      statCard('₦', stats.paymentDelay, 'Payment delay'),
+		      statCard('!', stats.stuckJobs, 'Stuck jobs')
+		    ].join('');
 
 	    $('#admin-control-queue').innerHTML = [
-	      queueCard('Pending payments', paymentVerificationCount, 'Finance queue', 'Verify proofs before jobs move forward.', 'admin-finance'),
-	      queueCard('Pending electricians', pendingElectricianCount, 'Onboarding queue', 'Review pending VoltFriq applications and approve or reject.', 'admin-electricians', 'electricians', 'pending'),
+	      queueCard('Pending payments', operationalPaymentCount, 'Finance queue', 'Verify proofs before jobs move forward.', 'admin-finance'),
+	      queueCard('Pending electricians', operationalElectricianCount, 'Onboarding queue', 'Review pending VoltFriq applications and approve or reject.', 'admin-electricians', 'electricians', 'pending'),
 	      queueCard('Stuck pairing jobs', operationalStuckCount, 'Dispatch queue', 'Review jobs that need routing attention.', 'admin-requests', 'requests', 'manual'),
-	      queueCard('Open disputes', openDisputeCount, 'Trust queue', 'Resolve open disputes and customer interventions.', 'admin-disputes'),
-	      queueCard('Expired assignments', operationalExpiredCount, 'Timeout queue', 'Review offers that expired before acceptance.', 'admin-requests', 'requests', 'timeout')
+	      queueCard('Failed pairing jobs', failedPairingCount, 'Retry queue', 'Retry dispatch where automated pairing has hit repeated attempts.', 'admin-requests', 'requests', 'failed'),
+	      queueCard('Open disputes', operationalDisputeCount, 'Trust queue', 'Resolve open disputes and customer interventions.', 'admin-disputes'),
+	      queueCard('Expired assignments', operationalExpiredCount, 'Timeout queue', 'Review offers that expired before acceptance.', 'admin-requests', 'requests', 'timeout'),
+	      queueCard('State drift', snapshotDriftCount, 'Integrity queue', 'Reconcile jobs whose snapshot differs from canonical events.', 'admin-jobs')
 	    ].join('');
     $('#admin-control-queue').querySelectorAll('.admin-queue-card').forEach((card) => {
       card.addEventListener('click', () => navigateTo(card.dataset.target, filterRouteData(card)));

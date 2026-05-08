@@ -27,7 +27,9 @@
 	    const todayEarnings = currentJobs
 	      .filter((job) => isToday(job.updatedAt) && ['customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status))
 	      .reduce((sum, job) => sum + (job.quote.total || 0), 0);
-	    const responseScore = Math.round(Number(electrician.response_rate || 0));
+	    const responseScore = Math.round(Number(electrician.response_score || electrician.response_rate || 0));
+	    const acceptanceScore = Math.round(Number(electrician.acceptance_score || electrician.acceptance_rate || 0));
+	    const payoutConfidence = Math.round(Number(electrician.payout_confidence_score || 100));
 	    document.getElementById('dash-avatar').textContent = '⚡';
 	    document.getElementById('dash-name').textContent = profile.full_name || 'VoltFriq';
 	    document.getElementById('dash-live-status').textContent = electrician.availability_status === 'available' ? 'Available for jobs' : 'Offline for now';
@@ -42,7 +44,9 @@
 	      acceptedJobs,
 	      inProgressJobs,
 	      pendingPayout,
-	      responseScore
+	      responseScore,
+	      acceptanceScore,
+	      payoutConfidence
 	    });
   }
 
@@ -66,9 +70,9 @@
         '<div class="elec-hero-stat"><strong>' + escapeHtml(String(summary.inProgressJobs || 0)) + '</strong><span>In progress</span></div>' +
       '</div>' +
       '<div class="elec-trust-meter"><span style="width:' + Math.min(100, Math.max(12, completed * 4)) + '%"></span></div>' +
-	      '<div class="elec-trust-meta">' + completed + ' completed · ' + (rating ? rating.toFixed(1) + '/5' : 'No rating yet') + ' · Response ' + (summary.responseScore ? summary.responseScore + '%' : '--') + '</div>' +
+	      '<div class="elec-trust-meta">' + completed + ' completed · ' + (rating ? rating.toFixed(1) + '/5' : 'No rating yet') + ' · Response ' + (summary.responseScore ? summary.responseScore + '%' : '--') + ' · Acceptance ' + (summary.acceptanceScore ? summary.acceptanceScore + '%' : '--') + '</div>' +
 	      '<div class="elec-hero-actions"><button class="btn-primary" id="btn-dash-toggle-availability">' + escapeHtml(availabilityButton) + '</button><button class="btn-secondary" id="btn-dash-open-active">Open active jobs</button></div>' +
-	      '<div class="elec-payout-hero"><span class="elec-payout-label">Payout status</span><strong>' + escapeHtml(Store.formatCurrency(summary.pendingPayout || 0)) + '</strong><small>Customer-confirmed work waiting for release.</small></div>' +
+	      '<div class="elec-payout-hero"><span class="elec-payout-label">Payout confidence ' + escapeHtml(summary.payoutConfidence + '%') + '</span><strong>' + escapeHtml(Store.formatCurrency(summary.pendingPayout || 0)) + '</strong><small>Customer-confirmed work waiting for release.</small></div>' +
       watchlist;
     const toggleButton = document.getElementById('btn-dash-toggle-availability');
     if (toggleButton) {
