@@ -5,7 +5,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict rpxfVKV60GXAKfTmKUkrmzFNa61FNQKT9exj8eY8VeAvO1d3rXr5OBTjtHcdFXI
+\restrict NXlERA7gq9mQGsryfOJh0j11kEhbb3i1x39nrJ0AhtgsKeqCwB8K3CS52Zk8RJf
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.3
@@ -3466,6 +3466,7 @@ CREATE FUNCTION "public"."is_valid_job_transition"("p_current_status" "public"."
 declare
   actor_role_value text := lower(coalesce(p_actor_role, 'system'));
   admin_override boolean := lower(coalesce(p_metadata ->> 'admin_override', 'false')) in ('true', '1', 'yes');
+  source_value text := coalesce(nullif(btrim(coalesce(p_metadata ->> 'source', '')), ''), 'app');
 begin
   if p_current_status is null or p_next_status is null then
     return false;
@@ -3485,7 +3486,12 @@ begin
   end if;
 
   if actor_role_value in ('customer', 'guest') then
-    return (p_current_status = 'quoted' and p_next_status = 'quote_accepted')
+    return (
+        p_current_status = 'requested'
+        and p_next_status = 'matching'
+        and source_value in ('create_customer_job', 'create_guest_customer_job')
+      )
+      or (p_current_status = 'quoted' and p_next_status = 'quote_accepted')
       or (p_current_status = 'electrician_completed' and p_next_status = 'customer_confirmed')
       or (
         p_next_status = 'cancelled'
@@ -13358,4 +13364,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TA
 -- PostgreSQL database dump complete
 --
 
-\unrestrict rpxfVKV60GXAKfTmKUkrmzFNa61FNQKT9exj8eY8VeAvO1d3rXr5OBTjtHcdFXI
+\unrestrict NXlERA7gq9mQGsryfOJh0j11kEhbb3i1x39nrJ0AhtgsKeqCwB8K3CS52Zk8RJf
+
