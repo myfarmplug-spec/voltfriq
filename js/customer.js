@@ -2518,4 +2518,8 @@
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
   }
+
+  function escapeAttribute(value) {
+    return escapeHtml(value);
+  }
 })();

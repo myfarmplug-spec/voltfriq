@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voltfriq-shell-v20260508-booking-signup-hotfix';
+const CACHE_NAME = 'voltfriq-shell-v20260508-customer-escape-hotfix';
 const APP_SHELL = [
   '/offline.html',
   '/manifest.json',
