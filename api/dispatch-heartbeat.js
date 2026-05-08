@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -24,6 +26,9 @@ export default async function handler(req, res) {
   }
 
   try {
+    const requestId = headerValue(req.headers['x-request-id'])
+      || headerValue(req.headers['x-vercel-id'])
+      || randomUUID();
     const response = await fetch(`${supabaseUrl}/rest/v1/rpc/run_operational_automation`, {
       method: 'POST',
       headers: {
@@ -31,7 +36,7 @@ export default async function handler(req, res) {
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`
       },
-      body: JSON.stringify({ p_limit: 100 })
+      body: JSON.stringify({ p_limit: 100, p_request_id: requestId })
     });
 
     if (!response.ok) {
@@ -44,6 +49,7 @@ export default async function handler(req, res) {
     res.status(200).json({
       ok: true,
       processed: Number(data && data.processed || 0),
+      requestId,
       automation: data || {}
     });
   } catch (error) {
@@ -52,4 +58,9 @@ export default async function handler(req, res) {
       error: error && error.message ? error.message : 'Unexpected dispatch heartbeat failure'
     });
   }
+}
+
+function headerValue(value) {
+  if (Array.isArray(value)) return String(value[0] || '').trim();
+  return String(value || '').trim();
 }

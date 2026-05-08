@@ -19,6 +19,8 @@ const ElecApp = (() => {
   let validationAnswers = {};
   let pendingElectricianRoute = null;
   let pendingElectricianSignupPayload = null;
+  let electricianReconnectBound = false;
+  let electricianReconnectRefreshTimer = null;
   const PENDING_SIGNUP_KEY = 'voltfriq_pending_electrician_signup';
   const DEFAULT_COUNTRY = 'Nigeria';
   const SUPPORTED_STATES = ['Rivers', 'Imo'];
@@ -191,6 +193,7 @@ const ElecApp = (() => {
       }
 
       renderRegistrationOptions();
+      bindElectricianReconnectRefresh();
 
       if (portalSubscription) portalSubscription.unsubscribe();
       portalSubscription = Store.subscribeToPortalFeed(async () => {
@@ -381,6 +384,34 @@ const ElecApp = (() => {
     });
   }
 
+  function bindElectricianReconnectRefresh() {
+    if (electricianReconnectBound) return;
+    electricianReconnectBound = true;
+    const scheduleElectricianRefresh = () => {
+      if (electricianReconnectRefreshTimer) window.clearTimeout(electricianReconnectRefreshTimer);
+      electricianReconnectRefreshTimer = window.setTimeout(async () => {
+        electricianReconnectRefreshTimer = null;
+        try {
+          if (!Store.getCurrentElectrician || !Store.getCurrentElectrician()) return;
+          if (currentJob) {
+            currentJob = await Store.getJob(currentJob.id);
+            renderJobDetail();
+            renderConfirmScreen();
+          }
+          if (currentScreen === 'elec-dashboard') {
+            await loadDashboard();
+          }
+        } catch (error) {
+          console.warn('Electrician refresh after reconnect failed', error);
+        }
+      }, 600);
+    };
+    if (window.VoltFriqNetwork && window.VoltFriqNetwork.onReconnect) {
+      window.VoltFriqNetwork.onReconnect('electrician-portal-refresh', scheduleElectricianRefresh);
+    }
+    window.addEventListener('voltfriq:refresh-requested', scheduleElectricianRefresh);
+  }
+
   function shouldStartApplication() {
     const params = new URLSearchParams(window.location.search || '');
     return params.get('apply') === '1' || window.location.hash === '#apply';
@@ -446,4 +477,3 @@ const ElecApp = (() => {
       showNotice('Reset link sent. Open it on this device, then choose a new password.');
     });
   }
-

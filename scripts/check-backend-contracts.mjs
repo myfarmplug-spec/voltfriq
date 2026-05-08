@@ -39,6 +39,8 @@ const requiredTables = [
   'guest_action_tokens',
   'guest_otps',
   'job_state_projections',
+  'event_replay_runs',
+  'operation_requests',
   'operational_alerts',
   'operational_automation_runs',
   'electrician_performance_snapshots',

@@ -20,6 +20,8 @@
   let trackingDetailsExpanded = false;
   let bookingSubmitInFlight = false;
   let bookingConfirmationTimer = null;
+  let customerReconnectBound = false;
+  let customerReconnectRefreshTimer = null;
 
   const ISSUE_OPTIONS = [
     { issue_type: 'Socket / Switch', value: 'Socket repair', description: 'Faulty socket, switch, or new socket point.', estimated_fee_min: 5000, estimated_fee_max: 8000 },
@@ -116,6 +118,7 @@
         document.getElementById('btn-guest').style.display = 'none';
       }
       hydrateDraftState();
+      bindCustomerReconnectRefresh();
       renderSettings();
       refreshWelcomeActions();
       pendingCustomerRoute = getCurrentRouteState();
@@ -403,6 +406,37 @@
 
   function closeMobileMenu() {
     toggleMobileMenu(false);
+  }
+
+  function bindCustomerReconnectRefresh() {
+    if (customerReconnectBound) return;
+    customerReconnectBound = true;
+    const scheduleCustomerRefresh = () => {
+      if (customerReconnectRefreshTimer) window.clearTimeout(customerReconnectRefreshTimer);
+      customerReconnectRefreshTimer = window.setTimeout(async () => {
+        customerReconnectRefreshTimer = null;
+        if (screenBusy || bookingSubmitInFlight) return;
+        try {
+          if (currentJob && ['assigned', 'appearance-fee', 'quotation', 'payment', 'confirm-work', 'rating', 'chat', 'report-issue'].includes(currentScreen)) {
+            await openTrackedJob(currentJob.id, { replace: true });
+            return;
+          }
+          if (currentScreen === 'dashboard' && Store.getCurrentProfile()) {
+            await renderDashboard();
+            return;
+          }
+          if (currentScreen === 'history' && Store.getCurrentProfile()) {
+            await showHistory(true, { replace: true });
+          }
+        } catch (error) {
+          console.warn('Customer refresh after reconnect failed', error);
+        }
+      }, 600);
+    };
+    if (window.VoltFriqNetwork && window.VoltFriqNetwork.onReconnect) {
+      window.VoltFriqNetwork.onReconnect('customer-portal-refresh', scheduleCustomerRefresh);
+    }
+    window.addEventListener('voltfriq:refresh-requested', scheduleCustomerRefresh);
   }
 
   function configureCustomerRoutes() {

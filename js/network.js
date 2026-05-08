@@ -1,4 +1,6 @@
 const NETWORK_BANNER_ID = 'voltfriq-network-status';
+const REFRESH_DEBOUNCE_MS = 450;
+const reconnectTasks = new Map();
 
 export function installNetworkResilience() {
   if (window.__voltfriqNetworkInstalled) return window.VoltFriqNetwork;
@@ -7,12 +9,32 @@ export function installNetworkResilience() {
   const state = {
     online: navigator.onLine !== false,
     lastOfflineAt: null,
-    lastOnlineAt: new Date().toISOString()
+    lastOnlineAt: new Date().toISOString(),
+    lastRefreshRequestedAt: null,
+    refreshReason: null
   };
-
+  let refreshTimer = null;
+  const requestRefresh = (reason) => {
+    state.lastRefreshRequestedAt = new Date().toISOString();
+    state.refreshReason = reason || 'refresh-requested';
+    if (refreshTimer) window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(() => {
+      refreshTimer = null;
+      window.dispatchEvent(new CustomEvent('voltfriq:refresh-requested', {
+        detail: { source: state.refreshReason, network: Object.assign({}, state) }
+      }));
+    }, REFRESH_DEBOUNCE_MS);
+  };
   const api = {
     isOnline: () => state.online,
-    getState: () => Object.assign({}, state)
+    getState: () => Object.assign({}, state),
+    requestRefresh,
+    onReconnect: (name, callback) => {
+      if (typeof callback !== 'function') return () => {};
+      const key = String(name || 'task-' + reconnectTasks.size);
+      reconnectTasks.set(key, callback);
+      return () => reconnectTasks.delete(key);
+    }
   };
 
   window.VoltFriqNetwork = api;
@@ -24,6 +46,8 @@ export function installNetworkResilience() {
       document.body.classList.remove('network-offline');
       showNetworkBanner('Back online. Syncing latest job updates...', true);
       window.dispatchEvent(new CustomEvent('voltfriq:network-restored', { detail: { reason } }));
+      runReconnectTasks();
+      requestRefresh(reason || 'network-restored');
       window.setTimeout(hideNetworkBanner, 2600);
     } else {
       state.lastOfflineAt = new Date().toISOString();
@@ -35,9 +59,29 @@ export function installNetworkResilience() {
 
   window.addEventListener('online', () => update(true, 'browser-online'));
   window.addEventListener('offline', () => update(false, 'browser-offline'));
+  window.addEventListener('pageshow', () => {
+    if (state.online) requestRefresh('pageshow');
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.online) requestRefresh('tab-visible');
+  });
 
   if (!state.online) update(false, 'initial-offline');
   return api;
+}
+
+function runReconnectTasks() {
+  const api = window.VoltFriqNetwork;
+  if (!api || !api.getState) return;
+  reconnectTasks.forEach((callback) => {
+    try {
+      Promise.resolve(callback(api.getState())).catch((error) => {
+        window.setTimeout(() => { throw error; }, 0);
+      });
+    } catch (error) {
+      window.setTimeout(() => { throw error; }, 0);
+    }
+  });
 }
 
 function showNetworkBanner(message, success) {

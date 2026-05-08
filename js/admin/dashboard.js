@@ -16,6 +16,8 @@
   let portalSubscription = null;
   let realtimeRefreshTimer = null;
   let pendingAdminRoute = null;
+  let adminReconnectBound = false;
+  let adminReconnectRefreshTimer = null;
 
   function wantsPasswordReset() {
     const query = new URLSearchParams(window.location.search || '');
@@ -230,9 +232,39 @@
 
   async function showApp(route) {
     $('#admin-bottom-nav').style.display = 'flex';
+    bindAdminReconnectRefresh();
     renderAdminLoadingState();
     await loadData();
     await activateAdminRoute(route && route.screen ? route : { screen: 'admin-dashboard', data: null, source: 'app' });
+  }
+
+  function bindAdminReconnectRefresh() {
+    if (adminReconnectBound) return;
+    adminReconnectBound = true;
+    const scheduleAdminRefresh = () => {
+      if (adminReconnectRefreshTimer) window.clearTimeout(adminReconnectRefreshTimer);
+      adminReconnectRefreshTimer = window.setTimeout(async () => {
+        adminReconnectRefreshTimer = null;
+        try {
+          const profile = Store.getCurrentProfile && Store.getCurrentProfile();
+          if (!profile || profile.role !== 'admin') return;
+          await loadData();
+          refreshScreen(currentScreen || 'admin-dashboard');
+        } catch (error) {
+          console.warn('Admin refresh after reconnect failed', error);
+        }
+      }, 600);
+    };
+    if (window.VoltFriqNetwork && window.VoltFriqNetwork.onReconnect) {
+      window.VoltFriqNetwork.onReconnect('admin-portal-refresh', scheduleAdminRefresh);
+    }
+    window.addEventListener('voltfriq:refresh-requested', () => {
+      try {
+        scheduleAdminRefresh();
+      } catch (error) {
+        console.warn('Admin refresh after reconnect failed', error);
+      }
+    });
   }
 
 	  async function loadData() {
@@ -303,6 +335,7 @@
 		    const failedPairingCount = queueCount('failedPairingJobs') || Number(summaryQueues.failedPairingJobs || 0);
 		    const operationalExpiredCount = queueCount('expiredAssignments') || Number(summaryQueues.expiredAssignments || expiredAssignmentCount || 0);
 		    const snapshotDriftCount = queueCount('snapshotDriftJobs') || Number(summaryQueues.snapshotDriftJobs || 0);
+		    const predictiveAlertCount = queueCount('predictiveAlerts') || Number(summaryQueues.predictiveAlerts || 0);
 		    const operationalDisputeCount = queueCount('openDisputes') || openDisputeCount || Number(summaryQueues.openDisputes || 0);
 		    const criticalAlertCount = (Array.isArray(operationalQueues.alerts) ? operationalQueues.alerts.filter((alert) => alert.severity === 'critical').length : 0) || Number(summaryQueues.criticalAlerts || 0);
 		    const actionSummary = [
@@ -315,6 +348,7 @@
 		      failedPairingCount ? failedPairingCount + ' failed pairing queue' + (failedPairingCount === 1 ? '' : 's') : null,
 		      operationalExpiredCount ? operationalExpiredCount + ' expired assignment' + (operationalExpiredCount === 1 ? '' : 's') : null,
 		      snapshotDriftCount ? snapshotDriftCount + ' snapshot drift' + (snapshotDriftCount === 1 ? '' : 's') : null,
+		      predictiveAlertCount ? predictiveAlertCount + ' predictive risk' + (predictiveAlertCount === 1 ? '' : 's') : null,
 		      operationalDisputeCount ? operationalDisputeCount + ' dispute' + (operationalDisputeCount === 1 ? '' : 's') + ' open' : null
 		    ].filter(Boolean);
 
@@ -338,6 +372,7 @@
 		      rejectionRate: formatPercent(summaryMetrics.rejectionRate || 0),
 		      paymentDelay: formatDuration(summaryMetrics.paymentVerificationDelaySeconds || 0),
 		      stuckJobs: String(summaryMetrics.stuckJobsCount || operationalStuckCount || 0),
+		      predictiveRisks: String(summaryMetrics.predictiveAlerts || predictiveAlertCount || 0),
 		      health: formatPercent(summaryMetrics.systemHealthScore == null ? 100 : summaryMetrics.systemHealthScore)
 		    };
 
@@ -347,7 +382,8 @@
 		      statCard('✓', stats.acceptTime, 'Avg accept'),
 		      statCard('%', stats.rejectionRate, 'Rejection rate'),
 		      statCard('₦', stats.paymentDelay, 'Payment delay'),
-		      statCard('!', stats.stuckJobs, 'Stuck jobs')
+		      statCard('!', stats.stuckJobs, 'Stuck jobs'),
+		      statCard('!', stats.predictiveRisks, 'Predictive risks')
 		    ].join('');
 
 	    $('#admin-control-queue').innerHTML = [
@@ -357,7 +393,8 @@
 	      queueCard('Failed pairing jobs', failedPairingCount, 'Retry queue', 'Retry dispatch where automated pairing has hit repeated attempts.', 'admin-requests', 'requests', 'failed'),
 	      queueCard('Open disputes', operationalDisputeCount, 'Trust queue', 'Resolve open disputes and customer interventions.', 'admin-disputes'),
 	      queueCard('Expired assignments', operationalExpiredCount, 'Timeout queue', 'Review offers that expired before acceptance.', 'admin-requests', 'requests', 'timeout'),
-	      queueCard('State drift', snapshotDriftCount, 'Integrity queue', 'Reconcile jobs whose snapshot differs from canonical events.', 'admin-jobs')
+	      queueCard('State drift', snapshotDriftCount, 'Integrity queue', 'Reconcile jobs whose snapshot differs from canonical events.', 'admin-jobs'),
+	      queueCard('Predictive risks', predictiveAlertCount, 'Reliability queue', 'Review jobs and operations likely to miss target soon.', 'admin-requests', 'requests', 'all')
 	    ].join('');
     $('#admin-control-queue').querySelectorAll('.admin-queue-card').forEach((card) => {
       card.addEventListener('click', () => navigateTo(card.dataset.target, filterRouteData(card)));

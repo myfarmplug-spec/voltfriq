@@ -729,6 +729,7 @@
 	        openDisputes: 0,
 	        expiredAssignments: 0,
 	        snapshotDriftJobs: 0,
+	        predictiveAlerts: 0,
 	        criticalAlerts: 0
 	      },
 	      metrics: {
@@ -742,8 +743,11 @@
 	        disputeRate30d: 0,
 	        electricianResponseQuality: 100,
 	        snapshotDriftJobs: 0,
+	        predictiveAlerts: 0,
 	        automationFailures24h: 0,
 	        automationLastRunAgeSeconds: 0,
+	        eventReplayLastRunAgeSeconds: 0,
+	        eventReplayFailures24h: 0,
 	        systemHealthScore: 100
 	      }
 	    };
@@ -756,11 +760,13 @@
 		      stuckJobs: [],
 		      failedPairingJobs: [],
 		      snapshotDriftJobs: [],
+		      predictiveAlerts: [],
 		      paymentBacklog: [],
-		      openDisputes: [],
-		      expiredAssignments: [],
+	      openDisputes: [],
+	      expiredAssignments: [],
 	      highRejectionElectricians: [],
 	      uploadFailures: [],
+	      eventReplayRuns: [],
 	      alerts: []
 	    };
 	  }
@@ -777,6 +783,7 @@
 	        openDisputes: Number(rawQueues.open_disputes || rawQueues.openDisputes || 0),
 	        expiredAssignments: Number(rawQueues.expired_assignments || rawQueues.expiredAssignments || 0),
 	        snapshotDriftJobs: Number(rawQueues.snapshot_drift_jobs || rawQueues.snapshotDriftJobs || 0),
+	        predictiveAlerts: Number(rawQueues.predictive_alerts || rawQueues.predictiveAlerts || 0),
 	        criticalAlerts: Number(rawQueues.critical_alerts || rawQueues.criticalAlerts || 0)
 	      },
 	      metrics: {
@@ -790,8 +797,11 @@
 	        disputeRate30d: Number(rawMetrics.dispute_rate_30d || rawMetrics.disputeRate30d || 0),
 	        electricianResponseQuality: Number(rawMetrics.electrician_response_quality || rawMetrics.electricianResponseQuality || 0),
 	        snapshotDriftJobs: Number(rawMetrics.snapshot_drift_jobs || rawMetrics.snapshotDriftJobs || 0),
+	        predictiveAlerts: Number(rawMetrics.predictive_alerts || rawMetrics.predictiveAlerts || 0),
 	        automationFailures24h: Number(rawMetrics.automation_failures_24h || rawMetrics.automationFailures24h || 0),
 	        automationLastRunAgeSeconds: Number(rawMetrics.automation_last_run_age_seconds || rawMetrics.automationLastRunAgeSeconds || 0),
+	        eventReplayLastRunAgeSeconds: Number(rawMetrics.event_replay_last_run_age_seconds || rawMetrics.eventReplayLastRunAgeSeconds || 0),
+	        eventReplayFailures24h: Number(rawMetrics.event_replay_failures_24h || rawMetrics.eventReplayFailures24h || 0),
 	        systemHealthScore: Number(rawMetrics.system_health_score || rawMetrics.systemHealthScore || 0)
 	      }
 	    };
@@ -804,11 +814,13 @@
 		      stuckJobs: Array.isArray(payload.stuck_jobs) ? payload.stuck_jobs : [],
 		      failedPairingJobs: Array.isArray(payload.failed_pairing_jobs) ? payload.failed_pairing_jobs : [],
 		      snapshotDriftJobs: Array.isArray(payload.snapshot_drift_jobs) ? payload.snapshot_drift_jobs : [],
+		      predictiveAlerts: Array.isArray(payload.predictive_alerts) ? payload.predictive_alerts : [],
 		      paymentBacklog: Array.isArray(payload.payment_backlog) ? payload.payment_backlog : [],
 	      openDisputes: Array.isArray(payload.open_disputes) ? payload.open_disputes : [],
 	      expiredAssignments: Array.isArray(payload.expired_assignments) ? payload.expired_assignments : [],
 	      highRejectionElectricians: Array.isArray(payload.high_rejection_electricians) ? payload.high_rejection_electricians : [],
 	      uploadFailures: Array.isArray(payload.upload_failures) ? payload.upload_failures : [],
+	      eventReplayRuns: Array.isArray(payload.event_replay_runs) ? payload.event_replay_runs : [],
 	      alerts: Array.isArray(payload.alerts) ? payload.alerts : []
 	    };
 	  }
