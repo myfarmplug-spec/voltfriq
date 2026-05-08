@@ -23,6 +23,22 @@
       "destination": "/electrician.html"
     },
     {
+      "source": "/electric",
+      "destination": "/electrician.html"
+    },
+    {
+      "source": "/electric/:path*",
+      "destination": "/electrician.html"
+    },
+    {
+      "source": "/electrician",
+      "destination": "/electrician.html"
+    },
+    {
+      "source": "/electrician/:path*",
+      "destination": "/electrician.html"
+    },
+    {
       "source": "/book/:path*",
       "destination": "/index.html"
     },

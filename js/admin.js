@@ -272,17 +272,18 @@
   }
 
   function renderDashboard() {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
     const alerts = buildAlerts();
+    const newBookingCount = currentJobs.filter((job) => ['requested', 'matching', 'assigned'].includes(job.status) || job.needsManualAssignment).length;
+    const pendingElectricianCount = currentElectricians.filter((electrician) => electrician.status === 'pending').length;
+    const manualAssignmentCount = currentJobs.filter((job) => job.needsManualAssignment || (job.status === 'matching' && !job.assignedElectricianId)).length;
+    const paymentVerificationCount = currentPayments.length;
     const actionSummary = [
-      currentPayments.length ? currentPayments.length + ' payment' + (currentPayments.length === 1 ? '' : 's') + ' pending' : null,
-      currentElectricians.filter((electrician) => electrician.status === 'pending').length
-        ? currentElectricians.filter((electrician) => electrician.status === 'pending').length + ' electrician' + (currentElectricians.filter((electrician) => electrician.status === 'pending').length === 1 ? '' : 's') + ' pending approval'
+      newBookingCount ? newBookingCount + ' new booking' + (newBookingCount === 1 ? '' : 's') : null,
+      paymentVerificationCount ? paymentVerificationCount + ' payment' + (paymentVerificationCount === 1 ? '' : 's') + ' pending' : null,
+      pendingElectricianCount
+        ? pendingElectricianCount + ' electrician' + (pendingElectricianCount === 1 ? '' : 's') + ' pending approval'
         : null,
-      currentJobs.filter(isStuckJob).length ? currentJobs.filter(isStuckJob).length + ' stuck job' + (currentJobs.filter(isStuckJob).length === 1 ? '' : 's') : null,
-      currentDisputes.filter((dispute) => dispute.status === 'open').length ? currentDisputes.filter((dispute) => dispute.status === 'open').length + ' open dispute' + (currentDisputes.filter((dispute) => dispute.status === 'open').length === 1 ? '' : 's') : null
+      manualAssignmentCount ? manualAssignmentCount + ' manual assignment' + (manualAssignmentCount === 1 ? '' : 's') : null
     ].filter(Boolean);
 
     if ($('#admin-action-banner')) {
@@ -300,28 +301,24 @@
     });
 
     const stats = {
-      totalJobsToday: currentJobs.filter((job) => new Date(job.createdAt) >= todayStart).length,
-      completedJobs: currentJobs.filter(isCompletedJob).length,
-      pendingJobs: currentJobs.filter((job) => !isCompletedJob(job) && job.status !== 'cancelled').length,
-      activeElectricians: currentElectricians.filter((electrician) => electrician.status === 'approved' && electrician.availability_status === 'available').length,
-      rejectedJobs: currentJobs.filter((job) => hasRejectedTimeline(job)).length
+      newBookings: newBookingCount,
+      pendingElectricians: pendingElectricianCount,
+      manualAssignments: manualAssignmentCount,
+      paymentVerification: paymentVerificationCount
     };
 
     $('#admin-stats').innerHTML = [
-      statCard('📅', stats.totalJobsToday, 'Total jobs today'),
-      statCard('✅', stats.completedJobs, 'Completed jobs'),
-      statCard('🕒', stats.pendingJobs, 'Pending jobs'),
-      statCard('⚡', stats.activeElectricians, 'Active electricians'),
-      statCard('↩️', stats.rejectedJobs, 'Rejected jobs')
+      statCard('⚡', stats.newBookings, 'New bookings'),
+      statCard('🧰', stats.pendingElectricians, 'Pending electricians'),
+      statCard('🕒', stats.manualAssignments, 'Manual assignment'),
+      statCard('💳', stats.paymentVerification, 'Payment verification')
     ].join('');
 
     $('#admin-control-queue').innerHTML = [
-      queueCard('Pending electricians', currentElectricians.filter((electrician) => electrician.status === 'pending').length, 'Review onboarding and approve or reject electricians.', 'admin-electricians'),
-      queueCard('Dispatch queue', currentJobs.filter((job) => job.status === 'matching' || job.needsManualAssignment).length, 'Override matching and reassign jobs that are stuck.', 'admin-requests'),
-      queueCard('Payment queue', currentPayments.length, 'Verify payment proofs manually before work moves forward.', 'admin-finance'),
-      queueCard('Payout queue', currentJobs.filter((job) => ['customer_confirmed', 'payout_pending'].includes(job.status)).length, 'Release electrician payouts once jobs are complete.', 'admin-finance'),
-      queueCard('Disputes', currentDisputes.filter((dispute) => dispute.status === 'open').length, 'Review customer issues and resolve them manually.', 'admin-disputes'),
-      queueCard('Trust desk', currentAppeals.filter((appeal) => appeal.status === 'open').length + currentElectricians.filter((electrician) => electrician.watchlist).length, 'Review appeals, watchlist cases, and poor ratings.', 'admin-trust')
+      queueCard('New bookings', newBookingCount, 'Review fresh requests and keep dispatch moving.', 'admin-requests'),
+      queueCard('Pending electricians', pendingElectricianCount, 'Review onboarding and approve or reject electricians.', 'admin-electricians'),
+      queueCard('Manual assignment', manualAssignmentCount, 'Assign or reassign jobs that need admin help.', 'admin-requests'),
+      queueCard('Payment verification', paymentVerificationCount, 'Verify payment proofs before work moves forward.', 'admin-finance')
     ].join('');
     $('#admin-control-queue').querySelectorAll('.admin-queue-card').forEach((card) => {
       card.addEventListener('click', () => navigateTo(card.dataset.target));
@@ -696,6 +693,12 @@
       '<button class="btn-primary btn-full" id="btn-save-settings">Save Settings</button>' +
       '<div style="margin-top:16px"><button class="btn-secondary btn-full" id="btn-open-expertise">Manage Expertise Categories</button></div>' +
       '<div style="margin-top:16px"><button class="btn-secondary btn-full" id="btn-open-prices">Manage Workmanship Prices</button></div>' +
+      '<div style="margin-top:20px" class="admin-section-title">Advanced Operations</div>' +
+      '<div style="display:grid;gap:12px;margin-top:12px">' +
+        '<button class="btn-secondary btn-full" id="btn-open-jobs">All Jobs</button>' +
+        '<button class="btn-secondary btn-full" id="btn-open-trust">Trust &amp; Appeals</button>' +
+        '<button class="btn-secondary btn-full" id="btn-open-disputes">Disputes</button>' +
+      '</div>' +
       '<div style="margin-top:16px"><button class="btn-ghost" id="btn-admin-logout" style="width:100%;color:var(--red)">Logout</button></div>';
 
     $('#btn-save-settings').addEventListener('click', saveSettings);
@@ -707,6 +710,9 @@
       navigateTo('admin-prices');
       renderPrices();
     });
+    $('#btn-open-jobs').addEventListener('click', () => navigateTo('admin-jobs'));
+    $('#btn-open-trust').addEventListener('click', () => navigateTo('admin-trust'));
+    $('#btn-open-disputes').addEventListener('click', () => navigateTo('admin-disputes'));
     $('#btn-admin-logout').addEventListener('click', handleLogout);
   }
 
@@ -1510,9 +1516,8 @@
 
   function adminNavScreen(screen) {
     if (['admin-request-detail'].includes(screen)) return 'admin-requests';
-    if (['admin-job-detail', 'admin-materials', 'admin-chats'].includes(screen)) return 'admin-jobs';
     if (['admin-elec-detail'].includes(screen)) return 'admin-electricians';
-    if (['admin-expertise', 'admin-prices'].includes(screen)) return 'admin-settings';
+    if (['admin-jobs', 'admin-job-detail', 'admin-materials', 'admin-chats', 'admin-trust', 'admin-disputes', 'admin-expertise', 'admin-prices'].includes(screen)) return 'admin-settings';
     return screen;
   }
 
@@ -1525,6 +1530,10 @@
 
   function buildAlerts() {
     const alerts = [];
+    const newBookingCount = currentJobs.filter((job) => ['requested', 'matching', 'assigned'].includes(job.status) || job.needsManualAssignment).length;
+    if (newBookingCount) {
+      alerts.push({ tag: 'Bookings', label: 'New bookings', count: newBookingCount + ' request(s) need dispatch attention', target: 'admin-requests' });
+    }
     if (currentPayments.length) {
       alerts.push({ tag: 'Payment', label: 'Pending payments', count: currentPayments.length + ' proof submission(s) need review', target: 'admin-finance' });
     }
@@ -1535,10 +1544,6 @@
     const stuckCount = currentJobs.filter(isStuckJob).length;
     if (stuckCount) {
       alerts.push({ tag: 'Dispatch', label: 'Stuck jobs', count: stuckCount + ' job(s) need intervention', target: 'admin-requests' });
-    }
-    const disputeCount = currentDisputes.filter((dispute) => dispute.status === 'open').length;
-    if (disputeCount) {
-      alerts.push({ tag: 'Disputes', label: 'Open disputes', count: disputeCount + ' customer issue(s) require action', target: 'admin-disputes' });
     }
     return alerts;
   }

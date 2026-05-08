@@ -25,7 +25,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/css/shared.css?v=20260506-apply-test" />
-  <link rel="stylesheet" href="/css/customer.css?v=20260506-tracking-ref" />
+  <link rel="stylesheet" href="/css/customer.css?v=20260508-auditor-location-hotfix" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
   <link rel="stylesheet" href="/css/home.css?v=20260506-home-company" />
 </head>
@@ -117,10 +117,6 @@
         <h2>Where should we send the <span>electrician?</span></h2>
       </div>
 
-      <select class="form-select" id="service-area-select" style="display:none;">
-        <option value="">Select a service area</option>
-      </select>
-
       <div class="booking-location-options" id="address-mode-tabs" role="tablist" aria-label="Choose location method">
         <button class="location-option-card active" type="button" data-address-mode="gps" id="location-option-gps">
           <span class="location-option-icon" aria-hidden="true">
@@ -143,7 +139,7 @@
           </span>
           <span class="location-option-copy">
             <strong>Enter address</strong>
-            <span id="manual-location-summary">Type your estate, street, or area</span>
+            <span id="manual-location-summary">Country, state, city, and street address</span>
           </span>
           <span class="location-option-arrow" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
@@ -152,9 +148,38 @@
       </div>
 
       <div class="manual-location-sheet" id="manual-location-sheet" style="display:none;">
+        <div class="manual-address-helper">VoltFriq uses this to route the nearest available electrician. You can continue without GPS.</div>
         <div class="form-group">
-          <label class="form-label">Address or area</label>
-          <input type="text" class="form-input" id="manual-location-input" placeholder="Enter your estate, street, area, or city" />
+          <label class="form-label">Country</label>
+          <select class="form-select" id="manual-country">
+            <option value="Nigeria" selected>Nigeria</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">State</label>
+          <select class="form-select" id="manual-state">
+            <option value="">Select state</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">City / LGA</label>
+          <select class="form-select" id="manual-city">
+            <option value="">Select city or LGA</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Street Address / House Number</label>
+          <input type="text" class="form-input" id="manual-street-address" placeholder="Example: No. 12 Ada George Road" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Landmark <span class="optional">(optional)</span></label>
+          <input type="text" class="form-input" id="manual-landmark" placeholder="Example: near Genesis Cinema" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Closest Service Area</label>
+          <select class="form-select" id="service-area-select">
+            <option value="">Select a service area</option>
+          </select>
         </div>
       </div>
 
@@ -848,12 +873,12 @@
 
   <script src="/vendor/supabase.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/api/env.js?v=20260508-customer-escape-hotfix"></script>
+  <script src="/api/env.js?v=20260508-auditor-location-hotfix"></script>
   <script src="/js/config.js?v=20260506-auth-booking"></script>
-  <script src="/js/store.js?v=20260508-customer-escape-hotfix"></script>
+  <script src="/js/store.js?v=20260508-auditor-location-hotfix"></script>
   <script src="/js/navigation.js?v=20260506-auth-booking-2"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/customer.js?v=20260508-customer-escape-hotfix"></script>
-  <script src="/js/sw-register.js?v=20260508-customer-escape-hotfix"></script>
+  <script src="/js/customer.js?v=20260508-auditor-location-hotfix"></script>
+  <script src="/js/sw-register.js?v=20260508-auditor-location-hotfix"></script>
 </body>
 </html>

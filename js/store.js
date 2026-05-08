@@ -526,6 +526,87 @@ const Store = (() => {
     return next;
   }
 
+  function normalizeLocationText(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function addressSearchText(input) {
+    if (typeof input === 'string') return normalizeLocationText(input);
+    const raw = input || {};
+    return normalizeLocationText([
+      raw.serviceArea,
+      raw.service_area,
+      raw.locationLabel,
+      raw.location_label,
+      raw.streetAddress,
+      raw.street_address,
+      raw.landmark,
+      raw.city,
+      raw.state,
+      raw.country
+    ].filter(Boolean).join(' '));
+  }
+
+  function areaName(area) {
+    return String(area || '').split(',')[0].trim();
+  }
+
+  function inferServiceAreaFromAddress(input) {
+    const text = addressSearchText(input);
+    const areas = getServiceAreas();
+    if (!text || !areas.length) return '';
+    const explicit = String((input && (input.serviceArea || input.service_area || input.closestServiceArea)) || '').trim();
+    if (explicit) {
+      const explicitMatch = areas.find((area) => area.toLowerCase() === explicit.toLowerCase());
+      if (explicitMatch) return explicitMatch;
+    }
+
+    const keywords = [
+      'ada george',
+      'old gra',
+      'new gra',
+      'gra',
+      'd line',
+      'd-line',
+      'trans amadi',
+      'woji',
+      'rumuola',
+      'rumuodomaya',
+      'rumuokoro',
+      'rumuigbo',
+      'eliozu',
+      'elelenwo',
+      'mile 1',
+      'mile 3',
+      'choba'
+    ];
+    let best = { area: '', score: 0 };
+    areas.forEach((area) => {
+      const normalizedArea = normalizeLocationText(area);
+      const normalizedAreaName = normalizeLocationText(areaName(area));
+      let score = 0;
+      if (text.includes(normalizedArea)) score += 120;
+      if (normalizedAreaName && text.includes(normalizedAreaName)) score += 100;
+      if (normalizedAreaName && normalizedAreaName.split(' ').every((word) => text.includes(word))) score += 60;
+      keywords.forEach((keyword) => {
+        const normalizedKeyword = normalizeLocationText(keyword);
+        if (normalizedKeyword && text.includes(normalizedKeyword) && normalizedArea.includes(normalizedKeyword)) {
+          score += 150;
+        }
+      });
+      if (input && input.city && normalizedArea.includes(normalizeLocationText(input.city))) score += 12;
+      if (input && input.state && normalizedArea.includes(normalizeLocationText(input.state))) score += 8;
+      if (score > best.score) best = { area, score };
+    });
+
+    return best.score >= 20 ? best.area : '';
+  }
+
   function getServiceAreas() {
     return (state.settings && Array.isArray(state.settings.service_areas) && state.settings.service_areas.length)
       ? state.settings.service_areas.slice()
@@ -689,7 +770,7 @@ const Store = (() => {
       status: 'pending',
       years_experience: payload.yearsExperience || 0,
       service_areas: payload.serviceAreas || [],
-      location_label: payload.locationLabel || null,
+      location_label: payload.locationLabel || payload.baseLocationLabel || payload.base_location_label || null,
       latitude: payload.latitude || null,
       longitude: payload.longitude || null,
       bank_name: payload.bankName || '',
@@ -801,7 +882,12 @@ const Store = (() => {
           requested_role: 'electrician',
           full_name: payload.fullName,
           phone: payload.phone || '',
+          country: payload.country || 'Nigeria',
+          state: payload.state || '',
+          city: payload.city || '',
+          street_address: payload.street_address || payload.streetAddress || '',
           location_label: payload.locationLabel || '',
+          base_location_label: payload.baseLocationLabel || payload.base_location_label || payload.locationLabel || '',
           years_experience: payload.yearsExperience || 0,
           availability_status: payload.availabilityStatus || 'available',
           service_areas: payload.serviceAreas || [],
@@ -2067,6 +2153,7 @@ const Store = (() => {
     getRoleHome,
     getSettings,
     getServiceAreas,
+    inferServiceAreaFromAddress,
     getStatusLabel,
     getPaymentStatusLabel,
     formatCurrency,

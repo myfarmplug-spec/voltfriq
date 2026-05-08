@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voltfriq-shell-v20260508-customer-escape-hotfix';
+const CACHE_NAME = 'voltfriq-shell-v20260508-auditor-location-hotfix';
 const APP_SHELL = [
   '/offline.html',
   '/manifest.json',

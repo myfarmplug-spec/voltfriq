@@ -2927,6 +2927,17 @@
   padding: 20px;
 }
 
+.manual-location-sheet {
+  display: grid;
+  gap: 14px;
+}
+
+.manual-address-helper {
+  color: var(--text-secondary);
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
 .helper-note,
 #gps-location-panel,
 #manual-location-panel,
@@ -3366,6 +3377,36 @@
 
 .review-summary-dot {
   color: var(--yellow);
+}
+
+.booking-readiness-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.booking-readiness-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  font-weight: 680;
+}
+
+.booking-readiness-item strong {
+  color: #fca5a5;
+  font-size: 0.82rem;
+}
+
+.booking-readiness-item.is-ready strong {
+  color: #86efac;
 }
 
 #screen-match .review-trust-strip {

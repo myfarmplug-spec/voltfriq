@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/shared.css?v=20260506-apply-test" />
-  <link rel="stylesheet" href="/css/electrician.css?v=20260507-audit-fix" />
+  <link rel="stylesheet" href="/css/electrician.css?v=20260508-auditor-location-hotfix" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
 </head>
 <body>
@@ -85,10 +85,33 @@
         <label class="form-label">Password</label>
         <input type="password" class="form-input" id="reg-password" placeholder="Create a password" />
       </div>
+      <div class="elec-reg-note">Your address helps VoltFriq assign jobs within areas you can realistically reach.</div>
       <div class="form-group">
-        <label class="form-label">Location</label>
+        <label class="form-label">Country</label>
+        <select class="form-select" id="reg-country">
+          <option value="Nigeria" selected>Nigeria</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">State</label>
+        <select class="form-select" id="reg-state">
+          <option value="">Select state</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">City / LGA</label>
+        <select class="form-select" id="reg-city">
+          <option value="">Select city or LGA</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Street Address / House Number</label>
+        <input type="text" class="form-input" id="reg-street-address" placeholder="Example: No. 12 Ada George Road" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Closest Service Area</label>
         <select class="form-select" id="reg-location">
-          <option value="">Select your closest service area</option>
+          <option value="">Select closest service area</option>
         </select>
       </div>
       <div class="form-group">
@@ -118,14 +141,14 @@
       <div class="elec-reg-note">Choose the areas where you can comfortably accept jobs. You can update this later from your profile.</div>
 
       <div class="form-group">
-        <label class="form-label">Availability Status</label>
+        <label class="form-label">Are you available to receive jobs?</label>
         <select class="form-select" id="reg-availability-status">
           <option value="available">Available for jobs</option>
           <option value="offline">Offline for now</option>
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Service Areas</label>
+        <label class="form-label">Where can you comfortably work?</label>
         <div class="skills-grid" id="reg-service-areas"></div>
       </div>
 
@@ -719,12 +742,12 @@
   </div>
 
   <script src="/vendor/supabase.min.js"></script>
-  <script src="/api/env.js?v=20260508-customer-escape-hotfix"></script>
+  <script src="/api/env.js?v=20260508-auditor-location-hotfix"></script>
   <script src="/js/config.js?v=20260506-auth-booking"></script>
-  <script src="/js/store.js?v=20260508-customer-escape-hotfix"></script>
+  <script src="/js/store.js?v=20260508-auditor-location-hotfix"></script>
   <script src="/js/navigation.js?v=20260506-auth-booking-2"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/electrician.js?v=20260508-customer-escape-hotfix"></script>
-  <script src="/js/sw-register.js?v=20260508-customer-escape-hotfix"></script>
+  <script src="/js/electrician.js?v=20260508-auditor-location-hotfix"></script>
+  <script src="/js/sw-register.js?v=20260508-auditor-location-hotfix"></script>
 </body>
 </html>

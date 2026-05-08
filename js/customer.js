@@ -36,6 +36,11 @@
   const draft = {
     serviceArea: '',
     locationLabel: '',
+    country: 'Nigeria',
+    state: '',
+    city: '',
+    streetAddress: '',
+    landmark: '',
     latitude: null,
     longitude: null,
     addressSource: '',
@@ -52,6 +57,12 @@
   };
 
   const CUSTOMER_DRAFT_KEY = 'voltfriq_customer_draft_v1';
+  const DEFAULT_COUNTRY = 'Nigeria';
+  const SUPPORTED_STATES = ['Rivers', 'Imo'];
+  const CITY_OPTIONS = {
+    Rivers: ['Port Harcourt', 'Obio-Akpor', 'Eleme', 'Oyigbo', 'Ikwerre'],
+    Imo: ['Owerri Municipal', 'Owerri North', 'Owerri West', 'Orlu', 'Okigwe']
+  };
 
   function wantsPasswordReset() {
     const query = new URLSearchParams(window.location.search || '');
@@ -173,11 +184,28 @@
     });
 
     on('service-area-select', 'change', () => {
-      draft.serviceArea = document.getElementById('service-area-select').value;
-      if (!document.getElementById('manual-location-input').value.trim()) {
-        draft.locationLabel = draft.serviceArea;
-      }
-      persistDraftState();
+      syncManualAddressDraft();
+      updateAvailabilityCard();
+    });
+    on('manual-country', 'change', () => {
+      syncManualAddressDraft();
+      updateAvailabilityCard();
+    });
+    on('manual-state', 'change', () => {
+      renderManualCityOptions();
+      syncManualAddressDraft();
+      updateAvailabilityCard();
+    });
+    on('manual-city', 'change', () => {
+      syncManualAddressDraft();
+      updateAvailabilityCard();
+    });
+    on('manual-street-address', 'input', () => {
+      syncManualAddressDraft();
+      updateAvailabilityCard();
+    });
+    on('manual-landmark', 'input', () => {
+      syncManualAddressDraft();
       updateAvailabilityCard();
     });
     const addressTabs = document.getElementById('address-mode-tabs');
@@ -188,23 +216,12 @@
         setAddressMode(button.dataset.addressMode);
       });
     }
-    on('manual-location-input', 'input', () => {
-      const manualLocation = document.getElementById('manual-location-input').value.trim();
-      draft.addressSource = 'manual';
-      draft.locationLabel = manualLocation;
-      draft.serviceArea = manualLocation;
-      if (manualLocation) {
-        draft.latitude = null;
-        draft.longitude = null;
-      }
-      persistDraftState();
-      updateAvailabilityCard();
-    });
     on('btn-use-location', 'click', () => useCurrentLocation(false));
     on('btn-use-map-location', 'click', applyMapLocation);
     on('btn-area-continue', 'click', () => {
+      if (addressMode === 'manual') syncManualAddressDraft();
       if (!hasDraftLocation()) {
-        showError('Choose a location before continuing.');
+        showError('Enter country, state, city, and street address before continuing, or use GPS.');
         return;
       }
       goTo('problem');
@@ -580,11 +597,11 @@
 
   function renderSettings() {
     const areas = getConfiguredServiceAreas();
+    renderManualAddressControls();
     const serviceAreaSelect = document.getElementById('service-area-select');
     if (serviceAreaSelect) {
       serviceAreaSelect.innerHTML = '<option value="">Select a service area</option>' +
         areas.map((area) => '<option value="' + escapeAttribute(area) + '">' + escapeHtml(area) + '</option>').join('');
-      serviceAreaSelect.style.display = areas.length ? '' : 'none';
       if (draft.serviceArea) syncServiceAreaSelect(draft.serviceArea);
     }
     renderLocationDatalist(areas);
@@ -606,8 +623,47 @@
       document.body.appendChild(datalist);
     }
     datalist.innerHTML = (areas || []).map((area) => '<option value="' + escapeAttribute(area) + '"></option>').join('');
-    const manualInput = document.getElementById('manual-location-input');
-    if (manualInput) manualInput.setAttribute('list', 'service-area-options');
+  }
+
+  function renderManualAddressControls() {
+    renderSelectOptions('manual-country', [DEFAULT_COUNTRY], draft.country || DEFAULT_COUNTRY, 'Select country');
+    renderSelectOptions('manual-state', SUPPORTED_STATES, draft.state, 'Select state');
+    renderManualCityOptions();
+    setInputValue('manual-street-address', draft.streetAddress);
+    setInputValue('manual-landmark', draft.landmark);
+  }
+
+  function renderManualCityOptions() {
+    const state = getElementValue('manual-state') || draft.state;
+    const cities = CITY_OPTIONS[state] || [];
+    if (draft.city && !cities.some((city) => city.toLowerCase() === draft.city.toLowerCase())) {
+      draft.city = '';
+    }
+    renderSelectOptions('manual-city', cities, draft.city, 'Select city or LGA');
+  }
+
+  function renderSelectOptions(id, options, currentValue, placeholder) {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const cleanValue = String(currentValue || '').trim();
+    select.innerHTML = '<option value="">' + escapeHtml(placeholder || 'Select') + '</option>' +
+      (options || []).map((option) => '<option value="' + escapeAttribute(option) + '">' + escapeHtml(option) + '</option>').join('');
+    if (cleanValue && (options || []).some((option) => option.toLowerCase() === cleanValue.toLowerCase())) {
+      const match = (options || []).find((option) => option.toLowerCase() === cleanValue.toLowerCase());
+      select.value = match;
+    } else if (id === 'manual-country' && !cleanValue) {
+      select.value = DEFAULT_COUNTRY;
+    }
+  }
+
+  function setInputValue(id, value) {
+    const input = document.getElementById(id);
+    if (input && document.activeElement !== input) input.value = value || '';
+  }
+
+  function getElementValue(id) {
+    const element = document.getElementById(id);
+    return element ? String(element.value || '').trim() : '';
   }
 
   function syncServiceAreaSelect(value) {
@@ -685,8 +741,11 @@
       useCurrentLocation(!!(options && options.autoStarted));
     }
     if (addressMode === 'manual') {
+      if (!draft.country) draft.country = DEFAULT_COUNTRY;
+      renderManualAddressControls();
+      syncManualAddressDraft();
       window.setTimeout(() => {
-        const input = document.getElementById('manual-location-input');
+        const input = document.getElementById('manual-street-address');
         if (input) input.focus();
       }, 80);
     }
@@ -715,8 +774,6 @@
     draft.latitude = normalized.latitude == null ? null : Number(normalized.latitude);
     draft.longitude = normalized.longitude == null ? null : Number(normalized.longitude);
     draft.addressSource = source || normalized.source || 'saved';
-    const manualInput = document.getElementById('manual-location-input');
-    if (manualInput) manualInput.value = normalized.addressText || label;
     syncServiceAreaSelect(label);
     const detectedCard = document.getElementById('detected-location-card');
     const detectedText = document.getElementById('detected-location-text');
@@ -733,6 +790,79 @@
     renderSavedAddresses();
     persistDraftState();
     updateAvailabilityCard();
+  }
+
+  function syncManualAddressDraft() {
+    const country = getElementValue('manual-country') || DEFAULT_COUNTRY;
+    const state = getElementValue('manual-state');
+    const city = getElementValue('manual-city');
+    const streetAddress = getElementValue('manual-street-address');
+    const landmark = getElementValue('manual-landmark');
+    const closestServiceArea = getElementValue('service-area-select');
+
+    draft.country = country;
+    draft.state = state;
+    draft.city = city;
+    draft.streetAddress = streetAddress;
+    draft.landmark = landmark;
+
+    const hasManualInput = Boolean(country || state || city || streetAddress || landmark || closestServiceArea);
+    if (hasManualInput) {
+      draft.addressSource = 'manual';
+    }
+
+    if (streetAddress) {
+      draft.latitude = null;
+      draft.longitude = null;
+    }
+
+    const manualLabel = composeManualLocationLabel();
+    if (manualLabel) {
+      draft.locationLabel = manualLabel;
+    } else if (draft.addressSource === 'manual') {
+      draft.locationLabel = '';
+    }
+    const inferredServiceArea = Store.inferServiceAreaFromAddress
+      ? Store.inferServiceAreaFromAddress({
+          serviceArea: closestServiceArea,
+          locationLabel: manualLabel,
+          streetAddress,
+          landmark,
+          city,
+          state,
+          country
+        })
+      : '';
+    draft.serviceArea = closestServiceArea || inferredServiceArea || manualServiceAreaFallback();
+    if (!closestServiceArea && inferredServiceArea) {
+      syncServiceAreaSelect(inferredServiceArea);
+    }
+    updateManualLocationSummary();
+    persistDraftState();
+  }
+
+  function composeManualLocationLabel() {
+    if (!draft.streetAddress) return '';
+    return [draft.streetAddress, draft.landmark, draft.city, draft.state, draft.country]
+      .map((part) => String(part || '').trim())
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  function manualServiceAreaFallback() {
+    return [draft.city, draft.state].filter(Boolean).join(', ') || draft.locationLabel || '';
+  }
+
+  function hasManualAddress() {
+    return Boolean(draft.country && draft.state && draft.city && draft.streetAddress);
+  }
+
+  function updateManualLocationSummary() {
+    const summary = document.getElementById('manual-location-summary');
+    if (!summary) return;
+    summary.textContent = hasManualAddress()
+      ? composeManualLocationLabel()
+      : 'Country, state, city, and street address';
   }
 
   function bindChoiceRow(id, callback) {
@@ -921,35 +1051,54 @@
   }
 
   function updateAvailabilityCard() {
-    const selectedArea = document.getElementById('service-area-select').value;
-    const manualLocation = document.getElementById('manual-location-input').value.trim();
-    draft.serviceArea = selectedArea || (manualLocation || draft.serviceArea);
-    if (manualLocation) {
-      draft.locationLabel = manualLocation;
-    } else if (selectedArea) {
-      draft.locationLabel = selectedArea;
-    } else if (!draft.latitude || !draft.longitude) {
-      draft.locationLabel = '';
-      draft.serviceArea = '';
+    if (addressMode === 'manual' || draft.addressSource === 'manual') {
+      syncManualAddressDraft();
     }
-    const hasLocation = !!(draft.serviceArea || draft.locationLabel || (draft.latitude && draft.longitude));
+    const bookingLocation = getFinalBookingLocation();
+    const hasLocation = Boolean(bookingLocation.locationLabel);
     document.getElementById('availability-count').textContent = hasLocation ? 'Ready' : 'Waiting';
     document.getElementById('availability-meta').textContent = hasLocation
-      ? 'Location saved.'
-      : 'Enter an area or use current location.';
+      ? 'Location saved. You can continue without GPS.'
+      : 'Enter your street address or use current location.';
     document.getElementById('btn-area-continue').disabled = !hasLocation;
     persistDraftState();
   }
 
+  function getFinalBookingLocation() {
+    if (draft.addressSource === 'manual' || addressMode === 'manual') {
+      syncManualAddressDraft();
+    }
+    const locationLabel = String(draft.locationLabel || composeManualLocationLabel() || '').trim();
+    const inferredServiceArea = Store.inferServiceAreaFromAddress
+      ? Store.inferServiceAreaFromAddress({
+          serviceArea: draft.serviceArea,
+          locationLabel,
+          streetAddress: draft.streetAddress,
+          landmark: draft.landmark,
+          city: draft.city,
+          state: draft.state,
+          country: draft.country
+        })
+      : '';
+    const serviceArea = String(draft.serviceArea || inferredServiceArea || manualServiceAreaFallback() || locationLabel).trim();
+    return {
+      locationLabel,
+      serviceArea,
+      latitude: draft.latitude == null ? null : draft.latitude,
+      longitude: draft.longitude == null ? null : draft.longitude
+    };
+  }
+
   function hasDraftLocation() {
-    return !!(draft.serviceArea || draft.locationLabel || (draft.latitude != null && draft.longitude != null));
+    return Boolean(getFinalBookingLocation().locationLabel);
   }
 
   function syncProblemSummary() {
     const areaLabel = document.getElementById('problem-area-label');
     const availabilityPill = document.getElementById('problem-availability-pill');
-    if (areaLabel) areaLabel.textContent = draft.locationLabel || draft.serviceArea || '--';
-    if (availabilityPill) availabilityPill.textContent = (draft.locationLabel || draft.serviceArea) ? 'Ready to book' : 'No area';
+    const bookingLocation = getFinalBookingLocation();
+    if (areaLabel) areaLabel.textContent = bookingLocation.locationLabel || bookingLocation.serviceArea || '--';
+    if (availabilityPill) availabilityPill.textContent = bookingLocation.locationLabel ? 'Ready to book' : 'No area';
   }
 
   function updateReviewButton() {
@@ -1050,6 +1199,7 @@
     if (!needsPhone) {
       if (button) button.disabled = false;
       if (note) note.style.display = 'none';
+      renderBookingReadinessChecklist();
       return true;
     }
 
@@ -1058,6 +1208,7 @@
 
     if (button) button.disabled = !phoneValid;
 
+    renderBookingReadinessChecklist();
     if (!note) return phoneValid;
     note.style.display = 'block';
     note.classList.remove('is-warning', 'is-success');
@@ -1088,6 +1239,40 @@
     return true;
   }
 
+  function getBookingReadiness() {
+    const profile = Store.getCurrentProfile();
+    const bookingLocation = getFinalBookingLocation();
+    return [
+      {
+        label: 'Phone',
+        ready: Boolean((profile && isValidPhone(profile.phone)) || isValidPhone(draft.guestPhone))
+      },
+      {
+        label: 'Location',
+        ready: Boolean(bookingLocation.locationLabel)
+      },
+      {
+        label: 'Issue',
+        ready: Boolean(draft.issueCategory)
+      },
+      {
+        label: 'Urgency',
+        ready: Boolean(draft.urgency)
+      }
+    ];
+  }
+
+  function renderBookingReadinessChecklist() {
+    const list = document.getElementById('booking-readiness-list');
+    if (!list) return;
+    list.innerHTML = getBookingReadiness().map((item) => {
+      return '<div class="booking-readiness-item' + (item.ready ? ' is-ready' : '') + '">' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '<strong>' + (item.ready ? 'Ready' : 'Missing') + '</strong>' +
+      '</div>';
+    }).join('');
+  }
+
   async function previewMatch(sourceButtonId) {
     const buttonId = sourceButtonId || 'btn-details-review';
     await withButtonLoading(buttonId, 'Preparing Review...', async () => {
@@ -1103,6 +1288,7 @@
     const issueEstimate = getIssueEstimate(draft.issueCategory, draft.issueLabel);
     const urgencyLabel = formatUrgencyLabel(draft.urgency || 'emergency');
     const assessmentValue = Store.formatCurrency(0);
+    const bookingLocation = getFinalBookingLocation();
 
     renderReviewContact();
     if (transparency) transparency.style.display = '';
@@ -1118,7 +1304,7 @@
         '</div>',
         '<div class="review-summary-row">',
           '<span class="review-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M12 21s7-4.5 7-10a7 7 0 1 0-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg></span>',
-          '<div class="review-summary-copy"><strong>' + escapeHtml(draft.locationLabel || draft.serviceArea || '--') + '</strong></div>',
+          '<div class="review-summary-copy"><strong>' + escapeHtml(bookingLocation.locationLabel || bookingLocation.serviceArea || '--') + '</strong></div>',
         '</div>',
         '<div class="review-summary-row">',
           '<span class="review-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18"/><path d="M6 4h12l2 3v13H4V7l2-3Z"/><path d="M7 11h10"/><path d="M7 15h6"/></svg></span>',
@@ -1128,7 +1314,8 @@
           '<span class="review-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8l-1.3 1.3a16 16 0 0 0 6.4 6.4l1.3-1.3a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9Z"/></svg></span>',
           '<div class="review-summary-copy"><strong>' + escapeHtml(getBookingContactLabel()) + '</strong></div>',
         '</div>',
-      '</div>'
+      '</div>',
+      '<div class="booking-readiness-list" id="booking-readiness-list"></div>'
     ].join('');
     if (transparency) {
       transparency.innerHTML = '<div class="review-assessment-row"><span class="review-assessment-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></span><span class="review-assessment-label">Assessment visit: ' + escapeHtml(assessmentValue) + '</span><span class="review-assessment-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></div>';
@@ -1326,7 +1513,11 @@
   }
 
   async function continueFromMatch() {
-    if (!hasDraftLocation()) {
+    if (draft.addressSource === 'manual' || addressMode === 'manual') {
+      syncManualAddressDraft();
+    }
+    const bookingLocation = getFinalBookingLocation();
+    if (!bookingLocation.locationLabel) {
       goTo('service-area');
       showError('Choose a location before submitting.');
       return;
@@ -1350,10 +1541,10 @@
         await Store.updateProfile({ phone: draft.guestPhone });
       }
       const bookingPayload = {
-        serviceArea: draft.serviceArea || draft.locationLabel,
-        locationLabel: draft.locationLabel || draft.serviceArea,
-        latitude: draft.latitude,
-        longitude: draft.longitude,
+        serviceArea: bookingLocation.serviceArea,
+        locationLabel: bookingLocation.locationLabel,
+        latitude: bookingLocation.latitude,
+        longitude: bookingLocation.longitude,
         issueCategory: draft.issueCategory,
         urgency: draft.urgency,
         note: draft.note,
@@ -1515,8 +1706,36 @@
 
   function renderAssigned(job) {
     currentTrackedTicket = job.ticket || currentTrackedTicket;
+    renderTrackingHero(job);
     renderTrackingProgress(job);
     renderTrackingDetails(job);
+  }
+
+  function renderTrackingHero(job) {
+    const title = document.getElementById('tracking-hero-title');
+    const sub = document.getElementById('tracking-hero-sub');
+    const note = document.getElementById('tracking-hero-note');
+    if (!title || !sub || !note) return;
+
+    if (job && job.needsManualAssignment) {
+      title.textContent = 'VoltFriq admin is assigning your electrician';
+      sub.textContent = 'No electrician is available automatically yet. Your request has been sent for manual assignment.';
+      note.textContent = 'You do not need to book again. This page will update when someone is assigned.';
+      return;
+    }
+
+    if (job && job.assignedElectrician) {
+      title.textContent = 'Your VoltFriq has been assigned';
+      sub.textContent = job.assignedElectrician.name
+        ? job.assignedElectrician.name + ' is attached to this booking.'
+        : 'A verified electrician is attached to this booking.';
+      note.textContent = 'Keep this page open for the next job update.';
+      return;
+    }
+
+    title.innerHTML = 'We are pairing you with the best <span>VoltFriq</span>';
+    sub.textContent = 'Finding a verified electrician near you...';
+    note.textContent = 'This usually takes less than a minute.';
   }
 
   function getTrackingStageIndex(job) {
@@ -1542,9 +1761,10 @@
     if (!container) return;
     const activeIndex = getTrackingStageIndex(job);
     const submittedTime = formatTrackingTime(job && job.createdAt);
+    const needsManualAssignment = Boolean(job && job.needsManualAssignment);
     const steps = [
       { title: 'Submitted', sub: submittedTime, icon: 'check' },
-      { title: 'Pairing', sub: activeIndex === 1 ? 'In progress' : 'Done', icon: 'bolt' },
+      { title: 'Pairing', sub: needsManualAssignment ? 'Admin assigning' : activeIndex === 1 ? 'In progress' : 'Done', icon: 'bolt' },
       { title: 'Assigned', sub: activeIndex >= 2 ? 'Done' : 'Pending', icon: 'person' },
       { title: 'On the way', sub: activeIndex >= 3 ? 'In progress' : 'Pending', icon: 'car' },
       { title: 'Completed', sub: activeIndex >= 4 ? 'Done' : 'Pending', icon: 'flag' }
@@ -2034,6 +2254,11 @@
   function resetDraft() {
     draft.serviceArea = '';
     draft.locationLabel = '';
+    draft.country = DEFAULT_COUNTRY;
+    draft.state = '';
+    draft.city = '';
+    draft.streetAddress = '';
+    draft.landmark = '';
     draft.latitude = null;
     draft.longitude = null;
     draft.addressSource = '';
@@ -2048,8 +2273,12 @@
     draft.selectedElectricianId = null;
     draft.matches = [];
     uploadedFiles = [];
-    document.getElementById('service-area-select').value = '';
-    document.getElementById('manual-location-input').value = '';
+    if (document.getElementById('service-area-select')) document.getElementById('service-area-select').value = '';
+    if (document.getElementById('manual-country')) document.getElementById('manual-country').value = DEFAULT_COUNTRY;
+    if (document.getElementById('manual-state')) document.getElementById('manual-state').value = '';
+    if (document.getElementById('manual-city')) document.getElementById('manual-city').value = '';
+    if (document.getElementById('manual-street-address')) document.getElementById('manual-street-address').value = '';
+    if (document.getElementById('manual-landmark')) document.getElementById('manual-landmark').value = '';
     document.getElementById('problem-category').value = '';
     document.getElementById('problem-desc').value = '';
     if (document.getElementById('review-phone')) document.getElementById('review-phone').value = '';
@@ -2081,6 +2310,11 @@
       window.sessionStorage.setItem(CUSTOMER_DRAFT_KEY, JSON.stringify({
         serviceArea: draft.serviceArea,
         locationLabel: draft.locationLabel,
+        country: draft.country,
+        state: draft.state,
+        city: draft.city,
+        streetAddress: draft.streetAddress,
+        landmark: draft.landmark,
         latitude: draft.latitude,
         longitude: draft.longitude,
         addressSource: draft.addressSource,
@@ -2105,6 +2339,11 @@
       const stored = JSON.parse(raw);
       draft.serviceArea = stored.serviceArea || '';
       draft.locationLabel = stored.locationLabel || '';
+      draft.country = stored.country || DEFAULT_COUNTRY;
+      draft.state = stored.state || '';
+      draft.city = stored.city || '';
+      draft.streetAddress = stored.streetAddress || '';
+      draft.landmark = stored.landmark || '';
       draft.latitude = stored.latitude == null ? null : Number(stored.latitude);
       draft.longitude = stored.longitude == null ? null : Number(stored.longitude);
       draft.addressSource = stored.addressSource || '';
@@ -2116,6 +2355,8 @@
       draft.materialHandling = stored.materialHandling || 'voltfriq_supplied';
       draft.note = stored.note || '';
       draft.guestPhone = stored.guestPhone || '';
+      renderManualAddressControls();
+      updateManualLocationSummary();
     } catch (error) {
       // Ignore broken draft snapshots.
     }
@@ -2407,7 +2648,7 @@
       let target = null;
       if (screen === 'service-area') {
         target = addressMode === 'manual'
-          ? document.getElementById('manual-location-input')
+          ? document.getElementById('manual-street-address')
           : document.getElementById('service-area-select');
       } else if (screen === 'problem') {
         target = document.getElementById('problem-desc');

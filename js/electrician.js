@@ -20,6 +20,12 @@ const ElecApp = (() => {
   let pendingElectricianRoute = null;
   let pendingElectricianSignupPayload = null;
   const PENDING_SIGNUP_KEY = 'voltfriq_pending_electrician_signup';
+  const DEFAULT_COUNTRY = 'Nigeria';
+  const SUPPORTED_STATES = ['Rivers', 'Imo'];
+  const CITY_OPTIONS = {
+    Rivers: ['Port Harcourt', 'Obio-Akpor', 'Eleme', 'Oyigbo', 'Ikwerre'],
+    Imo: ['Owerri Municipal', 'Owerri North', 'Owerri West', 'Orlu', 'Okigwe']
+  };
 
   function wantsPasswordReset() {
     const query = new URLSearchParams(window.location.search || '');
@@ -38,10 +44,19 @@ const ElecApp = (() => {
       fullName: payload.fullName || '',
       phone: payload.phone || '',
       email: payload.email || '',
+      country: payload.country || DEFAULT_COUNTRY,
+      state: payload.state || '',
+      city: payload.city || '',
+      streetAddress: payload.streetAddress || payload.street_address || '',
+      street_address: payload.street_address || payload.streetAddress || '',
       locationLabel: payload.locationLabel || '',
+      location_label: payload.location_label || payload.locationLabel || '',
+      baseLocationLabel: payload.baseLocationLabel || payload.base_location_label || payload.locationLabel || payload.location_label || '',
+      base_location_label: payload.base_location_label || payload.baseLocationLabel || payload.location_label || payload.locationLabel || '',
       yearsExperience: payload.yearsExperience || 0,
       availabilityStatus: payload.availabilityStatus || 'available',
       serviceAreas: payload.serviceAreas || [],
+      service_areas: payload.service_areas || payload.serviceAreas || [],
       skills: payload.skills || [],
       bankName: payload.bankName || '',
       bankAccountNumber: payload.bankAccountNumber || '',
@@ -301,6 +316,13 @@ const ElecApp = (() => {
       if (event.key === 'Enter') handleLogin();
     });
     document.getElementById('btn-apply').addEventListener('click', () => goTo('elec-reg-1'));
+    document.getElementById('reg-country').addEventListener('change', renderRegistrationOptions);
+    document.getElementById('reg-state').addEventListener('change', () => {
+      renderElectricianCityOptions();
+      renderRegistrationOptions();
+    });
+    document.getElementById('reg-city').addEventListener('change', renderRegistrationOptions);
+    document.getElementById('reg-street-address').addEventListener('input', renderRegistrationOptions);
     document.getElementById('reg-location').addEventListener('change', renderRegistrationOptions);
 
     document.getElementById('btn-reg-next-1').addEventListener('click', nextRegistrationStepOne);
@@ -417,6 +439,7 @@ const ElecApp = (() => {
     const settings = Store.getSettings();
     const selectedAreas = activeChipValues('#reg-service-areas .chip.active', 'area');
     const serviceAreas = getRegistrationServiceAreas(settings);
+    renderElectricianAddressControls();
     const selectedLocation = renderLocationSelect(serviceAreas);
 
     document.getElementById('reg-service-areas').innerHTML = serviceAreas.length
@@ -706,10 +729,10 @@ const ElecApp = (() => {
   }
 
   function nextRegistrationStepOne() {
-    const required = ['reg-name', 'reg-phone', 'reg-email', 'reg-password', 'reg-location'];
+    const required = ['reg-name', 'reg-phone', 'reg-email', 'reg-password', 'reg-country', 'reg-state', 'reg-city', 'reg-street-address', 'reg-location'];
     const missing = required.some((id) => !document.getElementById(id).value.trim());
     if (missing) {
-      showError('Complete your personal details before continuing.');
+      showError('Complete your personal details and full service address before continuing.');
       return;
     }
     renderRegistrationOptions();
@@ -778,7 +801,7 @@ const ElecApp = (() => {
       }
 
       const validation = computeValidationResult();
-      const chosenLocation = document.getElementById('reg-location').value.trim();
+      const address = getElectricianAddressDraft();
       const chosenServiceAreas = activeChipValues('#reg-service-areas .chip.active', 'area');
 
       pendingElectricianSignupPayload = {
@@ -786,10 +809,19 @@ const ElecApp = (() => {
         phone: document.getElementById('reg-phone').value.trim(),
         email: document.getElementById('reg-email').value.trim(),
         password: document.getElementById('reg-password').value.trim(),
-        locationLabel: chosenLocation,
+        country: address.country,
+        state: address.state,
+        city: address.city,
+        streetAddress: address.streetAddress,
+        street_address: address.street_address,
+        locationLabel: address.locationLabel,
+        location_label: address.location_label,
+        baseLocationLabel: address.baseLocationLabel,
+        base_location_label: address.base_location_label,
         yearsExperience: parseInt(document.getElementById('reg-experience').value, 10) || 0,
         availabilityStatus: document.getElementById('reg-availability-status').value || 'available',
-        serviceAreas: chosenServiceAreas.length ? chosenServiceAreas : [chosenLocation].filter(Boolean),
+        serviceAreas: chosenServiceAreas.length ? chosenServiceAreas : address.serviceAreas,
+        service_areas: chosenServiceAreas.length ? chosenServiceAreas : address.serviceAreas,
         skills: selectedExpertise.slice(),
         bankName: document.getElementById('reg-payout-bank').value.trim(),
         bankAccountNumber: document.getElementById('reg-payout-account-number').value.trim(),
@@ -895,6 +927,7 @@ const ElecApp = (() => {
       summary.innerHTML = [
         ['Name', profile.full_name || payload.fullName || '--'],
         ['Phone', profile.phone || payload.phone || '--'],
+        ['Location', row.location_label || payload.locationLabel || payload.location_label || '--'],
         ['Status', row.status || 'pending'],
         ['Availability', row.availability_status || payload.availabilityStatus || 'available'],
         ['Service areas', serviceAreas.join(', ') || '--'],
@@ -1515,15 +1548,93 @@ const ElecApp = (() => {
     return Array.isArray(settings.service_areas) ? settings.service_areas.filter(Boolean) : [];
   }
 
+  function renderElectricianAddressControls() {
+    renderSelectOptions('reg-country', [DEFAULT_COUNTRY], getElementValue('reg-country') || DEFAULT_COUNTRY, 'Select country');
+    renderSelectOptions('reg-state', SUPPORTED_STATES, getElementValue('reg-state'), 'Select state');
+    renderElectricianCityOptions();
+  }
+
+  function renderElectricianCityOptions() {
+    const state = getElementValue('reg-state');
+    const currentCity = getElementValue('reg-city');
+    const cities = CITY_OPTIONS[state] || [];
+    renderSelectOptions('reg-city', cities, currentCity, 'Select city or LGA');
+  }
+
+  function renderSelectOptions(id, options, currentValue, placeholder) {
+    const select = document.getElementById(id);
+    if (!select) return '';
+    const safeOptions = (options || []).filter(Boolean);
+    const cleanValue = String(currentValue || '').trim();
+    select.innerHTML = '<option value="">' + escapeHtml(placeholder || 'Select') + '</option>' +
+      safeOptions.map((option) => '<option value="' + escapeAttribute(option) + '">' + escapeHtml(option) + '</option>').join('');
+    if (cleanValue && safeOptions.some((option) => option.toLowerCase() === cleanValue.toLowerCase())) {
+      const match = safeOptions.find((option) => option.toLowerCase() === cleanValue.toLowerCase());
+      select.value = match;
+      return match;
+    }
+    if (id === 'reg-country' && !cleanValue) {
+      select.value = DEFAULT_COUNTRY;
+      return DEFAULT_COUNTRY;
+    }
+    select.value = '';
+    return '';
+  }
+
+  function getElementValue(id) {
+    const element = document.getElementById(id);
+    return element ? String(element.value || '').trim() : '';
+  }
+
+  function getElectricianAddressDraft() {
+    const country = getElementValue('reg-country') || DEFAULT_COUNTRY;
+    const state = getElementValue('reg-state');
+    const city = getElementValue('reg-city');
+    const streetAddress = getElementValue('reg-street-address');
+    const closestServiceArea = getElementValue('reg-location');
+    const locationLabel = [streetAddress, city, state, country].filter(Boolean).join(', ');
+    const inferredServiceArea = Store.inferServiceAreaFromAddress
+      ? Store.inferServiceAreaFromAddress({
+          serviceArea: closestServiceArea,
+          locationLabel,
+          streetAddress,
+          city,
+          state,
+          country
+        })
+      : '';
+    const serviceArea = closestServiceArea || inferredServiceArea;
+    return {
+      country,
+      state,
+      city,
+      streetAddress,
+      street_address: streetAddress,
+      closestServiceArea: serviceArea,
+      locationLabel,
+      location_label: locationLabel,
+      baseLocationLabel: locationLabel,
+      base_location_label: locationLabel,
+      serviceAreas: serviceArea ? [serviceArea] : []
+    };
+  }
+
   function renderLocationSelect(areas) {
     const locationSelect = document.getElementById('reg-location');
     if (!locationSelect) return '';
     const currentValue = locationSelect.value;
     const safeAreas = (areas || []).filter(Boolean);
-    locationSelect.innerHTML = '<option value="">Select your closest service area</option>' +
+    const address = getElectricianAddressDraft();
+    const inferredValue = address.closestServiceArea || '';
+    locationSelect.innerHTML = '<option value="">Select closest service area</option>' +
       safeAreas.map((area) => '<option value="' + escapeAttribute(area) + '">' + escapeHtml(area) + '</option>').join('');
     if (currentValue && safeAreas.some((area) => area.toLowerCase() === currentValue.toLowerCase())) {
       const match = safeAreas.find((area) => area.toLowerCase() === currentValue.toLowerCase());
+      locationSelect.value = match;
+      return match;
+    }
+    if (inferredValue && safeAreas.some((area) => area.toLowerCase() === inferredValue.toLowerCase())) {
+      const match = safeAreas.find((area) => area.toLowerCase() === inferredValue.toLowerCase());
       locationSelect.value = match;
       return match;
     }
@@ -1773,6 +1884,9 @@ const ElecApp = (() => {
     const raw = String(pathname || '/electricians/login').trim();
     if (!raw) return '/electricians/login';
     const cleaned = raw.replace(/\/+$/, '');
+    if (cleaned === '/electric' || cleaned === '/electrician') return '/electricians/login';
+    if (cleaned.indexOf('/electric/') === 0) return '/electricians/' + cleaned.slice('/electric/'.length);
+    if (cleaned.indexOf('/electrician/') === 0) return '/electricians/' + cleaned.slice('/electrician/'.length);
     return cleaned || '/electricians/login';
   }
 
