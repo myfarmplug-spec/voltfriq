@@ -24,14 +24,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/process_dispatch_queue`, {
+    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/run_operational_automation`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`
       },
-      body: JSON.stringify({})
+      body: JSON.stringify({ p_limit: 100 })
     });
 
     if (!response.ok) {
@@ -43,7 +43,8 @@ export default async function handler(req, res) {
     const data = await response.json();
     res.status(200).json({
       ok: true,
-      processed: Number(data || 0)
+      processed: Number(data && data.processed || 0),
+      automation: data || {}
     });
   } catch (error) {
     res.status(500).json({

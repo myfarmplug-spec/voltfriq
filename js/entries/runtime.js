@@ -4,6 +4,8 @@ export async function bootstrapRuntime() {
   window.supabase = window.supabase || { createClient };
   await loadRuntimeEnv();
   await import('../config.js');
+  const { installNetworkResilience } = await import('../network.js');
+  installNetworkResilience();
   const navigation = await import('../navigation.js');
   const Chat = (await import('../chat.js')).default;
   window.Chat = Chat;

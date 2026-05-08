@@ -14,7 +14,10 @@ const serviceRoleOnly = new Set([
   'guest_job_payload',
   'mark_guest_otp_delivery',
   'operational_alert_dedupe_key',
-  'process_dispatch_queue'
+  'process_dispatch_queue',
+  'run_operational_automation',
+  'sync_all_job_state_projections',
+  'sync_job_state_projection'
 ]);
 
 const anonAllowed = new Set([

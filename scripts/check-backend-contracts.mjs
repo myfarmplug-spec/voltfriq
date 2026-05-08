@@ -38,7 +38,9 @@ const requiredTables = [
   'guest_customers',
   'guest_action_tokens',
   'guest_otps',
+  'job_state_projections',
   'operational_alerts',
+  'operational_automation_runs',
   'electrician_performance_snapshots',
   'upload_failures'
 ];

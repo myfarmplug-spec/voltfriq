@@ -742,6 +742,8 @@
 	        disputeRate30d: 0,
 	        electricianResponseQuality: 100,
 	        snapshotDriftJobs: 0,
+	        automationFailures24h: 0,
+	        automationLastRunAgeSeconds: 0,
 	        systemHealthScore: 100
 	      }
 	    };
@@ -788,6 +790,8 @@
 	        disputeRate30d: Number(rawMetrics.dispute_rate_30d || rawMetrics.disputeRate30d || 0),
 	        electricianResponseQuality: Number(rawMetrics.electrician_response_quality || rawMetrics.electricianResponseQuality || 0),
 	        snapshotDriftJobs: Number(rawMetrics.snapshot_drift_jobs || rawMetrics.snapshotDriftJobs || 0),
+	        automationFailures24h: Number(rawMetrics.automation_failures_24h || rawMetrics.automationFailures24h || 0),
+	        automationLastRunAgeSeconds: Number(rawMetrics.automation_last_run_age_seconds || rawMetrics.automationLastRunAgeSeconds || 0),
 	        systemHealthScore: Number(rawMetrics.system_health_score || rawMetrics.systemHealthScore || 0)
 	      }
 	    };
