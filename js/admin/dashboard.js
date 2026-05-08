@@ -387,14 +387,11 @@
 		    ].join('');
 
 	    $('#admin-control-queue').innerHTML = [
-	      queueCard('Pending payments', operationalPaymentCount, 'Finance queue', 'Verify proofs before jobs move forward.', 'admin-finance'),
-	      queueCard('Pending electricians', operationalElectricianCount, 'Onboarding queue', 'Review pending VoltFriq applications and approve or reject.', 'admin-electricians', 'electricians', 'pending'),
-	      queueCard('Stuck pairing jobs', operationalStuckCount, 'Dispatch queue', 'Review jobs that need routing attention.', 'admin-requests', 'requests', 'manual'),
-	      queueCard('Failed pairing jobs', failedPairingCount, 'Retry queue', 'Retry dispatch where automated pairing has hit repeated attempts.', 'admin-requests', 'requests', 'failed'),
-	      queueCard('Open disputes', operationalDisputeCount, 'Trust queue', 'Resolve open disputes and customer interventions.', 'admin-disputes'),
-	      queueCard('Expired assignments', operationalExpiredCount, 'Timeout queue', 'Review offers that expired before acceptance.', 'admin-requests', 'requests', 'timeout'),
-	      queueCard('State drift', snapshotDriftCount, 'Integrity queue', 'Reconcile jobs whose snapshot differs from canonical events.', 'admin-jobs'),
-	      queueCard('Predictive risks', predictiveAlertCount, 'Reliability queue', 'Review jobs and operations likely to miss target soon.', 'admin-requests', 'requests', 'all')
+	      queueCard('Dispatch Queue', operationalStuckCount + failedPairingCount + operationalExpiredCount, 'Routing queue', 'Review stuck pairing, failed retries, and expired offers.', 'admin-requests', 'requests', 'manual'),
+	      queueCard('Payment Queue', operationalPaymentCount, 'Finance queue', 'Verify proofs before jobs move forward.', 'admin-finance'),
+	      queueCard('Approval Queue', operationalElectricianCount, 'Onboarding queue', 'Review pending VoltFriq applications and approve or reject.', 'admin-electricians', 'electricians', 'pending'),
+	      queueCard('Dispute Queue', operationalDisputeCount, 'Trust queue', 'Resolve open disputes and customer interventions.', 'admin-disputes'),
+	      queueCard('Recovery Queue', snapshotDriftCount + predictiveAlertCount, 'Reliability queue', 'Reconcile state drift and predictive operational risks.', 'admin-jobs')
 	    ].join('');
     $('#admin-control-queue').querySelectorAll('.admin-queue-card').forEach((card) => {
       card.addEventListener('click', () => navigateTo(card.dataset.target, filterRouteData(card)));

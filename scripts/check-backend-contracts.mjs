@@ -43,9 +43,53 @@ const requiredTables = [
   'operation_requests',
   'operational_alerts',
   'operational_automation_runs',
+  'operational_metrics',
+  'system_health_snapshots',
   'electrician_performance_snapshots',
   'upload_failures'
 ];
+
+const requiredColumns = {
+  job_events: [
+    'id',
+    'job_id',
+    'event_type',
+    'actor_id',
+    'actor_role',
+    'request_id',
+    'event_version',
+    'transition_id',
+    'public_message',
+    'internal_note',
+    'payload',
+    'created_at'
+  ],
+  operational_alerts: [
+    'id',
+    'alert_type',
+    'severity',
+    'job_id',
+    'electrician_id',
+    'message',
+    'metadata',
+    'resolved_at',
+    'created_at'
+  ],
+  electricians: [
+    'acceptance_score',
+    'response_score',
+    'completion_score',
+    'dispute_score',
+    'reliability_score',
+    'tier'
+  ],
+  electrician_performance_snapshots: [
+    'completion_score',
+    'dispute_score',
+    'reliability_score',
+    'tier'
+  ]
+};
 
 const missingRpcs = uniqueRpcNames.filter((name) => {
   const pattern = new RegExp(`function\\s+public\\.${name}\\b|function\\s+${name}\\b`, 'i');
@@ -56,6 +100,20 @@ const missingTables = requiredTables.filter((name) => {
   const pattern = new RegExp(`create\\s+table(?:\\s+if\\s+not\\s+exists)?\\s+public\\.${name}\\b`, 'i');
   return !pattern.test(sqlCorpus);
 });
+
+const missingColumns = [];
+for (const [tableName, columns] of Object.entries(requiredColumns)) {
+  const tablePattern = new RegExp(`create\\s+table(?:\\s+if\\s+not\\s+exists)?\\s+(?:"public"\\.)?"?${tableName}"?\\s*\\(([\\s\\S]*?)\\n\\);`, 'i');
+  const tableMatch = sqlCorpus.match(tablePattern);
+  if (!tableMatch) {
+    missingColumns.push(`${tableName}.*`);
+    continue;
+  }
+  for (const column of columns) {
+    const columnPattern = new RegExp(`"?${column}"?\\s+`, 'i');
+    if (!columnPattern.test(tableMatch[1])) missingColumns.push(`${tableName}.${column}`);
+  }
+}
 
 const duplicateTargets = [
   'wallets',
@@ -85,12 +143,15 @@ const duplicateFunctionHits = duplicateFunctions.filter((name) => {
   return (hits || []).length > 1;
 });
 
-if (missingRpcs.length || missingTables.length || duplicateTableHits.length || duplicateFunctionHits.length) {
+if (missingRpcs.length || missingTables.length || missingColumns.length || duplicateTableHits.length || duplicateFunctionHits.length) {
   if (missingRpcs.length) {
     console.error('Missing RPC definitions:\n- ' + missingRpcs.join('\n- '));
   }
   if (missingTables.length) {
     console.error('Missing required tables:\n- ' + missingTables.join('\n- '));
+  }
+  if (missingColumns.length) {
+    console.error('Missing required columns:\n- ' + missingColumns.join('\n- '));
   }
   if (duplicateTableHits.length) {
     console.error('Duplicate table definitions in schema.sql:\n- ' + duplicateTableHits.join('\n- '));

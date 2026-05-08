@@ -437,6 +437,17 @@
       window.VoltFriqNetwork.onReconnect('customer-portal-refresh', scheduleCustomerRefresh);
     }
     window.addEventListener('voltfriq:refresh-requested', scheduleCustomerRefresh);
+    window.addEventListener('voltfriq:guest-upload-retried', (event) => {
+      if (event && event.detail && currentJob && event.detail.jobId === currentJob.id) {
+        showNotice('Photos added to your booking.');
+        scheduleCustomerRefresh();
+      }
+    });
+    window.addEventListener('voltfriq:guest-upload-failed', (event) => {
+      if (event && event.detail && currentJob && event.detail.jobId === currentJob.id) {
+        showError(new Error(event.detail.error || 'Could not upload photos. Please try again.'));
+      }
+    });
   }
 
   function configureCustomerRoutes() {

@@ -357,6 +357,7 @@ const Store = (() => {
   async function init() {
     const client = ensureClient();
     loadGuestAccess();
+    installGuestUploadRetryQueue();
     if (!client) {
       state.configured = false;
       return { configured: false };
@@ -681,4 +682,3 @@ const Store = (() => {
   function electricianSignupRedirectUrl() {
     return siteUrlForPath('/electricians/login?verify=signup');
   }
-

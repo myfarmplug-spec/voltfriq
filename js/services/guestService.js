@@ -1,3 +1,9 @@
+  const GUEST_UPLOAD_RETRY_KEY = 'voltfriq_guest_upload_retry_v1';
+  const GUEST_UPLOAD_MAX_QUEUE = 6;
+  const GUEST_UPLOAD_MAX_RETRY_BYTES = 6 * 1024 * 1024;
+  let guestUploadRetryInstalled = false;
+  let guestUploadRetryRunning = false;
+
   async function createGuestBooking(input) {
     const client = ensureClient();
     const phone = String(input.phone || '').trim();
@@ -142,6 +148,157 @@
     return getGuestJob(jobId, guest.accessToken);
   }
 
+  function readGuestUploadRetryQueue() {
+    try {
+      const raw = window.localStorage.getItem(GUEST_UPLOAD_RETRY_KEY);
+      const queue = raw ? JSON.parse(raw) : [];
+      return Array.isArray(queue) ? queue : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveGuestUploadRetryQueue(queue) {
+    try {
+      const nextQueue = Array.isArray(queue) ? queue.slice(-GUEST_UPLOAD_MAX_QUEUE) : [];
+      window.localStorage.setItem(GUEST_UPLOAD_RETRY_KEY, JSON.stringify(nextQueue));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function guestUploadSignature(jobId, encodedFiles) {
+    return String(jobId || '') + ':' + encodedFiles.map((file) => [
+      file.name,
+      file.type,
+      String(file.data || '').length,
+      String(file.data || '').slice(0, 48)
+    ].join(':')).join('|');
+  }
+
+  function shouldQueueGuestUploadError(error) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    const status = Number(error && error.status ? error.status : 0);
+    if (status === 408 || status === 429 || status >= 500) return true;
+    const message = String((error && error.message) || error || '').toLowerCase();
+    return message.includes('failed to fetch')
+      || message.includes('network')
+      || message.includes('timed out')
+      || message.includes('offline')
+      || message.includes('temporarily unavailable');
+  }
+
+  function queueGuestPhotoUpload(jobId, accessToken, encodedFiles) {
+    const bodySize = JSON.stringify(encodedFiles).length;
+    if (bodySize > GUEST_UPLOAD_MAX_RETRY_BYTES) {
+      const error = new Error('Your connection dropped before upload. Please try again on a steadier connection.');
+      error.queued = false;
+      throw error;
+    }
+
+    const signature = guestUploadSignature(jobId, encodedFiles);
+    const queue = readGuestUploadRetryQueue().filter((item) => item && item.signature !== signature);
+    queue.push({
+      id: (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'guest-upload-' + Date.now(),
+      jobId,
+      accessToken,
+      files: encodedFiles,
+      signature,
+      attempts: 0,
+      createdAt: new Date().toISOString(),
+      nextAttemptAt: Date.now() + 12000
+    });
+
+    if (!saveGuestUploadRetryQueue(queue)) {
+      const error = new Error('Your connection dropped before upload, and this browser could not save the photos for retry.');
+      error.queued = false;
+      throw error;
+    }
+  }
+
+  async function postGuestPhotoUpload(jobId, accessToken, encodedFiles) {
+    const response = await fetchWithTimeout('/api/guest-photo-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        accessToken,
+        files: encodedFiles
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      const error = new Error(payload.error || 'Could not upload photos.');
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
+    }
+    const row = payload.job || {};
+    row.id = row.id || jobId;
+    row.is_guest = true;
+    return hydrateProtectedAssets(normalizeJob(row));
+  }
+
+  async function processGuestUploadRetryQueue() {
+    if (guestUploadRetryRunning) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
+    const queue = readGuestUploadRetryQueue();
+    if (!queue.length) return;
+
+    guestUploadRetryRunning = true;
+    const remaining = [];
+    const nowMs = Date.now();
+
+    try {
+      for (const item of queue) {
+        if (!item || !item.jobId || !item.accessToken || !Array.isArray(item.files)) continue;
+        if (Number(item.nextAttemptAt || 0) > nowMs) {
+          remaining.push(item);
+          continue;
+        }
+
+        try {
+          const job = await postGuestPhotoUpload(item.jobId, item.accessToken, item.files);
+          window.dispatchEvent(new CustomEvent('voltfriq:guest-upload-retried', {
+            detail: { jobId: item.jobId, job }
+          }));
+          if (window.VoltFriqNetwork && window.VoltFriqNetwork.requestRefresh) {
+            window.VoltFriqNetwork.requestRefresh('guest-photo-upload-retried');
+          }
+        } catch (error) {
+          const attempts = Number(item.attempts || 0) + 1;
+          if (shouldQueueGuestUploadError(error)) {
+            remaining.push(Object.assign({}, item, {
+              attempts,
+              lastError: (error && error.message) || 'Upload retry failed.',
+              nextAttemptAt: Date.now() + Math.min(30 * 60 * 1000, 5000 * Math.pow(2, attempts))
+            }));
+          } else {
+            window.dispatchEvent(new CustomEvent('voltfriq:guest-upload-failed', {
+              detail: { jobId: item.jobId, error: (error && error.message) || 'Upload retry failed.' }
+            }));
+          }
+        }
+      }
+      saveGuestUploadRetryQueue(remaining);
+    } finally {
+      guestUploadRetryRunning = false;
+    }
+  }
+
+  function installGuestUploadRetryQueue() {
+    if (guestUploadRetryInstalled || typeof window === 'undefined') return;
+    guestUploadRetryInstalled = true;
+    window.addEventListener('online', () => processGuestUploadRetryQueue());
+    window.addEventListener('voltfriq:refresh-requested', () => processGuestUploadRetryQueue());
+    if (window.VoltFriqNetwork && window.VoltFriqNetwork.onReconnect) {
+      window.VoltFriqNetwork.onReconnect('guest-photo-upload-retry', processGuestUploadRetryQueue);
+    }
+    window.setTimeout(() => processGuestUploadRetryQueue(), 1200);
+  }
+
   async function uploadGuestJobPhotos(jobId, files) {
     const guest = getGuestAccess();
     const selectedFiles = Array.from(files || []);
@@ -163,23 +320,18 @@
         data: await readFileAsBase64(file)
       });
     }
-    const response = await fetch('/api/guest-photo-upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jobId,
-        accessToken: guest.accessToken,
-        files: encodedFiles
-      })
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.ok) {
-      throw new Error(payload.error || 'Could not upload photos.');
+
+    try {
+      return await postGuestPhotoUpload(jobId, guest.accessToken, encodedFiles);
+    } catch (error) {
+      if (shouldQueueGuestUploadError(error)) {
+        queueGuestPhotoUpload(jobId, guest.accessToken, encodedFiles);
+        const queuedError = new Error('Photo upload paused. We saved it and will retry automatically when your connection is stable.');
+        queuedError.queued = true;
+        throw queuedError;
+      }
+      throw error;
     }
-    const row = payload.job || {};
-    row.id = row.id || jobId;
-    row.is_guest = true;
-    return hydrateProtectedAssets(normalizeJob(row));
   }
 
   function readFileAsBase64(file) {

@@ -5,7 +5,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 9PBFe1D25U74NVYNaQ9kL49uE39Fi7onkGJ5aBD9qvCxF4blO42A7299Jdq0nFg
+\restrict rpxfVKV60GXAKfTmKUkrmzFNa61FNQKT9exj8eY8VeAvO1d3rXr5OBTjtHcdFXI
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.3
@@ -781,6 +781,7 @@ CREATE TABLE "public"."operational_alerts" (
     "escalation_level" integer DEFAULT 0 NOT NULL,
     "escalated_at" timestamp with time zone,
     "next_review_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "operational_alerts_alert_type_check" CHECK (("alert_type" = ANY (ARRAY['pending_payment'::"text", 'pending_electrician'::"text", 'stuck_pairing'::"text", 'expired_assignment'::"text", 'open_dispute'::"text", 'payment_delay'::"text", 'customer_confirmation_delay'::"text", 'dispatch_conflict'::"text", 'state_conflict'::"text", 'snapshot_drift'::"text", 'failed_pairing'::"text", 'upload_failure'::"text", 'high_rejection_electrician'::"text", 'electrician_performance'::"text", 'predictive_pairing_risk'::"text", 'predictive_payment_backlog'::"text", 'automation_lag'::"text", 'projection_replay_due'::"text", 'projection_replay_failure'::"text"]))),
     CONSTRAINT "operational_alerts_severity_check" CHECK (("severity" = ANY (ARRAY['info'::"text", 'warning'::"text", 'critical'::"text"]))),
     CONSTRAINT "operational_alerts_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'resolved'::"text"])))
@@ -941,7 +942,9 @@ CREATE TABLE "public"."electricians" (
     "payout_reliability_score" numeric(5,2) DEFAULT 100 NOT NULL,
     "quality_tier" "text" DEFAULT 'Trusted'::"text" NOT NULL,
     "quality_penalty_until" timestamp with time zone,
-    "quality_penalty_reason" "text"
+    "quality_penalty_reason" "text",
+    "reliability_score" numeric(5,2) DEFAULT 100 NOT NULL,
+    "tier" "text" DEFAULT 'Trusted'::"text" NOT NULL
 );
 
 
@@ -1044,6 +1047,67 @@ $$;
 
 
 ALTER FUNCTION "public"."append_job_timeline"("p_job_id" "uuid", "p_status" "public"."job_status", "p_note" "text", "p_actor_profile_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: apply_electrician_reliability_cooldowns(integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."apply_electrician_reliability_cooldowns"("p_limit" integer DEFAULT 200) RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  item record;
+  snapshot_row public.electrician_performance_snapshots;
+  updated_count integer := 0;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'Service role required';
+  end if;
+
+  for item in
+    select e.id
+    from public.electricians e
+    where e.status = 'approved'
+    order by coalesce(e.last_offered_at, to_timestamp(0)) asc, e.updated_at asc nulls last
+    limit greatest(coalesce(p_limit, 200), 1)
+  loop
+    snapshot_row := public.refresh_electrician_performance_snapshot(item.id);
+
+    if snapshot_row.quality_tier in ('Watch', 'Recovery')
+       or snapshot_row.rejection_rate >= 50
+       or snapshot_row.completion_score < 70
+       or snapshot_row.dispute_score < 75 then
+      update public.electricians
+      set quality_penalty_until = greatest(coalesce(quality_penalty_until, now()), now() + interval '12 hours'),
+          quality_penalty_reason = case
+            when snapshot_row.rejection_rate >= 50 then 'Automatic cooldown: rejection rate above target'
+            when snapshot_row.completion_score < 70 then 'Automatic cooldown: completion reliability below target'
+            when snapshot_row.dispute_score < 75 then 'Automatic cooldown: dispute score below target'
+            else 'Automatic cooldown: reliability review'
+          end
+      where id = item.id;
+      updated_count := updated_count + 1;
+    elsif exists (
+      select 1 from public.electricians e
+      where e.id = item.id
+        and e.quality_penalty_until is not null
+        and e.quality_penalty_until <= now()
+    ) then
+      update public.electricians
+      set quality_penalty_until = null,
+          quality_penalty_reason = null
+      where id = item.id;
+      updated_count := updated_count + 1;
+    end if;
+  end loop;
+
+  return updated_count;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."apply_electrician_reliability_cooldowns"("p_limit" integer) OWNER TO "postgres";
 
 --
 -- Name: apply_operational_escalations(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -1153,6 +1217,41 @@ $$;
 ALTER FUNCTION "public"."attach_guest_job_photos"("p_job_id" "uuid", "p_access_token" "text", "p_photo_paths" "text"[]) OWNER TO "postgres";
 
 --
+-- Name: audit_direct_job_status_write(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."audit_direct_job_status_write"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if old.status is distinct from new.status and pg_trigger_depth() <= 1 then
+    perform public.upsert_operational_alert(
+      'state_conflict',
+      'warning',
+      'Legacy projection write observed outside canonical event projection.',
+      new.id,
+      new.assigned_electrician_id,
+      null,
+      null,
+      null,
+      jsonb_build_object(
+        'previous_status', old.status,
+        'next_status', new.status,
+        'previous_state_version', old.state_version,
+        'next_state_version', new.state_version,
+        'source', 'jobs_status_update_trigger'
+      )
+    );
+  end if;
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."audit_direct_job_status_write"() OWNER TO "postgres";
+
+--
 -- Name: calculate_electrician_level(integer, numeric, integer, numeric, boolean); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -1182,6 +1281,94 @@ $$;
 
 
 ALTER FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) OWNER TO "postgres";
+
+--
+-- Name: system_health_snapshots; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE "public"."system_health_snapshots" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "health_score" numeric(5,2) DEFAULT 100 NOT NULL,
+    "queues" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "metrics" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "predictive_alert_count" integer DEFAULT 0 NOT NULL,
+    "critical_alert_count" integer DEFAULT 0 NOT NULL,
+    "recovery_action_count" integer DEFAULT 0 NOT NULL,
+    "source" "text" DEFAULT 'automation'::"text" NOT NULL,
+    "captured_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."system_health_snapshots" OWNER TO "postgres";
+
+--
+-- Name: capture_system_health_snapshot("text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."capture_system_health_snapshot"("p_source" "text" DEFAULT 'automation'::"text") RETURNS "public"."system_health_snapshots"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $_$
+declare
+  summary jsonb;
+  metric record;
+  snapshot_row public.system_health_snapshots;
+  metric_value numeric;
+begin
+  if not (public.is_admin() or auth.role() = 'service_role') then
+    raise exception 'Admin or service role required';
+  end if;
+
+  summary := public.admin_operational_summary();
+
+  insert into public.system_health_snapshots (
+    health_score,
+    queues,
+    metrics,
+    predictive_alert_count,
+    critical_alert_count,
+    recovery_action_count,
+    source
+  )
+  values (
+    coalesce((summary #>> '{metrics,system_health_score}')::numeric, 100),
+    coalesce(summary -> 'queues', '{}'::jsonb),
+    coalesce(summary -> 'metrics', '{}'::jsonb),
+    coalesce((summary #>> '{metrics,predictive_alerts}')::integer, 0),
+    coalesce((summary #>> '{queues,critical_alerts}')::integer, 0),
+    coalesce((summary #>> '{metrics,dispatch_retries_7d}')::integer, 0),
+    coalesce(nullif(btrim(p_source), ''), 'automation')
+  )
+  returning * into snapshot_row;
+
+  for metric in
+    select key, value
+    from jsonb_each_text(coalesce(summary -> 'metrics', '{}'::jsonb))
+  loop
+    if metric.value ~ '^-?[0-9]+(\\.[0-9]+)?$' then
+      metric_value := metric.value::numeric;
+      insert into public.operational_metrics (metric_name, metric_value, metric_unit, dimensions, source, captured_at)
+      values (
+        metric.key,
+        metric_value,
+        case
+          when metric.key like '%seconds%' then 'seconds'
+          when metric.key like '%rate%' or metric.key like '%score%' or metric.key like '%quality%' then 'percent'
+          else 'count'
+        end,
+        jsonb_build_object('snapshot_id', snapshot_row.id),
+        coalesce(nullif(btrim(p_source), ''), 'automation'),
+        snapshot_row.captured_at
+      );
+    end if;
+  end loop;
+
+  return snapshot_row;
+end;
+$_$;
+
+
+ALTER FUNCTION "public"."capture_system_health_snapshot"("p_source" "text") OWNER TO "postgres";
 
 --
 -- Name: claim_operation_request("text", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -1373,16 +1560,40 @@ begin
     p_customer_note,
     coalesce(p_requires_assessment, true),
     coalesce(p_material_handling, 'voltfriq_supplied'),
-    'matching'
+    'requested'
   )
   returning * into created_job;
+
+  perform public.log_job_event(
+    created_job.id,
+    'JOB_CREATED',
+    'customer',
+    actor_profile_id,
+    'Booking confirmed.',
+    'Customer created a new booking request.',
+    jsonb_build_object(
+      'next_status', 'requested',
+      'source', 'create_customer_job',
+      'idempotency_key', 'job-created:' || created_job.id::text
+    )
+  );
 
   insert into public.job_photos (job_id, file_path)
   select created_job.id, photo_path
   from unnest(coalesce(p_photo_paths, '{}'::text[])) as photo_path;
 
-  perform public.append_job_timeline(created_job.id, 'requested', 'Customer created a new booking request.', actor_profile_id);
-  perform public.append_job_timeline(created_job.id, 'matching', 'Automatic dispatch started.', actor_profile_id);
+  created_job := public.transition_job_state(
+    created_job.id,
+    'matching',
+    'customer',
+    actor_profile_id,
+    'Pairing you with a VoltFriq.',
+    'Automatic dispatch started.',
+    jsonb_build_object('source', 'create_customer_job', 'expected_status', 'requested'),
+    'requested',
+    'pairing-started:' || created_job.id::text
+  );
+
   perform public.create_notification(actor_profile_id, created_job.id, 'new_job_created', 'Booking created', 'We are finding the nearest verified VoltFriq for you.', '{}'::jsonb);
 
   select * into created_job from public.dispatch_job_internal(created_job.id, null);
@@ -1581,7 +1792,7 @@ begin
     p_customer_note,
     coalesce(p_requires_assessment, true),
     coalesce(p_material_handling, 'voltfriq_supplied'),
-    case when dispatch_otp_required then 'requested'::public.job_status else 'matching'::public.job_status end
+    'requested'
   )
   returning * into created_job;
 
@@ -1589,13 +1800,20 @@ begin
   set job_id = created_job.id
   where id = attempt_id;
 
-  insert into public.job_timeline (job_id, status, note, actor_profile_id, metadata)
-  values (
+  perform public.log_job_event(
     created_job.id,
-    'requested',
-    'Guest customer created a new booking request.',
+    'JOB_CREATED',
+    'guest',
     null,
-    jsonb_build_object('guest_customer_id', guest_row.id, 'guest_dispatch_otp_required', dispatch_otp_required)
+    'Booking confirmed.',
+    'Guest customer created a new booking request.',
+    jsonb_build_object(
+      'guest_customer_id', guest_row.id,
+      'guest_dispatch_otp_required', dispatch_otp_required,
+      'next_status', 'requested',
+      'source', 'create_guest_customer_job',
+      'idempotency_key', 'job-created:' || created_job.id::text
+    )
   );
 
   if dispatch_otp_required then
@@ -1604,8 +1822,17 @@ begin
       'masked_phone', '***' || right(normalized_phone, 4)
     );
   else
-    insert into public.job_timeline (job_id, status, note, actor_profile_id, metadata)
-    values (created_job.id, 'matching', 'Automatic dispatch started.', null, '{}'::jsonb);
+    created_job := public.transition_job_state(
+      created_job.id,
+      'matching',
+      'guest',
+      null,
+      'Pairing you with a VoltFriq.',
+      'Automatic dispatch started.',
+      jsonb_build_object('guest_customer_id', guest_row.id, 'source', 'create_guest_customer_job', 'expected_status', 'requested'),
+      'requested',
+      'pairing-started:' || created_job.id::text
+    );
 
     select * into created_job from public.dispatch_job_internal(created_job.id, null);
   end if;
@@ -1940,7 +2167,7 @@ CREATE FUNCTION "public"."detect_stuck_jobs"() RETURNS TABLE("job_id" "uuid", "s
     j.id,
     case
       when j.status = 'assigned' and j.assignment_expires_at is not null and j.assignment_expires_at <= now() then 'expired_assignment'
-      when j.status = 'matching' and coalesce(j.last_dispatch_at, j.updated_at, j.created_at) < now() - interval '5 minutes' then 'stuck_pairing'
+      when j.status = 'matching' and coalesce(j.last_dispatch_at, j.updated_at, j.created_at) < now() - interval '8 minutes' then 'stuck_pairing'
       when j.status in ('assessment_payment_pending_verification', 'work_payment_pending_verification') and j.updated_at < now() - interval '30 minutes' then 'payment_delay'
       when j.status = 'electrician_completed' and coalesce(j.electrician_completed_at, j.updated_at) < now() - interval '24 hours' then 'customer_confirmation_delay'
       else null
@@ -1952,7 +2179,7 @@ CREATE FUNCTION "public"."detect_stuck_jobs"() RETURNS TABLE("job_id" "uuid", "s
     end as severity,
     case
       when j.status = 'assigned' and j.assignment_expires_at is not null and j.assignment_expires_at <= now() then 'Assignment expired before VoltFriq acceptance.'
-      when j.status = 'matching' and coalesce(j.last_dispatch_at, j.updated_at, j.created_at) < now() - interval '5 minutes' then 'Pairing has exceeded the operational target.'
+      when j.status = 'matching' and coalesce(j.last_dispatch_at, j.updated_at, j.created_at) < now() - interval '8 minutes' then 'Pairing has exceeded the operational target.'
       when j.status in ('assessment_payment_pending_verification', 'work_payment_pending_verification') and j.updated_at < now() - interval '30 minutes' then 'Payment proof is waiting for verification beyond target.'
       when j.status = 'electrician_completed' and coalesce(j.electrician_completed_at, j.updated_at) < now() - interval '24 hours' then 'Customer completion confirmation is overdue.'
       else null
@@ -1968,7 +2195,7 @@ CREATE FUNCTION "public"."detect_stuck_jobs"() RETURNS TABLE("job_id" "uuid", "s
   where j.status <> 'cancelled'
     and (
       (j.status = 'assigned' and j.assignment_expires_at is not null and j.assignment_expires_at <= now())
-      or (j.status = 'matching' and coalesce(j.last_dispatch_at, j.updated_at, j.created_at) < now() - interval '5 minutes')
+      or (j.status = 'matching' and coalesce(j.last_dispatch_at, j.updated_at, j.created_at) < now() - interval '8 minutes')
       or (j.status in ('assessment_payment_pending_verification', 'work_payment_pending_verification') and j.updated_at < now() - interval '30 minutes')
       or (j.status = 'electrician_completed' and coalesce(j.electrician_completed_at, j.updated_at) < now() - interval '24 hours')
     )
@@ -2537,32 +2764,14 @@ begin
     raise exception 'This assignment has changed. Refresh your jobs before rejecting.';
   end if;
 
-  perform public.log_job_event(
-    p_job_id,
-    'ASSIGNMENT_REJECTED',
-    'electrician',
-    auth.uid(),
-    'Pairing you with a VoltFriq.',
-    'Assigned VoltFriq declined the booking. Re-dispatch started.',
-    jsonb_build_object(
-      'electrician_id', electrician_row.id,
-      'assignment_event_id', assignment_event.id,
-      'assignment_token', job_row.current_assignment_token,
-      'previous_status', job_row.status,
-      'next_status', 'matching',
-      'state_version', coalesce(job_row.state_version, 0) + 1,
-      'source', 'electrician_reject_job',
-      'idempotency_key', 'assignment-rejected:' || p_job_id::text || ':' || electrician_row.id::text || ':' || assignment_event.id::text
-    )
-  );
-
   update public.jobs
   set status = 'matching',
       assigned_electrician_id = null,
       assignment_expires_at = null,
       current_assignment_event_id = null,
       current_assignment_token = null,
-      state_version = coalesce(state_version, 0) + 1
+      state_version = coalesce(state_version, 0) + 1,
+      updated_at = now()
   where id = p_job_id
     and status = 'assigned'
     and assigned_electrician_id = electrician_row.id
@@ -2576,6 +2785,25 @@ begin
     raise exception 'This assignment is no longer available.';
   end if;
 
+  perform public.log_job_event(
+    p_job_id,
+    'ASSIGNMENT_REJECTED',
+    'electrician',
+    auth.uid(),
+    'Pairing you with a VoltFriq.',
+    'Assigned VoltFriq declined the booking. Re-dispatch started.',
+    jsonb_build_object(
+      'electrician_id', electrician_row.id,
+      'assignment_event_id', assignment_event.id,
+      'assignment_token', coalesce(job_row.current_assignment_token, assignment_event.metadata ->> 'assignment_token'),
+      'previous_status', 'assigned',
+      'next_status', 'matching',
+      'state_version', job_row.state_version,
+      'source', 'electrician_reject_job',
+      'idempotency_key', 'assignment-rejected:' || p_job_id::text || ':' || electrician_row.id::text || ':' || assignment_event.id::text
+    )
+  );
+
   perform public.refresh_electrician_performance_snapshot(electrician_row.id);
   select * into job_row from public.dispatch_job_internal(p_job_id, null);
   return job_row;
@@ -2584,6 +2812,59 @@ $$;
 
 
 ALTER FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: enforce_job_status_event(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."enforce_job_status_event"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  required_status public.job_status := new.status;
+  required_version integer := coalesce(new.state_version, 0);
+  has_event boolean;
+begin
+  if tg_op = 'UPDATE' and old.status is not distinct from new.status then
+    return new;
+  end if;
+
+  select exists (
+    select 1
+    from public.job_events e
+    where e.job_id = new.id
+      and public.job_status_for_event(e.event_type, coalesce(e.metadata, e.payload, '{}'::jsonb)) = required_status
+      and coalesce(e.event_version, e.transition_to_version, 0) >= required_version
+  ) into has_event;
+
+  if not has_event then
+    perform public.upsert_operational_alert(
+      'state_conflict',
+      'critical',
+      'Job snapshot status change was rejected because no matching canonical event exists.',
+      new.id,
+      new.assigned_electrician_id,
+      null,
+      null,
+      null,
+      jsonb_build_object(
+        'operation', tg_op,
+        'required_status', required_status,
+        'required_version', required_version,
+        'previous_status', case when tg_op = 'UPDATE' then old.status::text else null end,
+        'source', 'enforce_job_status_event'
+      )
+    );
+    raise exception 'Job status % requires a matching job_events record', required_status;
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."enforce_job_status_event"() OWNER TO "postgres";
 
 --
 -- Name: profiles; Type: TABLE; Schema: public; Owner: postgres
@@ -3492,7 +3773,13 @@ begin
     new.actor_profile_id,
     public.public_message_for_job_event(event_type_value, new.status, new.note),
     new.note,
-    coalesce(new.metadata, '{}'::jsonb) || jsonb_build_object('timeline_id', new.id)
+    coalesce(new.metadata, '{}'::jsonb) ||
+      jsonb_build_object(
+        'timeline_id', new.id,
+        'next_status', new.status,
+        'source', coalesce(new.metadata ->> 'source', 'job_timeline'),
+        'idempotency_key', 'timeline:' || new.id::text
+      )
   );
   return new;
 end;
@@ -3817,9 +4104,20 @@ declare
   metadata_previous_version integer;
   expected_state_version integer;
   projected public.job_status;
+  metadata_transition_id uuid;
 begin
   if new.event_sequence is null then
     new.event_sequence := nextval('public.job_events_event_sequence_seq'::regclass);
+  end if;
+
+  if new.transition_id is null
+     and coalesce(new.metadata, '{}'::jsonb) ->> 'transition_id' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    metadata_transition_id := (new.metadata ->> 'transition_id')::uuid;
+    new.transition_id := metadata_transition_id;
+  end if;
+
+  if new.transition_id is null then
+    new.transition_id := gen_random_uuid();
   end if;
 
   if new.request_id is null then
@@ -3832,11 +4130,12 @@ begin
     new.request_hash := md5(jsonb_build_object(
       'job_id', new.job_id,
       'event_type', new.event_type,
-      'metadata', coalesce(new.metadata, '{}'::jsonb) - 'request_id' - 'requestId'
+      'transition_id', new.transition_id,
+      'metadata', coalesce(new.metadata, '{}'::jsonb) - 'request_id' - 'requestId' - 'transition_id'
     )::text);
   end if;
 
-  new.metadata := coalesce(new.metadata, '{}'::jsonb) - 'request_id' - 'requestId';
+  new.metadata := coalesce(new.metadata, '{}'::jsonb) - 'request_id' - 'requestId' - 'transition_id';
 
   select * into job_row
   from public.jobs
@@ -3847,7 +4146,7 @@ begin
     raise exception 'Job not found';
   end if;
 
-  select coalesce(max(transition_to_version), 0)
+  select coalesce(max(coalesce(event_version, transition_to_version)), 0)
   into latest_version
   from public.job_events
   where job_id = new.job_id;
@@ -3857,7 +4156,7 @@ begin
   from public.job_events
   where job_id = new.job_id
     and projected_status is not null
-  order by transition_to_version desc, event_sequence desc
+  order by coalesce(event_version, transition_to_version) desc, event_sequence desc
   limit 1;
 
   if coalesce(new.metadata, '{}'::jsonb) ->> 'state_version' ~ '^[0-9]+$' then
@@ -3884,6 +4183,7 @@ begin
           'expected_state_version', expected_state_version,
           'actual_state_version', coalesce(job_row.state_version, 0),
           'event_type', new.event_type,
+          'transition_id', new.transition_id,
           'source', coalesce(new.source, new.metadata ->> 'source', 'event_insert')
         )
       );
@@ -3909,9 +4209,11 @@ begin
     end if;
   end if;
 
+  new.event_version := coalesce(new.event_version, new.transition_to_version, latest_version);
+
   if projected is not null
      and latest_version > 0
-     and coalesce(new.transition_to_version, 0) <= latest_version
+     and coalesce(new.event_version, new.transition_to_version, 0) <= latest_version
      and projected is distinct from latest_projected_status then
     perform public.upsert_operational_alert(
       'state_conflict',
@@ -3924,16 +4226,17 @@ begin
       null,
       jsonb_build_object(
         'event_type', new.event_type,
-        'incoming_version', coalesce(new.transition_to_version, 0),
+        'incoming_version', coalesce(new.event_version, new.transition_to_version, 0),
         'latest_version', latest_version,
         'incoming_status', projected,
         'latest_projected_status', latest_projected_status,
+        'transition_id', new.transition_id,
         'source', coalesce(new.source, new.metadata ->> 'source', 'event_insert')
       )
     );
     raise exception 'Stale job event %. Incoming version %, latest version %',
       new.event_type,
-      coalesce(new.transition_to_version, 0),
+      coalesce(new.event_version, new.transition_to_version, 0),
       latest_version;
   end if;
 
@@ -3945,6 +4248,8 @@ begin
 
   new.metadata := coalesce(new.metadata, '{}'::jsonb)
     || jsonb_build_object(
+      'event_version', new.event_version,
+      'transition_id', new.transition_id,
       'state_version', new.transition_to_version,
       'transition_from_version', new.transition_from_version
     );
@@ -4125,9 +4430,9 @@ begin
     new.projected_status,
     new.id,
     new.event_sequence,
-    coalesce(new.transition_to_version, 0),
+    coalesce(new.event_version, new.transition_to_version, 0),
     now(),
-    jsonb_build_object('event_type', new.event_type, 'source', new.source, 'request_id', new.request_id)
+    jsonb_build_object('event_type', new.event_type, 'source', new.source, 'request_id', new.request_id, 'transition_id', new.transition_id)
   )
   on conflict (job_id) do update
   set projected_status = excluded.projected_status,
@@ -4145,11 +4450,11 @@ begin
 
   update public.jobs
   set status = new.projected_status,
-      state_version = greatest(coalesce(state_version, 0), coalesce(new.transition_to_version, 0)),
+      state_version = greatest(coalesce(state_version, 0), coalesce(new.event_version, new.transition_to_version, 0)),
       snapshot_reconciled_at = now(),
       updated_at = now()
   where id = new.job_id
-    and coalesce(new.transition_to_version, 0) > coalesce(state_version, 0);
+    and coalesce(new.event_version, new.transition_to_version, 0) > coalesce(state_version, 0);
 
   update public.job_events
   set projected_at = coalesce(projected_at, now())
@@ -4204,6 +4509,25 @@ $$;
 ALTER FUNCTION "public"."public_message_for_job_event"("p_event_type" "text", "p_status" "public"."job_status", "p_note" "text") OWNER TO "postgres";
 
 --
+-- Name: rebuild_all_job_projections(integer, "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."rebuild_all_job_projections"("p_limit" integer DEFAULT 500, "p_request_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'Service role required';
+  end if;
+  return public.rebuild_all_projections(p_limit, p_request_id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."rebuild_all_job_projections"("p_limit" integer, "p_request_id" "text") OWNER TO "postgres";
+
+--
 -- Name: rebuild_all_job_state_projections(integer); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -4241,6 +4565,47 @@ $$;
 
 
 ALTER FUNCTION "public"."rebuild_all_job_state_projections"("p_limit" integer) OWNER TO "postgres";
+
+--
+-- Name: rebuild_all_projections(integer, "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."rebuild_all_projections"("p_limit" integer DEFAULT 500, "p_request_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'Service role required';
+  end if;
+  return public.replay_all_job_events(p_limit, p_request_id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."rebuild_all_projections"("p_limit" integer, "p_request_id" "text") OWNER TO "postgres";
+
+--
+-- Name: rebuild_job_projection("uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."rebuild_job_projection"("p_job_id" "uuid", "p_request_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if auth.role() = 'service_role' then
+    return public.replay_job_events(p_job_id, p_request_id);
+  end if;
+  if public.is_admin() then
+    return public.admin_replay_job_events(p_job_id);
+  end if;
+  raise exception 'Admin or service role required';
+end;
+$$;
+
+
+ALTER FUNCTION "public"."rebuild_job_projection"("p_job_id" "uuid", "p_request_id" "text") OWNER TO "postgres";
 
 --
 -- Name: rebuild_job_state_projection("uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -4564,7 +4929,9 @@ CREATE TABLE "public"."electrician_performance_snapshots" (
     "completion_score" numeric(5,2) DEFAULT 100 NOT NULL,
     "dispute_score" numeric(5,2) DEFAULT 100 NOT NULL,
     "payout_reliability_score" numeric(5,2) DEFAULT 100 NOT NULL,
-    "quality_tier" "text" DEFAULT 'Trusted'::"text" NOT NULL
+    "quality_tier" "text" DEFAULT 'Trusted'::"text" NOT NULL,
+    "reliability_score" numeric(6,2) DEFAULT 100 NOT NULL,
+    "tier" "text" DEFAULT 'Trusted'::"text" NOT NULL
 );
 
 
@@ -5415,9 +5782,9 @@ begin
       continue;
     end if;
 
-    if coalesce(event_row.transition_to_version, 0) < latest_version
+    if coalesce(event_row.event_version, event_row.transition_to_version, 0) < latest_version
        or (
-         coalesce(event_row.transition_to_version, 0) = latest_version
+         coalesce(event_row.event_version, event_row.transition_to_version, 0) = latest_version
          and latest_status is not null
          and event_row.projected_status is distinct from latest_status
        ) then
@@ -5425,7 +5792,7 @@ begin
       continue;
     end if;
 
-    if coalesce(event_row.transition_to_version, 0) = latest_version
+    if coalesce(event_row.event_version, event_row.transition_to_version, 0) = latest_version
        and latest_status is not null
        and event_row.event_sequence < latest_sequence then
       stale_count := stale_count + 1;
@@ -5435,7 +5802,7 @@ begin
     latest_status := event_row.projected_status;
     latest_event_id := event_row.id;
     latest_sequence := event_row.event_sequence;
-    latest_version := coalesce(event_row.transition_to_version, latest_version);
+    latest_version := coalesce(event_row.event_version, event_row.transition_to_version, latest_version);
 
     insert into public.job_state_projections (
       job_id,
@@ -5458,7 +5825,8 @@ begin
       jsonb_build_object(
         'replayed', true,
         'replay_run_id', p_replay_run_id,
-        'reason', coalesce(nullif(btrim(p_reason), ''), 'event-replay')
+        'reason', coalesce(nullif(btrim(p_reason), ''), 'event-replay'),
+        'transition_id', event_row.transition_id
       )
     )
     on conflict (job_id) do update
@@ -5800,8 +6168,10 @@ declare
   dispatch_count integer := 0;
   alert_count integer := 0;
   escalated_count integer := 0;
+  cooldown_count integer := 0;
   resolved_count integer := 0;
   total_count integer := 0;
+  health_snapshot public.system_health_snapshots;
   payload jsonb;
 begin
   if auth.role() <> 'service_role' then
@@ -5841,11 +6211,13 @@ begin
   replay_count := coalesce((replay_payload ->> 'processed')::integer, 0);
 
   rebuilt_count := public.rebuild_all_job_state_projections(greatest(least(coalesce(p_limit, 100), 500), 1));
+  cooldown_count := public.apply_electrician_reliability_cooldowns(greatest(least(coalesce(p_limit, 100), 200), 1));
   prioritized_count := public.prioritize_dispatch_queue(greatest(least(coalesce(p_limit, 100) * 2, 500), 1));
   synced_count := public.sync_all_job_state_projections(greatest(coalesce(p_limit, 100), 1));
   dispatch_count := public.process_dispatch_queue();
   alert_count := public.refresh_operational_alerts();
   escalated_count := public.apply_operational_escalations();
+  health_snapshot := public.capture_system_health_snapshot('automation');
 
   update public.operational_alerts a
   set status = 'resolved',
@@ -5858,7 +6230,7 @@ begin
     );
   get diagnostics resolved_count = row_count;
 
-  total_count := replay_count + rebuilt_count + prioritized_count + synced_count + dispatch_count + alert_count + escalated_count + resolved_count;
+  total_count := replay_count + rebuilt_count + cooldown_count + prioritized_count + synced_count + dispatch_count + alert_count + escalated_count + resolved_count;
 
   payload := jsonb_build_object(
     'request_id', clean_request_id,
@@ -5866,12 +6238,14 @@ begin
     'event_replay', replay_payload,
     'event_replay_processed', replay_count,
     'projection_rebuilds', rebuilt_count,
+    'electrician_cooldowns', cooldown_count,
     'queue_prioritized', prioritized_count,
     'projection_syncs', synced_count,
     'dispatch_actions', dispatch_count,
     'alerts_refreshed', alert_count,
     'alerts_escalated', escalated_count,
     'alerts_resolved', resolved_count,
+    'health_snapshot_id', health_snapshot.id,
     'processed', total_count
   );
 
@@ -6878,6 +7252,70 @@ $_$;
 ALTER FUNCTION "public"."sync_app_account_for_auth_user"("p_user_id" "uuid") OWNER TO "postgres";
 
 --
+-- Name: sync_electrician_reliability_aliases(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."sync_electrician_reliability_aliases"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  new.reliability_score := greatest(0, least(100, round((
+      coalesce(new.response_score, new.response_rate, 100) * 0.20
+    + coalesce(new.acceptance_score, new.acceptance_rate, 100) * 0.20
+    + coalesce(new.completion_score, 100) * 0.22
+    + coalesce(new.dispute_score, 100) * 0.22
+    + coalesce(new.payout_confidence_score, new.payout_reliability_score, 100) * 0.16
+  )::numeric, 2)));
+  new.tier := coalesce(nullif(new.quality_tier, ''), new.tier, 'Trusted');
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."sync_electrician_reliability_aliases"() OWNER TO "postgres";
+
+--
+-- Name: sync_electrician_snapshot_reliability_aliases(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."sync_electrician_snapshot_reliability_aliases"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  new.reliability_score := coalesce(nullif(new.score, 0), new.reliability_score, 100);
+  new.tier := coalesce(nullif(new.quality_tier, ''), new.tier, 'Trusted');
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."sync_electrician_snapshot_reliability_aliases"() OWNER TO "postgres";
+
+--
+-- Name: sync_job_event_payload(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."sync_job_event_payload"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if coalesce(new.metadata, '{}'::jsonb) = '{}'::jsonb
+     and coalesce(new.payload, '{}'::jsonb) <> '{}'::jsonb then
+    new.metadata := new.payload;
+  end if;
+
+  new.payload := coalesce(new.metadata, new.payload, '{}'::jsonb);
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."sync_job_event_payload"() OWNER TO "postgres";
+
+--
 -- Name: sync_job_state_projection("uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -7372,9 +7810,10 @@ CREATE FUNCTION "public"."verify_job_payment"("p_payment_id" "uuid", "p_approved
 declare
   payment_row public.job_payments;
   job_row public.jobs;
-  next_status job_status;
+  next_status public.job_status;
   customer_profile uuid;
   electrician_profile uuid;
+  event_type_value text;
 begin
   if not public.is_admin() then
     raise exception 'Admin access required';
@@ -7390,12 +7829,21 @@ begin
     raise exception 'Job not found';
   end if;
 
+  if payment_row.status = 'verified' and p_approved then
+    return payment_row;
+  end if;
+
+  if payment_row.status in ('verified', 'rejected')
+     and payment_row.status <> (case when p_approved then 'verified'::public.payment_status else 'rejected'::public.payment_status end) then
+    raise exception 'Payment has already been resolved. Refresh before changing it.';
+  end if;
+
   if job_row.status = 'cancelled' then
     raise exception 'Cancelled jobs cannot receive payment verification.';
   end if;
 
   update public.job_payments
-  set status = case when p_approved then 'verified'::payment_status else 'rejected'::payment_status end,
+  set status = case when p_approved then 'verified'::public.payment_status else 'rejected'::public.payment_status end,
       admin_note = p_admin_note,
       verified_by = auth.uid(),
       verified_at = now()
@@ -7404,20 +7852,49 @@ begin
 
   if p_approved then
     next_status := case
-      when payment_row.payment_type = 'assessment_fee' then 'assessment_confirmed'::job_status
-      else 'payment_confirmed'::job_status
+      when payment_row.payment_type = 'assessment_fee' then 'assessment_confirmed'::public.job_status
+      else 'payment_confirmed'::public.job_status
     end;
   else
     next_status := case
-      when payment_row.payment_type = 'assessment_fee' then 'assessment_fee_pending'::job_status
-      else 'quote_accepted'::job_status
+      when payment_row.payment_type = 'assessment_fee' then 'assessment_fee_pending'::public.job_status
+      else 'quote_accepted'::public.job_status
     end;
   end if;
 
-  update public.jobs
-  set status = next_status
-  where id = payment_row.job_id
-  returning * into job_row;
+  job_row := public.transition_job_state(
+    payment_row.job_id,
+    next_status,
+    'admin',
+    auth.uid(),
+    case when p_approved then 'Payment verified.' else 'Payment needs to be resubmitted.' end,
+    case when p_approved then 'Payment verified by admin.' else 'Payment rejected by admin.' end,
+    jsonb_build_object(
+      'payment_id', payment_row.id,
+      'payment_type', payment_row.payment_type,
+      'approved', p_approved,
+      'source', 'verify_job_payment',
+      'expected_state_version', job_row.state_version
+    ),
+    job_row.status,
+    'payment-verification:' || payment_row.id::text || ':' || case when p_approved then 'approved' else 'rejected' end
+  );
+
+  event_type_value := case when p_approved then 'PAYMENT_VERIFIED' else 'JOB_UPDATED' end;
+  perform public.log_job_event(
+    payment_row.job_id,
+    event_type_value,
+    'admin',
+    auth.uid(),
+    case when p_approved then 'Payment verified.' else 'Payment needs to be resubmitted.' end,
+    case when p_approved then 'Payment verified by admin.' else 'Payment rejected by admin.' end,
+    jsonb_build_object(
+      'payment_id', payment_row.id,
+      'payment_type', payment_row.payment_type,
+      'source', 'verify_job_payment',
+      'idempotency_key', 'payment-event:' || payment_row.id::text || ':' || case when p_approved then 'approved' else 'rejected' end
+    )
+  );
 
   select c.profile_id into customer_profile
   from public.jobs j
@@ -7429,11 +7906,13 @@ begin
   join public.electricians e on e.id = j.assigned_electrician_id
   where j.id = payment_row.job_id;
 
-  perform public.append_job_timeline(payment_row.job_id, next_status, case when p_approved then 'Payment verified by admin.' else 'Payment rejected by admin.' end, auth.uid());
   if p_approved then
     perform public.create_notification(customer_profile, payment_row.job_id, 'payment_verified', 'Payment verified', 'Your payment was verified and the job can move forward.', jsonb_build_object('payment_id', payment_row.id));
     perform public.create_notification(electrician_profile, payment_row.job_id, 'payment_verified', 'Payment confirmed', 'Admin verified customer payment for this job.', jsonb_build_object('payment_id', payment_row.id));
+  else
+    perform public.create_notification(customer_profile, payment_row.job_id, 'payment_rejected', 'Payment review needed', 'VoltFriq could not verify that proof. Please resubmit clearly.', jsonb_build_object('payment_id', payment_row.id));
   end if;
+
   return payment_row;
 end;
 $$;
@@ -8612,6 +9091,9 @@ CREATE TABLE "public"."job_events" (
     "request_hash" "text",
     "replay_of_event_id" "uuid",
     "replay_run_id" "uuid",
+    "event_version" integer,
+    "transition_id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "payload" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
     CONSTRAINT "job_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['JOB_CREATED'::"text", 'PAIRING_STARTED'::"text", 'ELECTRICIAN_ASSIGNED'::"text", 'ASSIGNMENT_ACCEPTED'::"text", 'ASSIGNMENT_REJECTED'::"text", 'ASSIGNMENT_EXPIRED'::"text", 'PAYMENT_SUBMITTED'::"text", 'PAYMENT_VERIFIED'::"text", 'WORK_STARTED'::"text", 'WORK_COMPLETED'::"text", 'CUSTOMER_CONFIRMED'::"text", 'DISPUTE_OPENED'::"text", 'JOB_CANCELLED'::"text", 'QUOTE_SUBMITTED'::"text", 'PAYOUT_RELEASED'::"text", 'RATING_SUBMITTED'::"text", 'JOB_UPDATED'::"text"]))),
     CONSTRAINT "job_events_severity_check" CHECK (("severity" = ANY (ARRAY['info'::"text", 'warning'::"text", 'critical'::"text"]))),
     CONSTRAINT "job_events_visibility_check" CHECK (("visibility" = ANY (ARRAY['public'::"text", 'internal'::"text"])))
@@ -8809,6 +9291,23 @@ CREATE TABLE "public"."operational_automation_runs" (
 
 
 ALTER TABLE "public"."operational_automation_runs" OWNER TO "postgres";
+
+--
+-- Name: operational_metrics; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE "public"."operational_metrics" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "metric_name" "text" NOT NULL,
+    "metric_value" numeric DEFAULT 0 NOT NULL,
+    "metric_unit" "text" DEFAULT 'count'::"text" NOT NULL,
+    "dimensions" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "source" "text" DEFAULT 'automation'::"text" NOT NULL,
+    "captured_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."operational_metrics" OWNER TO "postgres";
 
 --
 -- Name: quote_items; Type: TABLE; Schema: public; Owner: postgres
@@ -9319,6 +9818,14 @@ ALTER TABLE ONLY "public"."operational_automation_runs"
 
 
 --
+-- Name: operational_metrics operational_metrics_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."operational_metrics"
+    ADD CONSTRAINT "operational_metrics_pkey" PRIMARY KEY ("id");
+
+
+--
 -- Name: profiles profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -9364,6 +9871,14 @@ ALTER TABLE ONLY "public"."referrals"
 
 ALTER TABLE ONLY "public"."referrals"
     ADD CONSTRAINT "referrals_referred_profile_id_key" UNIQUE ("referred_profile_id");
+
+
+--
+-- Name: system_health_snapshots system_health_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."system_health_snapshots"
+    ADD CONSTRAINT "system_health_snapshots_pkey" PRIMARY KEY ("id");
 
 
 --
@@ -9576,6 +10091,13 @@ CREATE INDEX "job_events_job_created_idx" ON "public"."job_events" USING "btree"
 
 
 --
+-- Name: job_events_job_event_version_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "job_events_job_event_version_idx" ON "public"."job_events" USING "btree" ("job_id", "event_version" DESC, "event_sequence" DESC);
+
+
+--
 -- Name: job_events_job_type_created_idx; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -9608,6 +10130,13 @@ CREATE INDEX "job_events_request_hash_idx" ON "public"."job_events" USING "btree
 --
 
 CREATE UNIQUE INDEX "job_events_request_id_uidx" ON "public"."job_events" USING "btree" ("request_id") WHERE ("request_id" IS NOT NULL);
+
+
+--
+-- Name: job_events_transition_id_uidx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "job_events_transition_id_uidx" ON "public"."job_events" USING "btree" ("transition_id");
 
 
 --
@@ -9674,6 +10203,13 @@ CREATE INDEX "operation_requests_status_updated_idx" ON "public"."operation_requ
 
 
 --
+-- Name: operational_alerts_created_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "operational_alerts_created_idx" ON "public"."operational_alerts" USING "btree" ("created_at" DESC);
+
+
+--
 -- Name: operational_alerts_escalation_idx; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -9709,6 +10245,13 @@ CREATE INDEX "operational_automation_runs_started_idx" ON "public"."operational_
 
 
 --
+-- Name: operational_metrics_name_captured_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "operational_metrics_name_captured_idx" ON "public"."operational_metrics" USING "btree" ("metric_name", "captured_at" DESC);
+
+
+--
 -- Name: profiles_referral_code_key; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -9720,6 +10263,13 @@ CREATE UNIQUE INDEX "profiles_referral_code_key" ON "public"."profiles" USING "b
 --
 
 CREATE INDEX "ratings_review_direction_idx" ON "public"."ratings" USING "btree" ("review_direction");
+
+
+--
+-- Name: system_health_snapshots_captured_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "system_health_snapshots_captured_idx" ON "public"."system_health_snapshots" USING "btree" ("captured_at" DESC);
 
 
 --
@@ -9800,6 +10350,13 @@ CREATE TRIGGER "admin_settings_touch_updated_at" BEFORE UPDATE ON "public"."admi
 
 
 --
+-- Name: jobs audit_direct_job_status_write_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER "audit_direct_job_status_write_trigger" AFTER UPDATE OF "status" ON "public"."jobs" FOR EACH ROW EXECUTE FUNCTION "public"."audit_direct_job_status_write"();
+
+
+--
 -- Name: customer_addresses customer_addresses_touch_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -9825,6 +10382,20 @@ CREATE TRIGGER "electrician_appeals_touch_updated_at" BEFORE UPDATE ON "public".
 --
 
 CREATE TRIGGER "electricians_touch_updated_at" BEFORE UPDATE ON "public"."electricians" FOR EACH ROW EXECUTE FUNCTION "public"."touch_updated_at"();
+
+
+--
+-- Name: jobs enforce_job_status_event_insert_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE CONSTRAINT TRIGGER "enforce_job_status_event_insert_trigger" AFTER INSERT ON "public"."jobs" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION "public"."enforce_job_status_event"();
+
+
+--
+-- Name: jobs enforce_job_status_event_update_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE CONSTRAINT TRIGGER "enforce_job_status_event_update_trigger" AFTER UPDATE OF "status" ON "public"."jobs" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION "public"."enforce_job_status_event"();
 
 
 --
@@ -9888,6 +10459,27 @@ CREATE TRIGGER "profiles_wallet_setup" AFTER INSERT ON "public"."profiles" FOR E
 --
 
 CREATE TRIGGER "project_job_event_state_trigger" AFTER INSERT ON "public"."job_events" FOR EACH ROW EXECUTE FUNCTION "public"."project_job_event_state"();
+
+
+--
+-- Name: electricians sync_electrician_reliability_aliases_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER "sync_electrician_reliability_aliases_trigger" BEFORE INSERT OR UPDATE OF "response_score", "response_rate", "acceptance_score", "acceptance_rate", "completion_score", "dispute_score", "payout_confidence_score", "payout_reliability_score", "quality_tier" ON "public"."electricians" FOR EACH ROW EXECUTE FUNCTION "public"."sync_electrician_reliability_aliases"();
+
+
+--
+-- Name: electrician_performance_snapshots sync_electrician_snapshot_reliability_aliases_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER "sync_electrician_snapshot_reliability_aliases_trigger" BEFORE INSERT OR UPDATE OF "score", "quality_tier" ON "public"."electrician_performance_snapshots" FOR EACH ROW EXECUTE FUNCTION "public"."sync_electrician_snapshot_reliability_aliases"();
+
+
+--
+-- Name: job_events sync_job_event_payload_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER "sync_job_event_payload_trigger" BEFORE INSERT OR UPDATE OF "metadata", "payload" ON "public"."job_events" FOR EACH ROW EXECUTE FUNCTION "public"."sync_job_event_payload"();
 
 
 --
@@ -10948,6 +11540,20 @@ CREATE POLICY "operational alerts service write" ON "public"."operational_alerts
 
 
 --
+-- Name: operational_metrics operational metrics admin read; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "operational metrics admin read" ON "public"."operational_metrics" FOR SELECT TO "authenticated" USING ("public"."is_admin"());
+
+
+--
+-- Name: operational_metrics operational metrics service write; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "operational metrics service write" ON "public"."operational_metrics" TO "service_role" USING (("auth"."role"() = 'service_role'::"text")) WITH CHECK (("auth"."role"() = 'service_role'::"text"));
+
+
+--
 -- Name: operational_alerts; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
@@ -10958,6 +11564,12 @@ ALTER TABLE "public"."operational_alerts" ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE "public"."operational_automation_runs" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: operational_metrics; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."operational_metrics" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -11034,6 +11646,26 @@ CREATE POLICY "referrals self insert" ON "public"."referrals" FOR INSERT WITH CH
 
 CREATE POLICY "referrals self or admin read" ON "public"."referrals" FOR SELECT USING ((("referrer_profile_id" = "auth"."uid"()) OR ("referred_profile_id" = "auth"."uid"()) OR "public"."is_admin"()));
 
+
+--
+-- Name: system_health_snapshots system health snapshots admin read; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "system health snapshots admin read" ON "public"."system_health_snapshots" FOR SELECT TO "authenticated" USING ("public"."is_admin"());
+
+
+--
+-- Name: system_health_snapshots system health snapshots service write; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "system health snapshots service write" ON "public"."system_health_snapshots" TO "service_role" USING (("auth"."role"() = 'service_role'::"text")) WITH CHECK (("auth"."role"() = 'service_role'::"text"));
+
+
+--
+-- Name: system_health_snapshots; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."system_health_snapshots" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: upload_failures upload failures admin read; Type: POLICY; Schema: public; Owner: postgres
@@ -11303,8 +11935,8 @@ GRANT ALL ON FUNCTION "public"."admin_operational_summary"() TO "authenticated";
 -- Name: TABLE "jobs"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE "public"."jobs" TO "anon";
-GRANT ALL ON TABLE "public"."jobs" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE "public"."jobs" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE "public"."jobs" TO "authenticated";
 GRANT ALL ON TABLE "public"."jobs" TO "service_role";
 
 
@@ -11397,6 +12029,14 @@ GRANT ALL ON FUNCTION "public"."append_job_timeline"("p_job_id" "uuid", "p_statu
 
 
 --
+-- Name: FUNCTION "apply_electrician_reliability_cooldowns"("p_limit" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."apply_electrician_reliability_cooldowns"("p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."apply_electrician_reliability_cooldowns"("p_limit" integer) TO "service_role";
+
+
+--
 -- Name: FUNCTION "apply_operational_escalations"(); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -11413,12 +12053,37 @@ GRANT ALL ON FUNCTION "public"."attach_guest_job_photos"("p_job_id" "uuid", "p_a
 
 
 --
+-- Name: FUNCTION "audit_direct_job_status_write"(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."audit_direct_job_status_write"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."audit_direct_job_status_write"() TO "service_role";
+
+
+--
 -- Name: FUNCTION "calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) TO "service_role";
 GRANT ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) TO "authenticated";
+
+
+--
+-- Name: TABLE "system_health_snapshots"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE "public"."system_health_snapshots" TO "service_role";
+GRANT SELECT ON TABLE "public"."system_health_snapshots" TO "authenticated";
+
+
+--
+-- Name: FUNCTION "capture_system_health_snapshot"("p_source" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."capture_system_health_snapshot"("p_source" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."capture_system_health_snapshot"("p_source" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."capture_system_health_snapshot"("p_source" "text") TO "authenticated";
 
 
 --
@@ -11590,8 +12255,16 @@ GRANT ALL ON FUNCTION "public"."electrician_level_rank"("p_level" "text") TO "au
 --
 
 REVOKE ALL ON FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "enforce_job_status_event"(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."enforce_job_status_event"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."enforce_job_status_event"() TO "service_role";
 
 
 --
@@ -11904,12 +12577,37 @@ GRANT ALL ON FUNCTION "public"."public_message_for_job_event"("p_event_type" "te
 
 
 --
+-- Name: FUNCTION "rebuild_all_job_projections"("p_limit" integer, "p_request_id" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."rebuild_all_job_projections"("p_limit" integer, "p_request_id" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."rebuild_all_job_projections"("p_limit" integer, "p_request_id" "text") TO "service_role";
+
+
+--
 -- Name: FUNCTION "rebuild_all_job_state_projections"("p_limit" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."rebuild_all_job_state_projections"("p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."rebuild_all_job_state_projections"("p_limit" integer) TO "service_role";
 GRANT ALL ON FUNCTION "public"."rebuild_all_job_state_projections"("p_limit" integer) TO "authenticated";
+
+
+--
+-- Name: FUNCTION "rebuild_all_projections"("p_limit" integer, "p_request_id" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."rebuild_all_projections"("p_limit" integer, "p_request_id" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."rebuild_all_projections"("p_limit" integer, "p_request_id" "text") TO "service_role";
+
+
+--
+-- Name: FUNCTION "rebuild_job_projection"("p_job_id" "uuid", "p_request_id" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."rebuild_job_projection"("p_job_id" "uuid", "p_request_id" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."rebuild_job_projection"("p_job_id" "uuid", "p_request_id" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."rebuild_job_projection"("p_job_id" "uuid", "p_request_id" "text") TO "authenticated";
 
 
 --
@@ -12212,6 +12910,30 @@ GRANT ALL ON FUNCTION "public"."sync_app_account_for_auth_user"("p_user_id" "uui
 
 
 --
+-- Name: FUNCTION "sync_electrician_reliability_aliases"(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."sync_electrician_reliability_aliases"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sync_electrician_reliability_aliases"() TO "service_role";
+
+
+--
+-- Name: FUNCTION "sync_electrician_snapshot_reliability_aliases"(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."sync_electrician_snapshot_reliability_aliases"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sync_electrician_snapshot_reliability_aliases"() TO "service_role";
+
+
+--
+-- Name: FUNCTION "sync_job_event_payload"(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."sync_job_event_payload"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sync_job_event_payload"() TO "service_role";
+
+
+--
 -- Name: FUNCTION "sync_job_state_projection"("p_job_id" "uuid", "p_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -12454,6 +13176,14 @@ GRANT SELECT ON TABLE "public"."operational_automation_runs" TO "authenticated";
 
 
 --
+-- Name: TABLE "operational_metrics"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE "public"."operational_metrics" TO "service_role";
+GRANT SELECT ON TABLE "public"."operational_metrics" TO "authenticated";
+
+
+--
 -- Name: TABLE "quote_items"; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -12628,4 +13358,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TA
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 9PBFe1D25U74NVYNaQ9kL49uE39Fi7onkGJ5aBD9qvCxF4blO42A7299Jdq0nFg
+\unrestrict rpxfVKV60GXAKfTmKUkrmzFNa61FNQKT9exj8eY8VeAvO1d3rXr5OBTjtHcdFXI

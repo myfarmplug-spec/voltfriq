@@ -772,7 +772,11 @@
       showNotice('Photos added to your booking.');
       renderAssigned(job);
     } catch (error) {
-      showError(error);
+      if (error && error.queued) {
+        showNotice(error.message);
+      } else {
+        showError(error);
+      }
     } finally {
       if (input) input.value = '';
       setScreenBusy(false);
