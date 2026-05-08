@@ -3,11 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const storePath = path.join(root, 'js', 'store.js');
+const generatedStorePath = path.join(root, '.tmp', 'frontend-bundles', 'js', 'store.js');
+const legacyStorePath = path.join(root, 'js', 'store.js');
 const migrationsDir = path.join(root, 'supabase', 'migrations');
 const schemaPath = path.join(root, 'supabase', 'schema.sql');
 
-const storeSource = fs.readFileSync(storePath, 'utf8');
+const storeSource = fs.readFileSync(
+  fs.existsSync(generatedStorePath) ? generatedStorePath : legacyStorePath,
+  'utf8'
+);
 const schemaSource = fs.existsSync(schemaPath) ? fs.readFileSync(schemaPath, 'utf8') : '';
 const migrationFiles = fs.readdirSync(migrationsDir)
   .filter((file) => file.endsWith('.sql'))

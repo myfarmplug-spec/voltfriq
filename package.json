@@ -4,8 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "npm run check:js && npm run check:backend",
-    "check:js": "node --check js/store.js && node --check js/customer.js && node --check js/electrician.js && node --check js/admin.js",
-    "check:backend": "node scripts/check-backend-contracts.mjs"
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build && node scripts/build-frontend-bundles.mjs --out dist && node scripts/copy-vite-static.mjs",
+    "preview": "vite preview --host 0.0.0.0",
+    "build:frontend": "node scripts/build-frontend-bundles.mjs --out .tmp/frontend-bundles",
+    "check": "npm run build:frontend && npm run check:js && npm run check:backend && npm run check:rpc && npm run build",
+    "check:js": "node --check .tmp/frontend-bundles/js/store.js && node --check .tmp/frontend-bundles/js/customer.js && node --check .tmp/frontend-bundles/js/electrician.js && node --check .tmp/frontend-bundles/js/admin.js",
+    "check:backend": "node scripts/check-backend-contracts.mjs",
+    "check:rpc": "node scripts/check-frontend-rpc-contracts.mjs"
+  },
+  "devDependencies": {
+    "vite": "^8.0.11"
   }
 }
