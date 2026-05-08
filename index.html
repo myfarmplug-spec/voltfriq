@@ -25,7 +25,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/css/shared.css?v=20260506-apply-test" />
-  <link rel="stylesheet" href="/css/customer.css?v=20260506-auth-booking" />
+  <link rel="stylesheet" href="/css/customer.css?v=20260506-tracking-ref" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
   <link rel="stylesheet" href="/css/home.css?v=20260506-home-company" />
 </head>
@@ -489,64 +489,89 @@
   </div>
 
   <div id="screen-assigned" class="screen">
-    <div class="screen-header">
-      <div class="screen-header-title">Job Tracking</div>
-      <button class="btn-icon" id="btn-assigned-history" title="Job History">&#128203;</button>
+    <div class="screen-header tracking-ref-header">
+      <div class="tracking-header-left">
+        <button class="btn-icon tracking-back-btn" id="btn-assigned-back" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
+        <div class="screen-header-title">Job Tracking</div>
+      </div>
+      <button class="tracking-support-btn" id="btn-assigned-support" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 15a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h3v4Z"/><path d="M3 15a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2H3v4Z"/><path d="M13 19h2a4 4 0 0 0 4-4"/></svg>
+        <span>Support</span>
+      </button>
     </div>
-    <div class="screen-body">
-      <div class="summary-strip card" id="tracking-summary"></div>
-
-      <div class="elec-card card" id="assigned-elec-card">
-        <div class="elec-avatar" id="assigned-avatar">&#128119;</div>
-        <div class="elec-info">
-          <div class="elec-name" id="assigned-name">--</div>
-          <div class="elec-specialty" id="assigned-specialty">--</div>
-          <div class="elec-stats">
-            <span class="badge badge-yellow">&#11088; <span id="assigned-rating">--</span></span>
-            <span class="badge badge-blue">&#128188; <span id="assigned-jobs">--</span> jobs</span>
-            <span class="badge badge-green">&#128205; <span id="assigned-distance">--</span> km</span>
-          </div>
-          <div class="issue-summary-cats" id="assigned-badges"></div>
-          <div class="helper-note" id="assigned-trust-note">Verified Pro</div>
+    <div class="screen-body tracking-ref-body">
+      <section class="tracking-hero-card" aria-label="Booking status">
+        <div class="tracking-hero-bolt-orb" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
         </div>
-      </div>
+        <div class="tracking-hero-copy">
+          <div class="tracking-confirmed-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.2 2.2 4.8-5"/></svg>
+            <span>BOOKING CONFIRMED</span>
+          </div>
+          <h2 id="tracking-hero-title">We’re pairing you with the best <span>VoltFriq</span></h2>
+          <p id="tracking-hero-sub">Finding a verified electrician near you...</p>
+          <div class="tracking-reassurance">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <span id="tracking-hero-note">This usually takes less than a minute.</span>
+          </div>
+        </div>
+        <div class="tracking-energy-graphic" aria-hidden="true">
+          <div class="tracking-map-grid"></div>
+          <svg class="tracking-route" viewBox="0 0 500 270" preserveAspectRatio="none">
+            <path d="M42 218 168 150 258 150 326 120 386 130 442 64" />
+            <path d="M238 150 306 36" />
+            <path d="M326 120 430 180" />
+          </svg>
+          <span class="tracking-node tracking-node-a"></span>
+          <span class="tracking-node tracking-node-b"></span>
+          <span class="tracking-node tracking-node-c"></span>
+          <span class="tracking-node tracking-node-d"></span>
+          <div class="tracking-pulse-core">
+            <span class="tracking-ring tracking-ring-one"></span>
+            <span class="tracking-ring tracking-ring-two"></span>
+            <span class="tracking-ring tracking-ring-three"></span>
+            <span class="tracking-core-bolt">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
+            </span>
+          </div>
+        </div>
+      </section>
 
-      <div class="issue-summary card">
-        <div class="issue-summary-title">Job Transparency</div>
-        <div class="issue-summary-cats" id="assigned-categories"></div>
-        <div class="issue-summary-desc" id="assigned-desc"></div>
-        <div class="mini-meta-list" id="assigned-meta-list"></div>
-      </div>
+      <section class="tracking-progress-card" aria-label="Booking progress">
+        <div class="tracking-progress-list" id="tracking-progress"></div>
+      </section>
 
-      <div class="timeline-card card">
-        <div class="issue-summary-title">Status</div>
-        <div class="status-lines" id="status-lines"></div>
-      </div>
+      <section class="tracking-details-card" id="tracking-details" aria-label="Booking details"></section>
 
-      <div class="issue-summary card trust-assurance-card" id="tracking-trust-card">
-        <div class="issue-summary-title">Customer Protection</div>
-        <div class="mini-meta-list" id="tracking-trust-list"></div>
-      </div>
-
-      <div class="issue-summary card">
-        <div class="issue-summary-title">Notifications</div>
-        <div class="mini-meta-list" id="customer-notifications-list"></div>
-      </div>
-
-      <div class="issue-summary card guest-dashboard-card" id="guest-dashboard-card" style="display:none;">
-        <div class="issue-summary-title">Optional Account</div>
-        <div class="guest-dashboard-copy">Create a customer account for future dashboards, faster repeat bookings, and easier tracking across devices.</div>
-        <button class="btn-secondary btn-full" id="btn-guest-create-account">Create Account</button>
-      </div>
-
-      <div class="issue-summary card">
-        <div class="issue-summary-title">Wallet &amp; Referral</div>
-        <div class="mini-meta-list" id="wallet-referral-summary"></div>
-      </div>
-
-      <button class="btn-primary btn-large" id="btn-open-chat">&#128172; Open Chat</button>
-      <button class="btn-secondary btn-full" id="btn-view-quote" style="display:none;">&#128196; View Quote</button>
-      <button class="btn-ghost" id="btn-report-issue-assigned">Report an Issue</button>
+      <section class="tracking-trust-card" aria-label="VoltFriq customer protection">
+        <div class="tracking-trust-row">
+          <span class="tracking-trust-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v6c0 5 3.4 8 7 9 3.6-1 7-4 7-9V6l-7-3Z"/><path d="m8.8 12.2 2.1 2.1 4.4-5"/></svg>
+          </span>
+          <div>
+            <strong>Your safety is our priority</strong>
+            <span>All VoltFriq electricians are verified and manually approved.</span>
+          </div>
+          <span class="tracking-trust-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </div>
+        <div class="tracking-trust-row">
+          <span class="tracking-trust-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v6c0 5 3.4 8 7 9 3.6-1 7-4 7-9V6l-7-3Z"/><path d="m8.8 12.2 2.1 2.1 4.4-5"/></svg>
+          </span>
+          <div>
+            <strong>Manual verification</strong>
+            <span>No work starts without your approval.</span>
+          </div>
+          <span class="tracking-trust-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -823,11 +848,12 @@
 
   <script src="/vendor/supabase.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/api/env.js?v=20260506-auth-booking"></script>
+  <script src="/api/env.js?v=20260508-mobile-ops"></script>
   <script src="/js/config.js?v=20260506-auth-booking"></script>
-  <script src="/js/store.js?v=20260506-doc-upload-fix"></script>
+  <script src="/js/store.js?v=20260508-mobile-ops"></script>
   <script src="/js/navigation.js?v=20260506-auth-booking-2"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/customer.js?v=20260506-auth-booking-2"></script>
+  <script src="/js/customer.js?v=20260508-mobile-ops"></script>
+  <script src="/js/sw-register.js?v=20260508-mobile-ops"></script>
 </body>
 </html>

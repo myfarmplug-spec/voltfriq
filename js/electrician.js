@@ -25,6 +25,11 @@ const ElecApp = (() => {
     const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
     return query.get('reset') === '1' || hash.get('type') === 'recovery';
   }
+  function hasSignupAuthCallback() {
+    const query = new URLSearchParams(window.location.search || '');
+    const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+    return query.get('verify') === 'signup' || hash.get('type') === 'signup' || hash.has('access_token');
+  }
   const ISSUE_LABELS = {
     'Light fitting': 'Light fitting',
     'Socket repair': 'Socket repair',
@@ -364,10 +369,11 @@ const ElecApp = (() => {
     const selectedAreas = activeChipValues('#reg-service-areas .chip.active', 'area');
     const serviceAreas = getRegistrationServiceAreas(settings);
     const usingFallbackArea = !(Array.isArray(settings.service_areas) && settings.service_areas.filter(Boolean).length);
+    renderLocationDatalist(serviceAreas);
 
     document.getElementById('reg-service-areas').innerHTML = serviceAreas.length
       ? serviceAreas.map((area) => {
-          const shouldActivate = selectedAreas.includes(area) || (usingFallbackArea && serviceAreas.length === 1);
+          const shouldActivate = selectedAreas.includes(area) || (usingFallbackArea && serviceAreas.length === 1) || serviceAreas.length === 1;
           return chipMarkup('area', area, shouldActivate);
         }).join('')
       : '<div class="expertise-empty">Enter your main location in Step 1 to continue.</div>';
@@ -660,12 +666,16 @@ const ElecApp = (() => {
   }
 
   async function nextRegistrationStepTwo() {
-    const serviceAreas = activeChipValues('#reg-service-areas .chip.active', 'area');
+    let serviceAreas = activeChipValues('#reg-service-areas .chip.active', 'area');
+    const fallbackLocation = document.getElementById('reg-location').value.trim();
+    if (!serviceAreas.length && fallbackLocation) {
+      serviceAreas = [fallbackLocation];
+    }
     if (!serviceAreas.length) {
       showError('Choose at least one service area before continuing.');
       return;
     }
-    await Store.loadExpertiseCategories();
+    await Store.loadExpertiseCategories().catch(() => null);
     renderExpertiseOptions();
     goTo('elec-reg-3');
   }
@@ -1442,9 +1452,24 @@ const ElecApp = (() => {
 
   function getRegistrationServiceAreas(settings) {
     const configured = Array.isArray(settings.service_areas) ? settings.service_areas.filter(Boolean) : [];
-    if (configured.length) return configured;
     const fallbackLocation = document.getElementById('reg-location') ? document.getElementById('reg-location').value.trim() : '';
-    return fallbackLocation ? [fallbackLocation] : [];
+    const areas = configured.slice();
+    if (fallbackLocation && !areas.some((area) => area.toLowerCase() === fallbackLocation.toLowerCase())) {
+      areas.unshift(fallbackLocation);
+    }
+    return areas.length ? areas : [];
+  }
+
+  function renderLocationDatalist(areas) {
+    let datalist = document.getElementById('electrician-service-area-options');
+    if (!datalist) {
+      datalist = document.createElement('datalist');
+      datalist.id = 'electrician-service-area-options';
+      document.body.appendChild(datalist);
+    }
+    datalist.innerHTML = (areas || []).map((area) => '<option value="' + escapeAttribute(area) + '"></option>').join('');
+    const locationInput = document.getElementById('reg-location');
+    if (locationInput) locationInput.setAttribute('list', 'electrician-service-area-options');
   }
 
   function getRegistrationSkillOptions(settings) {
@@ -1456,7 +1481,7 @@ const ElecApp = (() => {
   }
 
   function chipMarkup(type, label, active = false) {
-    return '<button class="chip' + (active ? ' active' : '') + '" data-' + type + '="' + label + '">' + label + '</button>';
+    return '<button type="button" class="chip' + (active ? ' active' : '') + '" data-' + type + '="' + escapeAttribute(label) + '">' + escapeHtml(label) + '</button>';
   }
 
   function toggleChip(event) {
@@ -1465,7 +1490,7 @@ const ElecApp = (() => {
   }
 
   function activeChipValues(selector, key) {
-    return Array.from(document.querySelectorAll(selector)).map((chip) => chip.dataset[key]);
+    return Array.from(document.querySelectorAll(selector)).map((chip) => chip.dataset[key]).filter(Boolean);
   }
 
   function formatUrgency(value) {
@@ -1538,6 +1563,7 @@ const ElecApp = (() => {
   async function withButtonLoading(buttonId, loadingText, work) {
     const button = document.getElementById(buttonId);
     const originalText = button ? button.textContent : '';
+    const originalHtml = button ? button.innerHTML : '';
     const wasDisabled = button ? button.disabled : false;
     if (button) {
       button.disabled = true;
@@ -1551,7 +1577,7 @@ const ElecApp = (() => {
       return null;
     } finally {
       if (button) {
-        button.textContent = originalText;
+        button.innerHTML = originalHtml || originalText;
         button.disabled = wasDisabled;
       }
     }

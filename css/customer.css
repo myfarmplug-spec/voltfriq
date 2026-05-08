@@ -3462,3 +3462,965 @@
   width: 24px;
   height: 24px;
 }
+
+/* Tracking reference match */
+#screen-assigned {
+  background:
+    radial-gradient(circle at 76% 16%, rgba(255, 184, 0, 0.10), transparent 32%),
+    radial-gradient(circle at 20% 12%, rgba(91, 167, 255, 0.08), transparent 34%),
+    #070B14;
+}
+
+#screen-assigned .tracking-ref-header {
+  width: 100%;
+  max-width: none;
+  padding: max(28px, calc(env(safe-area-inset-top, 0px) + 18px)) clamp(22px, 4vw, 48px) 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: rgba(7, 11, 20, 0.76);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.24);
+}
+
+#screen-assigned .tracking-header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+#screen-assigned .tracking-ref-header .screen-header-title {
+  flex: 0 1 auto;
+  font-size: clamp(1.45rem, 2.3vw, 1.9rem);
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+#screen-assigned .tracking-back-btn,
+#screen-assigned .tracking-support-btn {
+  min-height: 56px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 38px rgba(0, 0, 0, 0.18);
+}
+
+#screen-assigned .tracking-back-btn {
+  width: 56px;
+  height: 56px;
+}
+
+#screen-assigned .tracking-back-btn svg,
+#screen-assigned .tracking-support-btn svg {
+  width: 25px;
+  height: 25px;
+}
+
+#screen-assigned .tracking-support-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 19px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+#screen-assigned .tracking-ref-body {
+  max-width: 1280px;
+  gap: 20px;
+  padding: 20px clamp(22px, 4vw, 48px) max(40px, calc(env(safe-area-inset-bottom, 0px) + 26px));
+}
+
+#screen-assigned .tracking-hero-card,
+#screen-assigned .tracking-progress-card,
+#screen-assigned .tracking-details-card,
+#screen-assigned .tracking-trust-card {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 22% 20%, rgba(255, 184, 0, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(11, 22, 38, 0.88), rgba(5, 11, 21, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(12px);
+}
+
+#screen-assigned .tracking-hero-card {
+  min-height: 260px;
+  display: grid;
+  grid-template-columns: 185px minmax(0, 1fr) minmax(360px, 0.9fr);
+  align-items: center;
+  gap: 30px;
+  padding: 44px 50px;
+}
+
+#screen-assigned .tracking-hero-card::after,
+#screen-assigned .tracking-progress-card::after,
+#screen-assigned .tracking-details-card::after,
+#screen-assigned .tracking-trust-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.045), transparent 30%, transparent 78%, rgba(255, 184, 0, 0.05));
+  opacity: 0.72;
+}
+
+#screen-assigned .tracking-hero-bolt-orb {
+  width: 150px;
+  height: 150px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--yellow);
+  background:
+    radial-gradient(circle, rgba(255, 184, 0, 0.22), transparent 58%),
+    rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 184, 0, 0.48);
+  box-shadow: 0 0 55px rgba(255, 184, 0, 0.16);
+  z-index: 1;
+}
+
+#screen-assigned .tracking-hero-bolt-orb svg {
+  width: 74px;
+  height: 74px;
+  filter: drop-shadow(0 0 16px rgba(255, 184, 0, 0.48));
+}
+
+#screen-assigned .tracking-hero-copy {
+  display: grid;
+  gap: 18px;
+  z-index: 1;
+}
+
+#screen-assigned .tracking-confirmed-pill {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 235, 174, 0.38);
+  background: rgba(0, 235, 174, 0.08);
+  color: #1ff2bd;
+  font-size: 0.86rem;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+}
+
+#screen-assigned .tracking-confirmed-pill svg {
+  width: 18px;
+  height: 18px;
+}
+
+#screen-assigned .tracking-hero-copy h2 {
+  max-width: 12.5ch;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(2rem, 3.4vw, 2.9rem);
+  font-weight: 860;
+  line-height: 1.16;
+  letter-spacing: 0;
+}
+
+#screen-assigned .tracking-hero-copy h2 span {
+  color: var(--yellow);
+}
+
+#screen-assigned .tracking-hero-copy p,
+#screen-assigned .tracking-reassurance {
+  margin: 0;
+  color: rgba(230, 237, 248, 0.68);
+}
+
+#screen-assigned .tracking-hero-copy p {
+  font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+  line-height: 1.4;
+}
+
+#screen-assigned .tracking-reassurance {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.97rem;
+}
+
+#screen-assigned .tracking-reassurance svg {
+  width: 21px;
+  height: 21px;
+  color: rgba(230, 237, 248, 0.72);
+}
+
+#screen-assigned .tracking-energy-graphic {
+  position: relative;
+  height: 210px;
+  z-index: 1;
+  isolation: isolate;
+}
+
+#screen-assigned .tracking-map-grid {
+  position: absolute;
+  inset: -18px -22px;
+  opacity: 0.32;
+  transform: perspective(450px) rotateX(58deg) rotateZ(-22deg);
+  transform-origin: center;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.10) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(circle at 55% 48%, #000 0 42%, transparent 72%);
+}
+
+#screen-assigned .tracking-route {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  filter: drop-shadow(0 0 8px rgba(255, 184, 0, 0.62));
+}
+
+#screen-assigned .tracking-route path {
+  fill: none;
+  stroke: var(--yellow);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#screen-assigned .tracking-node {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #fff7d7;
+  box-shadow: 0 0 18px rgba(255, 184, 0, 0.9), 0 0 42px rgba(255, 184, 0, 0.38);
+}
+
+#screen-assigned .tracking-node-a { left: 7%; top: 78%; }
+#screen-assigned .tracking-node-b { left: 63%; top: 10%; }
+#screen-assigned .tracking-node-c { right: 8%; top: 52%; }
+#screen-assigned .tracking-node-d { right: 18%; top: 72%; }
+
+#screen-assigned .tracking-pulse-core {
+  position: absolute;
+  left: 47%;
+  top: 49%;
+  width: 76px;
+  height: 76px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+}
+
+#screen-assigned .tracking-ring,
+#screen-assigned .tracking-core-bolt {
+  position: absolute;
+  border-radius: 999px;
+}
+
+#screen-assigned .tracking-ring {
+  border: 1.4px solid rgba(255, 184, 0, 0.78);
+  box-shadow: 0 0 25px rgba(255, 184, 0, 0.18);
+  animation: trackingPulse 2.4s ease-in-out infinite;
+}
+
+#screen-assigned .tracking-ring-one { inset: -34px; animation-delay: 0s; }
+#screen-assigned .tracking-ring-two { inset: -17px; animation-delay: 0.28s; }
+#screen-assigned .tracking-ring-three { inset: 0; animation-delay: 0.56s; }
+
+#screen-assigned .tracking-core-bolt {
+  inset: 16px;
+  display: grid;
+  place-items: center;
+  color: #fff5b8;
+  background: radial-gradient(circle, rgba(255, 184, 0, 0.42), rgba(255, 184, 0, 0.10) 68%);
+  box-shadow: 0 0 35px rgba(255, 184, 0, 0.52);
+}
+
+#screen-assigned .tracking-core-bolt svg {
+  width: 28px;
+  height: 28px;
+}
+
+#screen-assigned .tracking-progress-card {
+  padding: 24px 34px;
+}
+
+#screen-assigned .tracking-progress-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: start;
+}
+
+#screen-assigned .tracking-step {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 11px;
+  min-width: 0;
+  color: rgba(230, 237, 248, 0.55);
+  z-index: 1;
+}
+
+#screen-assigned .tracking-step::before,
+#screen-assigned .tracking-step::after {
+  content: "";
+  position: absolute;
+  top: 23px;
+  height: 3px;
+  pointer-events: none;
+}
+
+#screen-assigned .tracking-step::before {
+  left: 0;
+  right: 50%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.20));
+}
+
+#screen-assigned .tracking-step::after {
+  left: 50%;
+  right: 0;
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.24) 35%, transparent 0);
+  background-size: 12px 3px;
+}
+
+#screen-assigned .tracking-step:first-child::before,
+#screen-assigned .tracking-step:last-child::after {
+  display: none;
+}
+
+#screen-assigned .tracking-step.is-done::before,
+#screen-assigned .tracking-step.is-done::after,
+#screen-assigned .tracking-step.is-active::before {
+  background: linear-gradient(90deg, rgba(255, 184, 0, 0.15), rgba(255, 184, 0, 0.96));
+}
+
+#screen-assigned .tracking-step-icon {
+  position: relative;
+  z-index: 2;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(230, 237, 248, 0.76);
+}
+
+#screen-assigned .tracking-step-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+#screen-assigned .tracking-step.is-done .tracking-step-icon,
+#screen-assigned .tracking-step.is-active .tracking-step-icon {
+  color: var(--yellow);
+  border-color: rgba(255, 184, 0, 0.88);
+  background: rgba(255, 184, 0, 0.10);
+  box-shadow: 0 0 22px rgba(255, 184, 0, 0.32);
+}
+
+#screen-assigned .tracking-step.is-done:first-child .tracking-step-icon {
+  color: #06101d;
+  background: linear-gradient(180deg, #ffe185, #ffb800);
+}
+
+#screen-assigned .tracking-step-copy {
+  display: grid;
+  gap: 5px;
+  text-align: center;
+}
+
+#screen-assigned .tracking-step-copy strong {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 730;
+}
+
+#screen-assigned .tracking-step-copy span {
+  color: rgba(230, 237, 248, 0.58);
+  font-size: 0.9rem;
+}
+
+#screen-assigned .tracking-step.is-active .tracking-step-copy span {
+  color: var(--yellow);
+}
+
+#screen-assigned .tracking-step-side {
+  display: none;
+}
+
+#screen-assigned .tracking-details-card {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(580px, 1.6fr) auto;
+  grid-template-areas: "main metrics contact";
+  gap: 24px;
+  align-items: center;
+  padding: 26px 32px;
+}
+
+#screen-assigned .tracking-detail-main {
+  grid-area: main;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  min-width: 0;
+  z-index: 1;
+}
+
+#screen-assigned .tracking-detail-icon {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--yellow);
+}
+
+#screen-assigned .tracking-detail-icon svg {
+  width: 38px;
+  height: 38px;
+  filter: drop-shadow(0 0 10px rgba(255, 184, 0, 0.24));
+}
+
+#screen-assigned .tracking-detail-copy h3,
+#screen-assigned .tracking-detail-copy p {
+  margin: 0;
+}
+
+#screen-assigned .tracking-detail-copy h3 {
+  color: var(--text-primary);
+  font-size: 1.22rem;
+  font-weight: 820;
+}
+
+#screen-assigned .tracking-detail-copy p {
+  margin-top: 7px;
+  color: rgba(230, 237, 248, 0.72);
+  font-size: 1rem;
+}
+
+#screen-assigned .tracking-ticket-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(230, 237, 248, 0.64);
+  font-size: 0.96rem;
+}
+
+#screen-assigned .tracking-copy-ticket {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(230, 237, 248, 0.76);
+  cursor: pointer;
+}
+
+#screen-assigned .tracking-copy-ticket svg {
+  width: 19px;
+  height: 19px;
+}
+
+#screen-assigned .tracking-copy-ticket.is-copied {
+  color: var(--yellow);
+}
+
+#screen-assigned .tracking-detail-metrics {
+  grid-area: metrics;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  z-index: 1;
+}
+
+#screen-assigned .tracking-metric {
+  min-height: 88px;
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  padding: 0 20px;
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+#screen-assigned .tracking-metric span,
+#screen-assigned .tracking-metric small {
+  color: rgba(230, 237, 248, 0.60);
+  font-style: normal;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+#screen-assigned .tracking-metric strong {
+  color: var(--text-primary);
+  font-size: 1.12rem;
+  font-weight: 780;
+}
+
+#screen-assigned .tracking-metric em {
+  width: max-content;
+  max-width: 100%;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 184, 0, 0.45);
+  background: rgba(255, 184, 0, 0.08);
+  color: var(--yellow);
+  font-style: normal;
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+#screen-assigned .tracking-contact-btn {
+  grid-area: contact;
+  min-width: 180px;
+  min-height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 720;
+  cursor: pointer;
+  z-index: 1;
+}
+
+#screen-assigned .tracking-contact-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+#screen-assigned .tracking-trust-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  padding: 26px 34px;
+}
+
+#screen-assigned .tracking-trust-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 18px;
+  z-index: 1;
+}
+
+#screen-assigned .tracking-trust-row + .tracking-trust-row {
+  padding-left: 34px;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+#screen-assigned .tracking-trust-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--yellow);
+}
+
+#screen-assigned .tracking-trust-icon svg {
+  width: 38px;
+  height: 38px;
+}
+
+#screen-assigned .tracking-trust-row strong,
+#screen-assigned .tracking-trust-row span {
+  display: block;
+}
+
+#screen-assigned .tracking-trust-row strong {
+  color: var(--text-primary);
+  font-size: 1.03rem;
+  font-weight: 760;
+}
+
+#screen-assigned .tracking-trust-row div > span {
+  margin-top: 6px;
+  color: rgba(230, 237, 248, 0.66);
+  font-size: 0.96rem;
+  line-height: 1.35;
+}
+
+#screen-assigned .tracking-trust-arrow {
+  display: none;
+  color: var(--text-primary);
+}
+
+#screen-assigned .tracking-trust-arrow svg {
+  width: 24px;
+  height: 24px;
+}
+
+@keyframes trackingPulse {
+  0%, 100% {
+    transform: scale(0.96);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 980px) {
+  #screen-assigned .tracking-hero-card {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 1fr);
+    padding: 34px;
+  }
+
+  #screen-assigned .tracking-hero-bolt-orb {
+    display: none;
+  }
+
+  #screen-assigned .tracking-details-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "main contact"
+      "metrics metrics";
+    gap: 24px;
+  }
+
+  #screen-assigned .tracking-detail-metrics {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 22px;
+  }
+
+  #screen-assigned .tracking-metric:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  #screen-assigned .tracking-ref-header {
+    padding: max(28px, calc(env(safe-area-inset-top, 0px) + 18px)) 16px 18px;
+  }
+
+  #screen-assigned .tracking-header-left {
+    gap: 14px;
+  }
+
+  #screen-assigned .tracking-ref-header .screen-header-title {
+    font-size: 1.45rem;
+  }
+
+  #screen-assigned .tracking-back-btn {
+    width: 54px;
+    height: 54px;
+    min-height: 54px;
+    border-radius: 16px;
+  }
+
+  #screen-assigned .tracking-support-btn {
+    min-height: 54px;
+    padding: 0 14px;
+    border-radius: 16px;
+    font-size: 0.98rem;
+  }
+
+  #screen-assigned .tracking-ref-body {
+    gap: 18px;
+    padding: 18px 16px max(32px, calc(env(safe-area-inset-bottom, 0px) + 22px));
+  }
+
+  #screen-assigned .tracking-hero-card,
+  #screen-assigned .tracking-progress-card,
+  #screen-assigned .tracking-details-card,
+  #screen-assigned .tracking-trust-card {
+    border-radius: 22px;
+  }
+
+  #screen-assigned .tracking-hero-card {
+    min-height: 430px;
+    grid-template-columns: 1fr;
+    align-items: start;
+    padding: 32px;
+  }
+
+  #screen-assigned .tracking-hero-copy {
+    gap: 18px;
+    max-width: 52%;
+  }
+
+  #screen-assigned .tracking-confirmed-pill {
+    padding: 8px 13px;
+    font-size: 0.78rem;
+  }
+
+  #screen-assigned .tracking-hero-copy h2 {
+    max-width: 9.5ch;
+    font-size: 2.06rem;
+  }
+
+  #screen-assigned .tracking-hero-copy p {
+    max-width: 12.5ch;
+    font-size: 1.16rem;
+  }
+
+  #screen-assigned .tracking-reassurance {
+    max-width: 13ch;
+    align-items: flex-start;
+    font-size: 0.96rem;
+    line-height: 1.35;
+  }
+
+  #screen-assigned .tracking-energy-graphic {
+    position: absolute;
+    right: -20px;
+    top: 84px;
+    width: 60%;
+    height: 330px;
+  }
+
+  #screen-assigned .tracking-map-grid {
+    inset: 0 -4px -28px -26px;
+    opacity: 0.28;
+  }
+
+  #screen-assigned .tracking-route {
+    inset: 24px 2px 18px -34px;
+  }
+
+  #screen-assigned .tracking-pulse-core {
+    left: 48%;
+    top: 45%;
+    width: 66px;
+    height: 66px;
+  }
+
+  #screen-assigned .tracking-node-a { left: 2%; top: 78%; }
+  #screen-assigned .tracking-node-b { left: 62%; top: 8%; }
+  #screen-assigned .tracking-node-c { right: 5%; top: 50%; }
+  #screen-assigned .tracking-node-d { right: 22%; top: 63%; }
+
+  #screen-assigned .tracking-progress-card {
+    padding: 28px 32px;
+  }
+
+  #screen-assigned .tracking-progress-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  #screen-assigned .tracking-step {
+    min-height: 74px;
+    grid-template-columns: 54px minmax(0, 1fr) auto;
+    justify-items: stretch;
+    align-items: start;
+    gap: 18px;
+  }
+
+  #screen-assigned .tracking-step::before,
+  #screen-assigned .tracking-step::after {
+    left: 25px;
+    right: auto;
+    width: 2px;
+    height: calc(100% - 48px);
+    top: 50px;
+    background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.22) 0 7px, transparent 7px 14px);
+  }
+
+  #screen-assigned .tracking-step::before {
+    display: none;
+  }
+
+  #screen-assigned .tracking-step.is-done::after,
+  #screen-assigned .tracking-step.is-active::after {
+    background: linear-gradient(to bottom, rgba(255, 184, 0, 0.9), rgba(255, 184, 0, 0.18));
+  }
+
+  #screen-assigned .tracking-step:last-child::after {
+    display: none;
+  }
+
+  #screen-assigned .tracking-step-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  #screen-assigned .tracking-step-copy {
+    padding-top: 3px;
+    text-align: left;
+  }
+
+  #screen-assigned .tracking-step-copy strong {
+    font-size: 1.1rem;
+  }
+
+  #screen-assigned .tracking-step-copy span {
+    font-size: 1rem;
+  }
+
+  #screen-assigned .tracking-step-side {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 6px;
+    min-width: 58px;
+    min-height: 32px;
+    border-radius: 999px;
+    font-size: 0.86rem;
+    font-weight: 760;
+  }
+
+  #screen-assigned .tracking-step-side-done {
+    color: #1ff2bd;
+    background: rgba(0, 235, 174, 0.08);
+    border: 1px solid rgba(0, 235, 174, 0.22);
+  }
+
+  #screen-assigned .tracking-step-side-active {
+    gap: 6px;
+    color: var(--yellow);
+  }
+
+  #screen-assigned .tracking-step-side-active i {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 10px rgba(255, 184, 0, 0.6);
+  }
+
+  #screen-assigned .tracking-details-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "main"
+      "metrics"
+      "contact";
+    padding: 28px 30px;
+    gap: 24px;
+  }
+
+  #screen-assigned .tracking-detail-main {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  #screen-assigned .tracking-detail-icon {
+    width: 70px;
+    height: 70px;
+  }
+
+  #screen-assigned .tracking-contact-btn {
+    grid-area: main;
+    justify-self: end;
+    min-width: 168px;
+    min-height: 60px;
+    align-self: center;
+  }
+
+  #screen-assigned .tracking-detail-copy {
+    padding-right: 170px;
+  }
+
+  #screen-assigned .tracking-detail-copy h3 {
+    font-size: 1.3rem;
+  }
+
+  #screen-assigned .tracking-detail-copy p,
+  #screen-assigned .tracking-ticket-line {
+    font-size: 1rem;
+  }
+
+  #screen-assigned .tracking-detail-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-top: 22px;
+  }
+
+  #screen-assigned .tracking-metric {
+    min-height: 88px;
+    padding: 0 18px;
+  }
+
+  #screen-assigned .tracking-metric:first-child {
+    padding-left: 0;
+  }
+
+  #screen-assigned .tracking-trust-card {
+    grid-template-columns: 1fr;
+    padding: 22px 30px;
+  }
+
+  #screen-assigned .tracking-trust-row {
+    grid-template-columns: 54px minmax(0, 1fr) 28px;
+    gap: 18px;
+    padding: 12px 0;
+  }
+
+  #screen-assigned .tracking-trust-row + .tracking-trust-row {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+  }
+
+  #screen-assigned .tracking-trust-row strong {
+    font-size: 1.1rem;
+  }
+
+  #screen-assigned .tracking-trust-row div > span {
+    font-size: 1rem;
+  }
+
+  #screen-assigned .tracking-trust-arrow {
+    display: block;
+  }
+}
+
+@media (max-width: 480px) {
+  #screen-assigned .tracking-support-btn {
+    min-height: 50px;
+    padding: 0 12px;
+    font-size: 0.9rem;
+  }
+
+  #screen-assigned .tracking-hero-card {
+    padding: 26px 24px;
+  }
+
+  #screen-assigned .tracking-hero-copy {
+    max-width: 56%;
+  }
+
+  #screen-assigned .tracking-detail-copy {
+    padding-right: 0;
+  }
+
+  #screen-assigned .tracking-contact-btn {
+    grid-area: contact;
+    width: 100%;
+  }
+
+  #screen-assigned .tracking-detail-metrics {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  #screen-assigned .tracking-metric {
+    min-height: auto;
+    padding: 0 0 0 16px;
+  }
+}

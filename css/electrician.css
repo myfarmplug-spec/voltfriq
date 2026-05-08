@@ -1228,13 +1228,13 @@
 .elec-live-card {
   padding: 18px;
   border-radius: 16px;
-  border: 1.5px solid #F3F4F6;
-  background: var(--white);
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, rgba(12, 24, 41, 0.96) 0%, rgba(8, 17, 31, 0.98) 100%);
   margin-bottom: 16px;
 }
 
 .elec-onboarding-card {
-  background: linear-gradient(180deg, #FFFCF2 0%, #FFFFFF 100%);
+  background: rgba(255, 184, 0, 0.07);
   border-color: rgba(255,184,0,0.28);
 }
 
@@ -1253,7 +1253,7 @@
 
 .elec-onboarding-note {
   font-size: 14px;
-  color: var(--mid);
+  color: var(--text-secondary);
   line-height: 1.6;
 }
 
@@ -1261,13 +1261,14 @@
   font-size: 14px;
   font-weight: 800;
   margin-bottom: 10px;
+  color: var(--text-primary);
 }
 
 .elec-question-card {
   padding: 14px 16px;
   border-radius: 14px;
-  border: 1.5px solid #F3F4F6;
-  background: var(--white);
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, rgba(12, 24, 41, 0.96) 0%, rgba(8, 17, 31, 0.98) 100%);
   margin-bottom: 10px;
 }
 
@@ -1296,8 +1297,8 @@
 .expertise-no-match {
   padding: 12px 14px;
   border-radius: 12px;
-  background: var(--light);
-  color: var(--mid);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -1317,9 +1318,9 @@
 }
 
 .expertise-dropdown {
-  border: 1.5px solid #E5E7EB;
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
-  background: var(--white);
+  background: linear-gradient(180deg, rgba(12, 24, 41, 0.96) 0%, rgba(8, 17, 31, 0.98) 100%);
   overflow: hidden;
 }
 
@@ -1333,20 +1334,24 @@
   flex-direction: column;
   max-height: 240px;
   overflow-y: auto;
-  border-top: 1px solid #F3F4F6;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .expertise-option {
   border: 0;
-  border-bottom: 1px solid #F3F4F6;
-  background: var(--white);
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
   padding: 14px 16px;
   text-align: left;
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: var(--dark);
+  color: var(--text-primary);
   cursor: pointer;
+}
+
+.expertise-option:hover {
+  background: rgba(255, 184, 0, 0.08);
 }
 
 .expertise-option:last-child {
@@ -1354,10 +1359,10 @@
 }
 
 .certification-card {
-  border: 1.5px solid #F3F4F6;
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 14px;
-  background: var(--white);
+  background: linear-gradient(180deg, rgba(12, 24, 41, 0.96) 0%, rgba(8, 17, 31, 0.98) 100%);
   margin-bottom: 10px;
 }
 
@@ -1379,21 +1384,22 @@
 }
 
 .validation-option {
-  border: 1.5px solid #E5E7EB;
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
-  background: var(--white);
+  background: rgba(255, 255, 255, 0.035);
   padding: 14px;
   text-align: left;
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: var(--dark);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
 .validation-option.active {
   border-color: var(--yellow);
-  background: #FFFBEB;
+  background: rgba(255, 184, 0, 0.12);
+  color: #fff4c7;
 }
 
 .validation-question-feedback,
@@ -1407,36 +1413,36 @@
 .validation-feedback {
   padding: 12px 14px;
   border-radius: 12px;
-  background: var(--light);
+  background: rgba(255, 255, 255, 0.045);
 }
 
 .validation-feedback.is-good {
-  background: #ECFDF5;
-  color: #065F46;
+  background: rgba(46, 207, 145, 0.12);
+  color: #7ff0c0;
 }
 
 .validation-feedback.is-review {
-  background: #FEF2F2;
-  color: #991B1B;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ffc4c4;
 }
 
 .document-group {
-  border: 1.5px solid #F3F4F6;
+  border: 1px solid var(--border-subtle);
   border-radius: 16px;
   padding: 14px;
-  background: var(--white);
+  background: linear-gradient(180deg, rgba(12, 24, 41, 0.96) 0%, rgba(8, 17, 31, 0.98) 100%);
   margin-bottom: 14px;
 }
 
 .document-group-title {
   font-size: 14px;
   font-weight: 800;
-  color: var(--dark);
+  color: var(--text-primary);
   margin-bottom: 10px;
 }
 
 .document-group-meta {
-  color: var(--mid);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 12px;
 }
@@ -1444,7 +1450,7 @@
 .document-group-or {
   padding: 4px 0 10px;
   text-align: center;
-  color: var(--mid);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1452,8 +1458,8 @@
 .doc-field-card {
   padding: 14px 16px;
   border-radius: 14px;
-  border: 1.5px solid #F3F4F6;
-  background: var(--white);
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.035);
   margin-bottom: 12px;
 }
 

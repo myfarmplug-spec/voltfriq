@@ -1359,17 +1359,66 @@
 }
 
 .admin-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
   background: rgba(5, 11, 21, 0.96);
   border-top: 1px solid var(--border-subtle);
   backdrop-filter: blur(14px);
+  padding: 8px 4px max(8px, env(safe-area-inset-bottom));
 }
 
 .admin-nav-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
   color: var(--text-tertiary);
 }
 
 .admin-nav-item.active {
   color: var(--yellow);
+}
+
+.admin-job-mini {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.admin-job-mini:last-child {
+  border-bottom: 0;
+}
+
+.admin-job-mini strong,
+.admin-job-mini span {
+  display: block;
+}
+
+.admin-job-mini span {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.price-edit-grid {
+  display: grid;
+  gap: 8px;
 }
 
 @media (min-width: 640px) {

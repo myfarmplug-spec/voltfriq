@@ -1,9 +1,29 @@
 /* ─── VOLTFRIQ — SUPABASE BACKEND SERVICE ───────────────────────── */
 
 const Store = (() => {
+  const DEFAULT_SERVICE_AREAS = [
+    'GRA, Port Harcourt',
+    'Old GRA, Port Harcourt',
+    'New GRA, Port Harcourt',
+    'D-Line, Port Harcourt',
+    'Trans Amadi, Port Harcourt',
+    'Woji, Port Harcourt',
+    'Rumuola, Port Harcourt',
+    'Rumuokoro, Port Harcourt',
+    'Rumuigbo, Port Harcourt',
+    'Ada George, Port Harcourt',
+    'Eliozu, Port Harcourt',
+    'Elelenwo, Port Harcourt',
+    'Mile 1, Port Harcourt',
+    'Mile 3, Port Harcourt',
+    'Choba, Port Harcourt'
+  ];
+  const LEGACY_LAGOS_AREAS = ['Lekki Phase 1', 'Victoria Island', 'Ikeja', 'Surulere', 'Yaba', 'Ajah'];
+  const REQUEST_TIMEOUT_MS = 45000;
+
   const DEFAULT_SETTINGS = {
     assessment_fee: 0,
-    service_areas: [],
+    service_areas: DEFAULT_SERVICE_AREAS.slice(),
     issue_categories: [],
     ranking_weights: {},
     platform_bank_name: '',
@@ -91,12 +111,43 @@ const Store = (() => {
     return window.VOLTFRIQ_CONFIG || {};
   }
 
+  function isLocalHostname(hostname) {
+    return ['localhost', '127.0.0.1', '0.0.0.0'].includes(String(hostname || '').toLowerCase());
+  }
+
+  function parseUrl(value) {
+    try {
+      return new URL(value);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function normalizeSiteUrl(value) {
+    const clean = String(value || '').trim().replace(/\/+$/, '');
+    if (!clean) return '';
+    if (/^https?:\/\//i.test(clean)) return clean;
+    if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|\/|$)/i.test(clean)) return 'http://' + clean;
+    return 'https://' + clean;
+  }
+
   function getPublicSiteUrl() {
-    const configured = String(config().publicSiteUrl || '').trim();
-    const fallback = (typeof window !== 'undefined' && window.location && window.location.origin)
+    const configured = normalizeSiteUrl(config().publicSiteUrl);
+    const currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
       ? window.location.origin
       : 'https://www.voltfriq.com';
-    return (configured || fallback).replace(/\/+$/, '');
+    const configuredUrl = parseUrl(configured);
+    const currentUrl = parseUrl(currentOrigin);
+
+    if (currentUrl && isLocalHostname(currentUrl.hostname)) {
+      return currentOrigin.replace(/\/+$/, '');
+    }
+
+    if (configuredUrl && isLocalHostname(configuredUrl.hostname) && currentUrl && !isLocalHostname(currentUrl.hostname)) {
+      return currentOrigin.replace(/\/+$/, '');
+    }
+
+    return (configured || currentOrigin || 'https://www.voltfriq.com').replace(/\/+$/, '');
   }
 
   function siteUrlForPath(path) {
@@ -275,6 +326,9 @@ const Store = (() => {
       return null;
     }
     state.client = window.supabase.createClient(config().supabaseUrl, config().supabaseAnonKey, {
+      global: {
+        fetch: fetchWithTimeout
+      },
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -283,6 +337,31 @@ const Store = (() => {
     });
     state.configured = true;
     return state.client;
+  }
+
+  function fetchWithTimeout(input, init) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort(new Error('Request timed out. Check your connection and try again.'));
+    }, REQUEST_TIMEOUT_MS);
+    const nextInit = Object.assign({}, init || {}, { signal: controller.signal });
+
+    if (init && init.signal) {
+      if (init.signal.aborted) {
+        window.clearTimeout(timeoutId);
+        return fetch(input, init);
+      }
+      init.signal.addEventListener('abort', () => controller.abort(init.signal.reason), { once: true });
+    }
+
+    return fetch(input, nextInit)
+      .catch((error) => {
+        if (controller.signal.aborted) {
+          throw new Error('Request timed out. Check your connection and try again.');
+        }
+        throw error;
+      })
+      .finally(() => window.clearTimeout(timeoutId));
   }
 
   function requireClient() {
@@ -426,12 +505,30 @@ const Store = (() => {
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    state.settings = Object.assign({}, DEFAULT_SETTINGS, result.data || {});
+    state.settings = normalizeSettings(Object.assign({}, DEFAULT_SETTINGS, result.data || {}));
     return state.settings;
   }
 
   function getSettings() {
     return state.settings;
+  }
+
+  function normalizeSettings(settings) {
+    const next = Object.assign({}, settings || {});
+    const areas = Array.isArray(next.service_areas) ? next.service_areas.map((area) => String(area || '').trim()).filter(Boolean) : [];
+    const normalizedAreas = areas.map((area) => area.toLowerCase());
+    const legacyOnly = areas.length > 0 && areas.every((area) => LEGACY_LAGOS_AREAS.map((legacy) => legacy.toLowerCase()).includes(area.toLowerCase()));
+    const hasPortHarcourtArea = normalizedAreas.some((area) => area.includes('port harcourt') || area.includes('phc') || area.includes('gra'));
+    next.service_areas = (!areas.length || legacyOnly || !hasPortHarcourtArea)
+      ? DEFAULT_SERVICE_AREAS.slice()
+      : areas;
+    return next;
+  }
+
+  function getServiceAreas() {
+    return (state.settings && Array.isArray(state.settings.service_areas) && state.settings.service_areas.length)
+      ? state.settings.service_areas.slice()
+      : DEFAULT_SERVICE_AREAS.slice();
   }
 
   async function loadExpertiseCategories() {
@@ -712,6 +809,7 @@ const Store = (() => {
           bank_name: payload.bankName || '',
           bank_account_number: payload.bankAccountNumber || '',
           bank_account_name: payload.bankAccountName || '',
+          skills: payload.skills || [],
           onboarding_score: payload.onboardingValidationScore || 0,
           onboarding_review_status: payload.onboardingReviewStatus || 'pending',
           onboarding_feedback: payload.onboardingFeedback || null,
@@ -950,7 +1048,7 @@ const Store = (() => {
     return jobs;
   }
 
-  async function listAdminJobs() {
+  async function listAdminJobs(options) {
     const client = ensureClient();
     const result = await client
       .from('jobs')
@@ -970,7 +1068,9 @@ const Store = (() => {
       .order('created_at', { ascending: false });
     if (result.error) throw normalizeError(result.error, 'Could not load admin jobs.');
     const jobs = (result.data || []).map(normalizeJob);
-    await Promise.all(jobs.map(hydrateProtectedAssets));
+    if (!options || options.includeProtectedAssets !== false) {
+      await Promise.all(jobs.map(hydrateProtectedAssets));
+    }
     return jobs;
   }
 
@@ -1313,7 +1413,7 @@ const Store = (() => {
     return state.electrician;
   }
 
-  async function listElectricians(filter) {
+  async function listElectricians(filter, options) {
     const client = ensureClient();
     let query = client
       .from('electricians')
@@ -1325,15 +1425,21 @@ const Store = (() => {
     const result = await query;
     if (result.error) throw normalizeError(result.error, 'Could not load electricians.');
     const electricians = result.data || [];
-    await Promise.all(electricians.map(async (electrician) => {
-      const docs = electrician.electrician_documents || [];
-      await Promise.all(docs.map(async (documentItem) => {
-        if (documentItem.file_path) {
-          documentItem.signedUrl = await createSignedStorageUrl('electricianDocuments', documentItem.file_path);
-        }
-      }));
-    }));
+    if (!options || options.includeDocumentUrls !== false) {
+      await Promise.all(electricians.map(hydrateElectricianDocuments));
+    }
     return electricians;
+  }
+
+  async function hydrateElectricianDocuments(electrician) {
+    if (!electrician) return electrician;
+    const docs = electrician.electrician_documents || [];
+    await Promise.all(docs.map(async (documentItem) => {
+      if (documentItem.file_path && !documentItem.signedUrl) {
+        documentItem.signedUrl = await createSignedStorageUrl('electricianDocuments', documentItem.file_path);
+      }
+    }));
+    return electrician;
   }
 
   async function getWalletSummary() {
@@ -1536,14 +1642,12 @@ const Store = (() => {
     const client = ensureClient();
     const current = await loadSettings();
     const payload = Object.assign({}, current, nextSettings);
-    const result = await client
-      .from('admin_settings')
-      .update(payload)
-      .eq('id', current.id)
-      .select('*')
-      .single();
+    const query = current.id
+      ? client.from('admin_settings').update(payload).eq('id', current.id).select('*').single()
+      : client.from('admin_settings').insert(payload).select('*').single();
+    const result = await query;
     if (result.error) throw normalizeError(result.error, 'Could not save admin settings.');
-    state.settings = Object.assign({}, DEFAULT_SETTINGS, result.data);
+    state.settings = normalizeSettings(Object.assign({}, DEFAULT_SETTINGS, result.data));
     return state.settings;
   }
 
@@ -1958,6 +2062,7 @@ const Store = (() => {
     selectDraftAddress,
     getRoleHome,
     getSettings,
+    getServiceAreas,
     getStatusLabel,
     getPaymentStatusLabel,
     formatCurrency,
@@ -1996,6 +2101,7 @@ const Store = (() => {
     updateCurrentElectrician,
     replaceCurrentElectricianSkills,
     listElectricians,
+    hydrateElectricianDocuments,
     getWalletSummary,
     getReferralSummary,
     linkReferralCode,

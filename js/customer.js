@@ -59,6 +59,12 @@
     return query.get('reset') === '1' || hash.get('type') === 'recovery';
   }
 
+  function hasSignupAuthCallback() {
+    const query = new URLSearchParams(window.location.search || '');
+    const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+    return query.get('verify') === 'signup' || hash.get('type') === 'signup' || hash.has('access_token');
+  }
+
   const CUSTOMER_ROUTE_TITLES = {
     welcome: 'VoltFriq | Port Harcourt Electricians',
     'service-area': 'VoltFriq | Book | Location',
@@ -256,6 +262,8 @@
     on('pay-copy-btn', 'click', () => copyText('pay-account-number', 'pay-copy-btn'));
 
     on('btn-open-chat', 'click', openChat);
+    on('btn-assigned-support', 'click', handleTrackingSupport);
+    on('btn-assigned-back', 'click', goBack);
     on('btn-chat-back', 'click', () => {
       chatOpen = false;
       Chat.destroy();
@@ -316,7 +324,18 @@
       resetDraft();
       goTo('welcome');
     });
-    on('btn-assigned-history', 'click', showHistory);
+    const trackingDetails = document.getElementById('tracking-details');
+    if (trackingDetails) {
+      trackingDetails.addEventListener('click', (event) => {
+        const contact = event.target.closest('#btn-tracking-contact');
+        if (contact) {
+          handleTrackingSupport();
+          return;
+        }
+        const copy = event.target.closest('[data-copy-ticket]');
+        if (copy) copyTrackingTicket(copy);
+      });
+    }
     on('btn-history-back', 'click', goBack);
 
     document.getElementById('history-tabs').addEventListener('click', (event) => {
@@ -455,6 +474,10 @@
     }
 
     if (route.screen === 'customer-auth') {
+      if (Store.getCurrentProfile() && !wantsPasswordReset() && hasSignupAuthCallback()) {
+        await continueAfterCustomerAuth();
+        return;
+      }
       openCustomerAuthScreen((route.data && route.data.intent) || 'default', (route.data && route.data.mode) || 'login', { replace: route.source !== 'popstate' });
       return;
     }
@@ -556,11 +579,49 @@
   }
 
   function renderSettings() {
-    const settings = Store.getSettings();
-    document.getElementById('service-area-select').innerHTML = '<option value="">Select a service area</option>' +
-      (settings.service_areas || []).map((area) => '<option value="' + area + '">' + area + '</option>').join('');
+    const areas = getConfiguredServiceAreas();
+    const serviceAreaSelect = document.getElementById('service-area-select');
+    if (serviceAreaSelect) {
+      serviceAreaSelect.innerHTML = '<option value="">Select a service area</option>' +
+        areas.map((area) => '<option value="' + escapeAttribute(area) + '">' + escapeHtml(area) + '</option>').join('');
+      serviceAreaSelect.style.display = areas.length ? '' : 'none';
+      if (draft.serviceArea) syncServiceAreaSelect(draft.serviceArea);
+    }
+    renderLocationDatalist(areas);
 
     renderIssueSelect();
+  }
+
+  function getConfiguredServiceAreas() {
+    if (Store.getServiceAreas) return Store.getServiceAreas();
+    const settings = Store.getSettings();
+    return Array.isArray(settings.service_areas) ? settings.service_areas.filter(Boolean) : [];
+  }
+
+  function renderLocationDatalist(areas) {
+    let datalist = document.getElementById('service-area-options');
+    if (!datalist) {
+      datalist = document.createElement('datalist');
+      datalist.id = 'service-area-options';
+      document.body.appendChild(datalist);
+    }
+    datalist.innerHTML = (areas || []).map((area) => '<option value="' + escapeAttribute(area) + '"></option>').join('');
+    const manualInput = document.getElementById('manual-location-input');
+    if (manualInput) manualInput.setAttribute('list', 'service-area-options');
+  }
+
+  function syncServiceAreaSelect(value) {
+    const select = document.getElementById('service-area-select');
+    const cleanValue = String(value || '').trim();
+    if (!select || !cleanValue) return;
+    const hasOption = Array.from(select.options).some((option) => option.value.toLowerCase() === cleanValue.toLowerCase());
+    if (!hasOption) {
+      const option = document.createElement('option');
+      option.value = cleanValue;
+      option.textContent = cleanValue;
+      select.appendChild(option);
+    }
+    select.value = cleanValue;
   }
 
   async function startBooking() {
@@ -656,6 +717,7 @@
     draft.addressSource = source || normalized.source || 'saved';
     const manualInput = document.getElementById('manual-location-input');
     if (manualInput) manualInput.value = normalized.addressText || label;
+    syncServiceAreaSelect(label);
     const detectedCard = document.getElementById('detected-location-card');
     const detectedText = document.getElementById('detected-location-text');
     if (detectedCard && detectedText && source === 'gps') {
@@ -1303,8 +1365,18 @@
       const job = Store.getCurrentProfile()
         ? await Store.createBooking(bookingPayload)
         : await Store.createGuestBooking(bookingPayload);
-      await openTrackedJob(job.id);
+      finishNewBooking(job);
     });
+  }
+
+  function finishNewBooking(job) {
+    if (!job || !job.id) return;
+    currentJob = job;
+    currentTrackedTicket = job.ticket || currentTrackedTicket;
+    bindJobSubscription(job.id);
+    routeJob(job, false, { routeData: { ticket: job.ticket || currentTrackedTicket } });
+    refreshWelcomeActions();
+    renderSidecars();
   }
 
   async function resumeLatestJob(options) {
@@ -1339,9 +1411,9 @@
     currentJob = await Store.getJob(jobId);
     currentTrackedTicket = currentJob.ticket || null;
     bindJobSubscription(jobId);
-    await renderSidecars();
     routeJob(currentJob, false, options);
     refreshWelcomeActions();
+    renderSidecars();
     return currentJob;
   }
 
@@ -1373,8 +1445,8 @@
     jobSubscription = Store.subscribeToJob(jobId, async (job) => {
       currentJob = job;
        currentTrackedTicket = job.ticket || currentTrackedTicket;
-      await renderSidecars();
       routeJob(job, true, { routeData: { ticket: job.ticket || currentTrackedTicket }, replace: true });
+      renderSidecars();
       if (chatOpen) {
         await Chat.render();
       }
@@ -1435,86 +1507,131 @@
   }
 
   function renderAssigned(job) {
-    const electrician = job.assignedElectrician;
-    const matchingMessage = getTrackingHeadline(job);
     currentTrackedTicket = job.ticket || currentTrackedTicket;
-    document.getElementById('tracking-summary').innerHTML = [
-      ['Ticket', job.ticket],
-      ['Tracking', matchingMessage],
-      ['Issue', humanizeIssueCategory(job.issueCategory)]
-    ].map(renderKeyValueRow).join('');
-
-    document.getElementById('assigned-avatar').textContent = '⚡';
-    document.getElementById('assigned-name').textContent = electrician ? electrician.name : (job.needsManualAssignment ? 'VoltFriq support is reviewing this request' : 'Finding a verified electrician near you');
-    document.getElementById('assigned-specialty').textContent = electrician
-      ? ((electrician.locationLabel || electrician.serviceAreas.join(', ')) || 'Nearest available VoltFriq')
-      : (job.needsManualAssignment ? 'Manual assignment required' : 'Matching the nearest verified VoltFriq');
-    document.getElementById('assigned-rating').textContent = electrician && electrician.rating ? electrician.rating.toFixed(1) : '--';
-    document.getElementById('assigned-jobs').textContent = electrician ? electrician.jobsCompleted : '--';
-    document.getElementById('assigned-distance').textContent = electrician ? calculateDistanceLabel(job, electrician) : '--';
-    document.getElementById('assigned-badges').innerHTML = electrician && electrician.badges ? electrician.badges.map((badge) => '<span class="badge badge-blue">' + escapeHtml(badge) + '</span>').join('') : '<span class="badge badge-blue">Verified Pro</span>';
-    document.getElementById('assigned-trust-note').textContent = electrician
-      ? 'Response rate ' + Math.round(electrician.responseRate || 0) + '% · ' + (electrician.totalRatings || 0) + ' rating(s)'
-      : 'Approved electricians only';
-    document.getElementById('assigned-categories').innerHTML = '<span class="badge badge-yellow">' + escapeHtml(humanizeIssueCategory(job.issueCategory)) + '</span>';
-    document.getElementById('assigned-desc').textContent = job.description || 'No additional note added.';
-    document.getElementById('assigned-meta-list').innerHTML = [
-      ['Service area', job.serviceArea],
-      ['Location', job.locationLabel || job.serviceArea],
-      ['Assessment', job.requiresAssessment ? 'Required' : 'Remote quote first'],
-      ['Materials', job.materialHandling === 'self_procured' ? 'Customer supplied' : 'VoltFriq supplied']
-    ].map(renderMiniMetaRow).join('');
-    document.getElementById('tracking-trust-list').innerHTML = [
-      ['Payment', 'Manually verified before work starts'],
-      ['Approval', 'No work starts without your approval'],
-      ['Tracking', 'Every step is visible in this screen'],
-      ['Support', job.isGuest ? 'Create an account later and keep this ticket safe for support' : 'Report any issue instantly from this screen']
-    ].map(renderMiniMetaRow).join('');
-    document.getElementById('btn-view-quote').style.display = job.quote && job.quote.id ? '' : 'none';
-    document.getElementById('btn-open-chat').style.display = job.isGuest ? 'none' : '';
-    document.getElementById('btn-report-issue-assigned').style.display = job.isGuest ? 'none' : '';
-    document.getElementById('btn-report-issue-confirm').style.display = job.isGuest ? 'none' : '';
-    if (document.getElementById('guest-dashboard-card')) {
-      document.getElementById('guest-dashboard-card').style.display = job.isGuest ? '' : 'none';
-    }
-    renderStatusLines(job);
+    renderTrackingProgress(job);
+    renderTrackingDetails(job);
   }
 
-  function getTrackingHeadline(job) {
-    if (job.needsManualAssignment) return 'Booking received. VoltFriq dispatch is reviewing the next best available electrician.';
-    if (['requested', 'matching'].includes(job.status)) return 'Booking received. Matching is in progress.';
-    if (job.status === 'assigned') return 'Electrician assigned. Waiting for acceptance.';
-    if (job.status === 'accepted') return 'Electrician accepted and is preparing the next step.';
-    if (['assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed'].includes(job.status)) return 'Assessment flow is in progress.';
-    if (job.status === 'quoted') return 'Quote ready for your review.';
-    if (['quote_accepted', 'work_payment_pending_verification', 'payment_confirmed'].includes(job.status)) return 'Work payment flow is in progress.';
-    if (['en_route', 'on_site'].includes(job.status)) return 'Your electrician is on the move or on site.';
-    if (job.status === 'work_in_progress') return 'Work is currently in progress.';
-    if (['electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status)) return 'Work is complete and closing steps are in progress.';
-    return 'Booking received. Matching is in progress.';
+  function getTrackingStageIndex(job) {
+    const status = (job && job.status) || 'matching';
+    if (['rated', 'payout_complete', 'payout_pending', 'customer_confirmed', 'electrician_completed'].includes(status)) return 4;
+    if (['en_route', 'on_site', 'work_in_progress'].includes(status)) return 3;
+    if ([
+      'assigned',
+      'accepted',
+      'assessment_fee_pending',
+      'assessment_payment_pending_verification',
+      'assessment_confirmed',
+      'quoted',
+      'quote_accepted',
+      'work_payment_pending_verification',
+      'payment_confirmed'
+    ].includes(status)) return 2;
+    return 1;
   }
 
-  function renderStatusLines(job) {
-    const lines = [
-      statusLine('Submitted', true, 'Your request has been saved and is now tracked by ticket.'),
-      statusLine('Assigned', ['matching', 'assigned', 'accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), job.needsManualAssignment ? 'No instant match accepted yet. Dispatch is reviewing and can manually deploy the next best VoltFriq.' : 'VoltFriq is routing the nearest approved electrician for this request.'),
-      statusLine('VoltFriq confirmed', ['assigned', 'accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'You will see the assigned VoltFriq before any work begins.'),
-      statusLine('Payment pending verification', ['assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Assessment, quote, and payment proofs stay here until manual verification is complete.'),
-      statusLine('Work in progress', ['en_route', 'on_site', 'work_in_progress', 'electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Track arrival, on-site work, and completion from this screen.'),
-      statusLine('Awaiting customer confirmation', ['electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status), 'Confirm completion, then rate the finished job when the closeout steps are done.')
+  function renderTrackingProgress(job) {
+    const container = document.getElementById('tracking-progress');
+    if (!container) return;
+    const activeIndex = getTrackingStageIndex(job);
+    const submittedTime = formatTrackingTime(job && job.createdAt);
+    const steps = [
+      { title: 'Submitted', sub: submittedTime, icon: 'check' },
+      { title: 'Pairing', sub: activeIndex === 1 ? 'In progress' : 'Done', icon: 'bolt' },
+      { title: 'Assigned', sub: activeIndex >= 2 ? 'Done' : 'Pending', icon: 'person' },
+      { title: 'On the way', sub: activeIndex >= 3 ? 'In progress' : 'Pending', icon: 'car' },
+      { title: 'Completed', sub: activeIndex >= 4 ? 'Done' : 'Pending', icon: 'flag' }
     ];
-    const container = document.getElementById('status-lines');
-    container.innerHTML = lines.join('');
-    container.classList.remove('is-updating');
-    void container.offsetWidth;
-    container.classList.add('is-updating');
+    container.innerHTML = steps.map((step, index) => {
+      const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending';
+      const side = state === 'done'
+        ? '<span class="tracking-step-side tracking-step-side-done">Done</span>'
+        : state === 'active'
+          ? '<span class="tracking-step-side tracking-step-side-active" aria-hidden="true"><i></i><i></i><i></i></span>'
+          : '';
+      return '<div class="tracking-step is-' + state + '">' +
+          '<div class="tracking-step-icon">' + trackingIcon(step.icon) + '</div>' +
+          '<div class="tracking-step-copy"><strong>' + escapeHtml(step.title) + '</strong><span>' + escapeHtml(step.sub) + '</span></div>' +
+          side +
+        '</div>';
+    }).join('');
   }
 
-  function statusLine(title, done, sub) {
-    return '<div class="status-line ' + (done ? 'done' : '') + '">' +
-      '<div class="status-line-dot"></div>' +
-      '<div><div class="status-line-title">' + title + '</div><div class="status-line-sub">' + sub + '</div></div>' +
-    '</div>';
+  function renderTrackingDetails(job) {
+    const container = document.getElementById('tracking-details');
+    if (!container) return;
+    const issue = getTrackingIssueLabel(job);
+    const location = (job && (job.locationLabel || job.serviceArea)) || 'Selected service area';
+    const ticket = (job && job.ticket) || currentTrackedTicket || 'VFQ-PENDING';
+    const urgency = formatUrgencyLabel((job && job.urgency) || 'emergency');
+    const serviceType = getTrackingServiceType(job);
+    const estimate = getTrackingEstimate(job);
+    const assessment = getTrackingAssessmentValue(job);
+    container.innerHTML = [
+      '<div class="tracking-detail-main">',
+        '<span class="tracking-detail-icon" aria-hidden="true">' + trackingIcon('socket') + '</span>',
+        '<div class="tracking-detail-copy">',
+          '<h3>' + escapeHtml(issue) + '</h3>',
+          '<p>' + escapeHtml(location) + '</p>',
+          '<div class="tracking-ticket-line">',
+            '<span>Ticket ID: ' + escapeHtml(ticket) + '</span>',
+            '<button class="tracking-copy-ticket" type="button" data-copy-ticket="' + escapeHtml(ticket) + '" aria-label="Copy ticket ID">' + trackingIcon('copy') + '</button>',
+          '</div>',
+        '</div>',
+      '</div>',
+      '<button class="tracking-contact-btn" id="btn-tracking-contact" type="button">' + trackingIcon('message') + '<span>Contact Us</span></button>',
+      '<div class="tracking-detail-metrics">',
+        '<div class="tracking-metric"><span>Service type</span><strong>' + escapeHtml(serviceType) + '</strong><em>' + escapeHtml(urgency) + '</em></div>',
+        '<div class="tracking-metric"><span>Estimated price</span><strong>' + escapeHtml(estimate) + '</strong><small>After assessment</small></div>',
+        '<div class="tracking-metric"><span>Assessment visit</span><strong>' + escapeHtml(assessment) + '</strong></div>',
+      '</div>'
+    ].join('');
+  }
+
+  function getTrackingIssueLabel(job) {
+    if (!job) return 'Electrical service';
+    return humanizeIssueCategory(job.issueCategory) || job.issueCategory || 'Electrical service';
+  }
+
+  function getTrackingServiceType(job) {
+    const issue = job ? getIssueOption(job.issueCategory, getTrackingIssueLabel(job)) : null;
+    const service = (issue && issue.value) || (job && inferSkillCategory(job.issueCategory)) || 'Electrical work';
+    return String(service).replace(/\s+issue$/i, '').replace(/^General Installation$/i, 'Installation');
+  }
+
+  function getTrackingEstimate(job) {
+    const issue = job ? getIssueOption(job.issueCategory, getTrackingIssueLabel(job)) : null;
+    const min = issue ? Number(issue.estimated_fee_min || 0) : 0;
+    if (min) return Store.formatCurrency(min) + '+';
+    return getIssueEstimate(job && job.issueCategory, getTrackingIssueLabel(job));
+  }
+
+  function getTrackingAssessmentValue(job) {
+    const settings = Store.getSettings();
+    const assessmentStatuses = ['assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed'];
+    const amount = job && assessmentStatuses.includes(job.status) ? Number(settings.assessment_fee || 0) : 0;
+    return Store.formatCurrency(amount);
+  }
+
+  function formatTrackingTime(value) {
+    if (!value) return 'Submitted';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Submitted';
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function trackingIcon(name) {
+    const icons = {
+      check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>',
+      bolt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>',
+      person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>',
+      car: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11 7 5h10l2 6"/><path d="M4 11h16v7H4z"/><path d="M7 18v2"/><path d="M17 18v2"/><circle cx="8" cy="15" r="1"/><circle cx="16" cy="15" r="1"/></svg>',
+      flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h11l-1.5 4L16 12H5"/></svg>',
+      socket: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="16" rx="3"/><path d="M9 9v2"/><path d="M15 9v2"/><path d="M10 16h4"/></svg>',
+      message: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>',
+      copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M5 16H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+    };
+    return icons[name] || '';
   }
 
   function renderAssessmentFee(job) {
@@ -1863,6 +1980,30 @@
     await Chat.init('customer-chat-container', currentJob.id, 'customer', (Store.getCurrentProfile() || {}).full_name || 'Customer');
   }
 
+  async function handleTrackingSupport() {
+    if (!currentJob) return;
+    if (currentJob.isGuest && !Store.getCurrentProfile()) {
+      openCustomerAuthScreen('tracking', 'login');
+      showNotice('Sign in or create an account to contact support about this booking.');
+      return;
+    }
+    await openChat();
+  }
+
+  function copyTrackingTicket(button) {
+    const ticket = button && button.dataset ? button.dataset.copyTicket : '';
+    if (!ticket) return;
+    const markCopied = () => {
+      button.classList.add('is-copied');
+      setTimeout(() => button.classList.remove('is-copied'), 1100);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ticket).then(markCopied).catch(markCopied);
+    } else {
+      markCopied();
+    }
+  }
+
   function copyText(sourceId, buttonId) {
     const value = document.getElementById(sourceId).textContent;
     navigator.clipboard.writeText(value).then(() => {
@@ -2038,9 +2179,11 @@
 
   async function renderSidecars() {
     try {
-      const notifications = await Store.listNotifications();
-      const walletSummary = await Store.getWalletSummary();
-      const referralSummary = await Store.getReferralSummary();
+      const [notifications, walletSummary, referralSummary] = await Promise.all([
+        Store.listNotifications(),
+        Store.getWalletSummary(),
+        Store.getReferralSummary()
+      ]);
       renderNotifications(notifications);
       renderWalletAndReferral(walletSummary, referralSummary);
     } catch (error) {
@@ -2283,6 +2426,7 @@
   async function withButtonLoading(buttonId, loadingText, work) {
     const button = document.getElementById(buttonId);
     const originalText = button ? button.textContent : '';
+    const originalHtml = button ? button.innerHTML : '';
     const wasDisabled = button ? button.disabled : false;
     if (button) {
       button.disabled = true;
@@ -2296,7 +2440,7 @@
       return null;
     } finally {
       if (button) {
-        button.textContent = originalText;
+        button.innerHTML = originalHtml || originalText;
         button.disabled = wasDisabled;
       }
     }

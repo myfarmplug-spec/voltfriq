@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoltFriq Offline</title>
+  <meta name="theme-color" content="#07111d" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/assets/favicon.ico" sizes="any" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --yellow: #ffb800;
+      --bg: #070b14;
+      --text: #f8fbff;
+      --muted: rgba(232, 240, 252, 0.68);
+      --border: rgba(255, 255, 255, 0.10);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 72% 18%, rgba(255, 184, 0, 0.12), transparent 34%),
+        radial-gradient(circle at 18% 82%, rgba(91, 167, 255, 0.10), transparent 38%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(100%, 520px);
+      padding: 32px;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(11, 22, 38, 0.90), rgba(5, 11, 21, 0.96));
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.36);
+    }
+
+    .mark {
+      width: 68px;
+      height: 68px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 22px;
+      border-radius: 999px;
+      color: var(--yellow);
+      background: rgba(255, 184, 0, 0.10);
+      border: 1px solid rgba(255, 184, 0, 0.28);
+      box-shadow: 0 0 28px rgba(255, 184, 0, 0.18);
+    }
+
+    .mark svg {
+      width: 34px;
+      height: 34px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2rem, 9vw, 3rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    button {
+      width: 100%;
+      min-height: 56px;
+      border: 0;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffc928, var(--yellow));
+      color: #07111d;
+      font: inherit;
+      font-weight: 850;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
+    </div>
+    <h1>You’re offline</h1>
+    <p>VoltFriq needs a connection for live booking, payment, and tracking updates. Reconnect, then try again.</p>
+    <button type="button" onclick="window.location.reload()">Try Again</button>
+  </main>
+</body>
+</html>

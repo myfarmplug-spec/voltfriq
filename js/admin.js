@@ -12,6 +12,7 @@
   let selectedJob = null;
   let selectedElectrician = null;
   let portalSubscription = null;
+  let realtimeRefreshTimer = null;
   let pendingAdminRoute = null;
 
   function wantsPasswordReset() {
@@ -174,8 +175,12 @@
   function attachRealtime() {
     if (portalSubscription) portalSubscription.unsubscribe();
     portalSubscription = Store.subscribeToPortalFeed(async () => {
-      await loadData();
-      refreshScreen(currentScreen || 'admin-dashboard');
+      if (realtimeRefreshTimer) window.clearTimeout(realtimeRefreshTimer);
+      realtimeRefreshTimer = window.setTimeout(async () => {
+        realtimeRefreshTimer = null;
+        await loadData();
+        refreshScreen(currentScreen || 'admin-dashboard');
+      }, 700);
     });
   }
 
@@ -225,13 +230,28 @@
   }
 
   async function loadData() {
-    currentJobs = await Store.listAdminJobs();
-    currentElectricians = await Store.listElectricians('all');
-    currentPayments = await Store.listPaymentsNeedingVerification();
-    currentNotifications = await Store.listNotifications();
-    currentDisputes = await Store.listDisputes();
-    currentAppeals = await Store.listAppeals();
-    await Store.loadExpertiseCategories();
+    const [
+      jobs,
+      electricians,
+      payments,
+      notifications,
+      disputes,
+      appeals
+    ] = await Promise.all([
+      Store.listAdminJobs({ includeProtectedAssets: false }),
+      Store.listElectricians('all', { includeDocumentUrls: false }),
+      Store.listPaymentsNeedingVerification(),
+      Store.listNotifications(),
+      Store.listDisputes(),
+      Store.listAppeals(),
+      Store.loadExpertiseCategories()
+    ]);
+    currentJobs = jobs || [];
+    currentElectricians = electricians || [];
+    currentPayments = payments || [];
+    currentNotifications = notifications || [];
+    currentDisputes = disputes || [];
+    currentAppeals = appeals || [];
     clearLoginError();
   }
 
@@ -372,8 +392,16 @@
   }
 
   function renderElectricians() {
-    const rows = currentElectricians.filter((electrician) => currentFilter.electricians === 'all' ? true : electrician.status === currentFilter.electricians);
-    $('#elec-list').innerHTML = rows.length ? rows.map(electricianCard).join('') : emptyState('No electricians in this view.');
+    const statusFilters = ['pending', 'approved', 'rejected', 'suspended'];
+    const rows = currentElectricians.filter((electrician) => statusFilters.includes(currentFilter.electricians) ? electrician.status === currentFilter.electricians : true);
+    const filteredRows = rows.filter((electrician) => {
+      if (currentFilter.electricians === 'active') return electricianHasActiveJob(electrician);
+      if (currentFilter.electricians === 'idle') return electrician.status === 'approved' && electrician.availability_status === 'available' && !electricianHasActiveJob(electrician);
+      if (currentFilter.electricians === 'offline') return electrician.availability_status !== 'available';
+      if (currentFilter.electricians === 'watchlist') return !!electrician.watchlist;
+      return true;
+    });
+    $('#elec-list').innerHTML = filteredRows.length ? filteredRows.map(electricianCard).join('') : emptyState('No electricians in this view.');
     $('#elec-list').querySelectorAll('.admin-job-card').forEach((card) => {
       card.addEventListener('click', () => openElectricianDetail(card.dataset.elecId));
     });
@@ -454,9 +482,10 @@
     });
   }
 
-  function openElectricianDetail(electricianId) {
+  async function openElectricianDetail(electricianId) {
     selectedElectrician = currentElectricians.find((electrician) => electrician.id === electricianId);
     if (!selectedElectrician) return;
+    await Store.hydrateElectricianDocuments(selectedElectrician).catch(() => selectedElectrician);
 
     const docs = (selectedElectrician.electrician_documents || []).map((documentItem) => {
       const href = documentItem.signedUrl || '';
@@ -488,6 +517,8 @@
         ['Onboarding review', selectedElectrician.onboarding_review_status || 'pending']
       ]) +
       infoCard('Trust history', electricianTrustRows(selectedElectrician)) +
+      electricianActivityCard(selectedElectrician) +
+      electricianAssignmentQueueCard(selectedElectrician) +
       appealsCard(selectedElectrician) +
       infoCard('Skills', (selectedElectrician.electrician_skills || []).length
         ? selectedElectrician.electrician_skills.map((skill) => [humanizeIssue(skill.category), 'Matched skill'])
@@ -501,6 +532,7 @@
     bindElectricianAction('btn-suspend-elec', electricianId, 'suspended');
     bindWatchlistAction('btn-add-watchlist', electricianId, true);
     bindWatchlistAction('btn-remove-watchlist', electricianId, false);
+    bindElectricianAssignmentQueue(electricianId);
     navigateTo('admin-elec-detail', {
       routeData: { electricianId: electricianId }
     });
@@ -618,18 +650,31 @@
       return '<div class="price-item">' +
         '<div class="price-item-info">' +
           '<div class="price-item-num">' + String(index + 1) + '</div>' +
-          '<div class="price-item-details">' +
-            '<div class="price-item-service">' + escapeHtml(item.issue_type || item.service || 'Estimate item') + '</div>' +
-            '<div class="price-item-description">' + escapeHtml(item.description || item.short_description || 'Final cost may vary after inspection.') + '</div>' +
+          '<div class="price-item-details price-edit-grid" id="price-item-' + index + '">' +
+            '<input class="form-input" data-price-field="issue" value="' + escapeAttribute(item.issue_type || item.service || '') + '" placeholder="Issue users can select" />' +
+            '<input class="form-input" data-price-field="description" value="' + escapeAttribute(item.description || item.short_description || '') + '" placeholder="Short description" />' +
+            '<input class="form-input" data-price-field="category" value="' + escapeAttribute(item.value || item.category || inferSkillCategory(item.issue_type || item.service || '')) + '" placeholder="Matching category" />' +
+            '<div class="admin-price-range">' +
+              '<input class="form-input" type="number" data-price-field="min" value="' + escapeAttribute(item.estimated_fee_min || item.price || item.amount || '') + '" placeholder="Min" />' +
+              '<input class="form-input" type="number" data-price-field="max" value="' + escapeAttribute(item.estimated_fee_max || item.price_max || item.max_amount || '') + '" placeholder="Max" />' +
+            '</div>' +
             '<div class="price-item-amount">' + escapeHtml(formatEstimateRange(item)) + '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="price-item-actions"><button class="btn-icon" data-remove-price="' + index + '" aria-label="Remove estimate item">&times;</button></div>' +
+        '<div class="price-item-actions">' +
+          '<button class="btn-secondary" id="btn-save-price-' + index + '" data-save-price="' + index + '">Save</button>' +
+          '<button class="btn-icon" data-remove-price="' + index + '" aria-label="Remove estimate item">&times;</button>' +
+        '</div>' +
       '</div>';
     }).join('') : emptyState('No workmanship prices published yet.');
     renderPriceCategoryOptions();
     const addButton = $('#btn-add-price');
     if (addButton) addButton.onclick = addPriceItem;
+    $$('#price-list-container [data-save-price]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        await withButtonLoading(button.id, 'Saving...', async () => updatePriceItem(Number(button.dataset.savePrice)));
+      });
+    });
     $$('#price-list-container [data-remove-price]').forEach((button) => {
       button.addEventListener('click', () => removePriceItem(Number(button.dataset.removePrice)));
     });
@@ -715,6 +760,36 @@
       $('#new-price-max').value = '';
       renderPrices();
     });
+  }
+
+  async function updatePriceItem(index) {
+    const settings = Store.getSettings();
+    const prices = (settings.workmanship_prices || []).slice();
+    const row = $('#price-item-' + index);
+    if (!row || !prices[index]) return;
+
+    const issueType = row.querySelector('[data-price-field="issue"]').value.trim();
+    const description = row.querySelector('[data-price-field="description"]').value.trim();
+    const skillCategory = row.querySelector('[data-price-field="category"]').value.trim();
+    const min = Number(row.querySelector('[data-price-field="min"]').value || 0);
+    const maxInput = row.querySelector('[data-price-field="max"]').value;
+    const maxValue = maxInput ? Number(maxInput) : null;
+    if (!issueType) throw new Error('Enter the issue users can select.');
+    if (!min || min < 0) throw new Error('Enter the estimated minimum workmanship fee.');
+    if (maxValue && maxValue < min) throw new Error('Maximum estimate cannot be lower than minimum estimate.');
+
+    prices[index] = Object.assign({}, prices[index], {
+      issue_type: issueType,
+      service: issueType,
+      description: description || 'Final cost may vary after inspection.',
+      estimated_fee_min: min,
+      estimated_fee_max: maxValue,
+      value: skillCategory || inferSkillCategory(issueType),
+      updated_at: new Date().toISOString()
+    });
+    await Store.saveSettings({ workmanship_prices: prices });
+    await Store.loadSettings();
+    renderPrices();
   }
 
   async function removePriceItem(index) {
@@ -852,13 +927,35 @@
     '</div>';
   }
 
+  function electricianHasActiveJob(electrician) {
+    if (!electrician) return false;
+    return currentJobs.some((job) => job.assignedElectricianId === electrician.id && !['rated', 'cancelled', 'payout_complete'].includes(job.status));
+  }
+
+  function electricianActiveJobs(electrician) {
+    if (!electrician) return [];
+    return currentJobs
+      .filter((job) => job.assignedElectricianId === electrician.id)
+      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  }
+
+  function electricianAssignableJobs() {
+    return currentJobs
+      .filter((job) => !['rated', 'cancelled', 'payout_complete'].includes(job.status))
+      .filter((job) => job.status === 'matching' || job.status === 'assigned' || !job.assignedElectricianId || job.needsManualAssignment)
+      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  }
+
   function electricianCard(electrician) {
+    const activeJobs = electricianActiveJobs(electrician).filter((job) => !['rated', 'cancelled', 'payout_complete'].includes(job.status));
+    const liveState = activeJobs.length ? 'Active on ' + activeJobs.length + ' job' + (activeJobs.length === 1 ? '' : 's') : (electrician.availability_status === 'available' ? 'Idle and available' : 'Offline or paused');
     return '<div class="admin-job-card" data-elec-id="' + electrician.id + '">' +
       cardHeader((electrician.profile && electrician.profile.full_name) || 'VoltFriq', electrician.status, statusClass(electrician.status)) +
       cardMetaRow((electrician.service_areas || []).join(', ') || 'No service area selected') +
-      cardMetaRow('Availability: ' + (electrician.availability_status || 'offline')) +
+      cardMetaRow('Availability: ' + (electrician.availability_status || 'offline') + ' · ' + liveState) +
       cardMetaRow('Level: ' + (electrician.level_badge || 'Verified Pro') + (electrician.watchlist ? ' · Watchlist' : '')) +
       cardMetaRow('Negative ratings: ' + String(electrician.negative_rating_count || 0)) +
+      cardMetaRow('Last offered: ' + (electrician.last_offered_at ? formatRelative(electrician.last_offered_at) : 'Never')) +
       cardMetaRow('Skills: ' + ((electrician.electrician_skills || []).map((skill) => humanizeIssue(skill.category)).join(', ') || 'None yet')) +
       cardFooter(String(electrician.completed_jobs || 0) + ' completed jobs', '★ ' + (electrician.average_rating ? Number(electrician.average_rating).toFixed(1) : '--')) +
     '</div>';
@@ -1009,6 +1106,50 @@
       adminInfoRow('Assigned electrician', job.assignedElectrician ? job.assignedElectrician.name : 'None') +
       '<button class="btn-secondary btn-full" id="btn-open-reassign" style="margin-top:12px">Open dispatch override</button>' +
     '</div>';
+  }
+
+  function electricianActivityCard(electrician) {
+    const jobs = electricianActiveJobs(electrician);
+    const activeJobs = jobs.filter((job) => !['rated', 'cancelled', 'payout_complete'].includes(job.status));
+    const rows = activeJobs.length
+      ? activeJobs.slice(0, 6).map((job) => {
+          return adminInfoRow(job.ticket, humanizeIssue(job.issueCategory) + ' · ' + job.statusLabel + ' · ' + formatRelative(job.updatedAt));
+        }).join('')
+      : '<div class="admin-empty-inline">No active job right now. This VoltFriq is idle if availability is set to available.</div>';
+    return '<div class="admin-info-card">' +
+      '<div class="admin-info-card-title">Live activity</div>' +
+      adminInfoRow('Current state', activeJobs.length ? 'Active' : (electrician.availability_status === 'available' ? 'Idle' : 'Offline')) +
+      adminInfoRow('Active jobs', String(activeJobs.length)) +
+      rows +
+    '</div>';
+  }
+
+  function electricianAssignmentQueueCard(electrician) {
+    if (electrician.status !== 'approved') {
+      return '<div class="admin-info-card"><div class="admin-info-card-title">Assign jobs</div><div class="admin-empty-inline">Approve this VoltFriq before assigning jobs.</div></div>';
+    }
+    const jobs = electricianAssignableJobs().filter((job) => job.assignedElectricianId !== electrician.id).slice(0, 6);
+    return '<div class="admin-info-card">' +
+      '<div class="admin-info-card-title">Assign or reassign jobs</div>' +
+      (jobs.length
+        ? jobs.map((job) => '<div class="admin-job-mini">' +
+            '<div><strong>' + escapeHtml(job.ticket) + '</strong><span>' + escapeHtml(humanizeIssue(job.issueCategory) + ' · ' + job.serviceArea + ' · ' + (job.assignedElectrician ? 'Assigned to ' + job.assignedElectrician.name : 'Unassigned')) + '</span></div>' +
+            '<button class="btn-secondary" type="button" id="btn-assign-' + job.id + '" data-assign-job="' + escapeAttribute(job.id) + '">Assign</button>' +
+          '</div>').join('')
+        : '<div class="admin-empty-inline">No matching or unassigned jobs are waiting right now.</div>') +
+    '</div>';
+  }
+
+  function bindElectricianAssignmentQueue(electricianId) {
+    document.querySelectorAll('[data-assign-job]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        await withButtonLoading(button.id, 'Assigning...', async () => {
+          await Store.setManualAssignment(button.dataset.assignJob, electricianId);
+          await loadData();
+          await openElectricianDetail(electricianId);
+        });
+      });
+    });
   }
 
   function photoCard(photos) {
@@ -1268,7 +1409,7 @@
       await withButtonLoading(buttonId, text, async () => {
         await Store.setElectricianStatus(electricianId, status);
         await loadData();
-        openElectricianDetail(electricianId);
+        await openElectricianDetail(electricianId);
       });
     });
   }
@@ -1280,7 +1421,7 @@
       await withButtonLoading(buttonId, watchlist ? 'Adding...' : 'Removing...', async () => {
         await Store.setElectricianWatchlist(electricianId, watchlist, watchlist ? 'Admin quality monitoring.' : null);
         await loadData();
-        openElectricianDetail(electricianId);
+        await openElectricianDetail(electricianId);
       });
     });
   }
@@ -1288,6 +1429,7 @@
   async function withButtonLoading(buttonId, loadingText, work) {
     const button = $('#' + buttonId);
     const originalText = button ? button.textContent : '';
+    const originalHtml = button ? button.innerHTML : '';
     const wasDisabled = button ? button.disabled : false;
     if (button) {
       button.disabled = true;
@@ -1301,7 +1443,7 @@
       return null;
     } finally {
       if (button) {
-        button.textContent = originalText;
+        button.innerHTML = originalHtml || originalText;
         button.disabled = wasDisabled;
       }
     }
@@ -1336,7 +1478,7 @@
     }
 
     if (nextRoute.screen === 'admin-elec-detail' && nextRoute.data && nextRoute.data.electricianId) {
-      openElectricianDetail(nextRoute.data.electricianId);
+      await openElectricianDetail(nextRoute.data.electricianId);
       return;
     }
 

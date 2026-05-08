@@ -13,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/shared.css?v=20260506-apply-test" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
-  <link rel="stylesheet" href="/css/admin.css?v=20260506-apply-test" />
+  <link rel="stylesheet" href="/css/admin.css?v=20260508-mobile-ops" />
 </head>
 <body>
 
@@ -115,8 +115,12 @@
       <div class="admin-screen-title">Electricians</div>
       <div class="admin-filter-tabs" id="elec-filter-tabs">
         <button class="admin-filter-tab active" data-filter="all">All</button>
+        <button class="admin-filter-tab" data-filter="active">Active</button>
+        <button class="admin-filter-tab" data-filter="idle">Idle</button>
+        <button class="admin-filter-tab" data-filter="offline">Offline</button>
         <button class="admin-filter-tab" data-filter="pending">Pending</button>
         <button class="admin-filter-tab" data-filter="approved">Approved</button>
+        <button class="admin-filter-tab" data-filter="watchlist">Watchlist</button>
         <button class="admin-filter-tab" data-filter="rejected">Rejected</button>
         <button class="admin-filter-tab" data-filter="suspended">Suspended</button>
       </div>
@@ -356,14 +360,21 @@
       </span>
       <span class="admin-nav-label">Trust</span>
     </button>
+    <button class="admin-nav-item" data-screen="admin-settings">
+      <span class="admin-nav-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.8 1.8 0 0 0 .3 2l.1.1a2.1 2.1 0 0 1-3 3l-.1-.1a1.8 1.8 0 0 0-2-.3 1.8 1.8 0 0 0-1 1.6V21a2.1 2.1 0 0 1-4.2 0v-.2a1.8 1.8 0 0 0-1-1.6 1.8 1.8 0 0 0-2 .3l-.1.1a2.1 2.1 0 0 1-3-3l.1-.1a1.8 1.8 0 0 0 .3-2 1.8 1.8 0 0 0-1.6-1H3a2.1 2.1 0 0 1 0-4.2h.2a1.8 1.8 0 0 0 1.6-1 1.8 1.8 0 0 0-.3-2l-.1-.1a2.1 2.1 0 0 1 3-3l.1.1a1.8 1.8 0 0 0 2 .3h.1a1.8 1.8 0 0 0 1-1.6V3a2.1 2.1 0 0 1 4.2 0v.2a1.8 1.8 0 0 0 1 1.6 1.8 1.8 0 0 0 2-.3l.1-.1a2.1 2.1 0 0 1 3 3l-.1.1a1.8 1.8 0 0 0-.3 2v.1a1.8 1.8 0 0 0 1.6 1h.2a2.1 2.1 0 0 1 0 4.2h-.2a1.8 1.8 0 0 0-1.6 1Z"/></svg>
+      </span>
+      <span class="admin-nav-label">Settings</span>
+    </button>
   </nav>
 
   <script src="/vendor/supabase.min.js"></script>
-  <script src="/api/env.js?v=20260506-auth-booking"></script>
+  <script src="/api/env.js?v=20260508-mobile-ops"></script>
   <script src="/js/config.js?v=20260506-auth-booking"></script>
-  <script src="/js/store.js?v=20260506-doc-upload-fix"></script>
+  <script src="/js/store.js?v=20260508-mobile-ops"></script>
   <script src="/js/navigation.js?v=20260506-auth-booking-2"></script>
   <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/admin.js?v=20260506-auth-booking-2"></script>
+  <script src="/js/admin.js?v=20260508-mobile-ops"></script>
+  <script src="/js/sw-register.js?v=20260508-mobile-ops"></script>
 </body>
 </html>
