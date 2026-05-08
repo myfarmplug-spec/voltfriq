@@ -19,6 +19,7 @@ const ElecApp = (() => {
   let validationAnswers = {};
   let pendingElectricianRoute = null;
   let pendingElectricianSignupPayload = null;
+  const PENDING_SIGNUP_KEY = 'voltfriq_pending_electrician_signup';
 
   function wantsPasswordReset() {
     const query = new URLSearchParams(window.location.search || '');
@@ -30,6 +31,53 @@ const ElecApp = (() => {
     const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
     return query.get('verify') === 'signup' || hash.get('type') === 'signup' || hash.has('access_token');
   }
+
+  function persistPendingElectricianSignup(payload) {
+    if (!payload) return;
+    const serializable = {
+      fullName: payload.fullName || '',
+      phone: payload.phone || '',
+      email: payload.email || '',
+      locationLabel: payload.locationLabel || '',
+      yearsExperience: payload.yearsExperience || 0,
+      availabilityStatus: payload.availabilityStatus || 'available',
+      serviceAreas: payload.serviceAreas || [],
+      skills: payload.skills || [],
+      bankName: payload.bankName || '',
+      bankAccountNumber: payload.bankAccountNumber || '',
+      bankAccountName: payload.bankAccountName || '',
+      certifications: payload.certifications || [],
+      onboardingValidationScore: payload.onboardingValidationScore || 0,
+      onboardingReviewStatus: payload.onboardingReviewStatus || 'pending',
+      onboardingFeedback: payload.onboardingFeedback || null,
+      onboardingAnswers: payload.onboardingAnswers || []
+    };
+    try {
+      window.localStorage.setItem(PENDING_SIGNUP_KEY, JSON.stringify(serializable));
+    } catch (error) {
+      // Email verification can still complete in the current tab.
+    }
+  }
+
+  function loadPendingElectricianSignup() {
+    if (pendingElectricianSignupPayload) return pendingElectricianSignupPayload;
+    try {
+      const raw = window.localStorage.getItem(PENDING_SIGNUP_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function clearPendingElectricianSignup() {
+    pendingElectricianSignupPayload = null;
+    try {
+      window.localStorage.removeItem(PENDING_SIGNUP_KEY);
+    } catch (error) {
+      // Nothing else to clear.
+    }
+  }
+
   const ISSUE_LABELS = {
     'Light fitting': 'Light fitting',
     'Socket repair': 'Socket repair',
@@ -253,6 +301,7 @@ const ElecApp = (() => {
       if (event.key === 'Enter') handleLogin();
     });
     document.getElementById('btn-apply').addEventListener('click', () => goTo('elec-reg-1'));
+    document.getElementById('reg-location').addEventListener('change', renderRegistrationOptions);
 
     document.getElementById('btn-reg-next-1').addEventListener('click', nextRegistrationStepOne);
     document.getElementById('btn-reg-next-2').addEventListener('click', nextRegistrationStepTwo);
@@ -368,15 +417,17 @@ const ElecApp = (() => {
     const settings = Store.getSettings();
     const selectedAreas = activeChipValues('#reg-service-areas .chip.active', 'area');
     const serviceAreas = getRegistrationServiceAreas(settings);
-    const usingFallbackArea = !(Array.isArray(settings.service_areas) && settings.service_areas.filter(Boolean).length);
-    renderLocationDatalist(serviceAreas);
+    const selectedLocation = renderLocationSelect(serviceAreas);
 
     document.getElementById('reg-service-areas').innerHTML = serviceAreas.length
       ? serviceAreas.map((area) => {
-          const shouldActivate = selectedAreas.includes(area) || (usingFallbackArea && serviceAreas.length === 1) || serviceAreas.length === 1;
+          const lowerArea = area.toLowerCase();
+          const shouldActivate = selectedAreas.some((selected) => selected.toLowerCase() === lowerArea)
+            || (selectedLocation && selectedLocation.toLowerCase() === lowerArea)
+            || serviceAreas.length === 1;
           return chipMarkup('area', area, shouldActivate);
         }).join('')
-      : '<div class="expertise-empty">Enter your main location in Step 1 to continue.</div>';
+      : '<div class="expertise-empty">No service areas are configured yet.</div>';
 
     document.getElementById('reg-service-areas').onclick = toggleChip;
 
@@ -727,16 +778,18 @@ const ElecApp = (() => {
       }
 
       const validation = computeValidationResult();
+      const chosenLocation = document.getElementById('reg-location').value.trim();
+      const chosenServiceAreas = activeChipValues('#reg-service-areas .chip.active', 'area');
 
       pendingElectricianSignupPayload = {
         fullName: document.getElementById('reg-name').value.trim(),
         phone: document.getElementById('reg-phone').value.trim(),
         email: document.getElementById('reg-email').value.trim(),
         password: document.getElementById('reg-password').value.trim(),
-        locationLabel: document.getElementById('reg-location').value.trim(),
+        locationLabel: chosenLocation,
         yearsExperience: parseInt(document.getElementById('reg-experience').value, 10) || 0,
         availabilityStatus: document.getElementById('reg-availability-status').value || 'available',
-        serviceAreas: activeChipValues('#reg-service-areas .chip.active', 'area'),
+        serviceAreas: chosenServiceAreas.length ? chosenServiceAreas : [chosenLocation].filter(Boolean),
         skills: selectedExpertise.slice(),
         bankName: document.getElementById('reg-payout-bank').value.trim(),
         bankAccountNumber: document.getElementById('reg-payout-account-number').value.trim(),
@@ -754,6 +807,7 @@ const ElecApp = (() => {
         onboardingAnswers: validation.answers,
         onDocumentUploadProgress: handleDocumentUploadProgress
       };
+      persistPendingElectricianSignup(pendingElectricianSignupPayload);
       const signupResult = await Store.signUpElectrician(pendingElectricianSignupPayload);
 
       const pendingAccount = Store.getCurrentElectrician() || { id: (signupResult && signupResult.user && signupResult.user.id) || 'pending' };
@@ -768,13 +822,13 @@ const ElecApp = (() => {
         return;
       }
 
-      pendingElectricianSignupPayload = null;
+      clearPendingElectricianSignup();
       await resumeSession({ screen: 'elec-dashboard', data: null, source: 'signup' });
     });
   }
 
   async function verifyPendingElectricianSignup() {
-    const payload = pendingElectricianSignupPayload;
+    const payload = loadPendingElectricianSignup();
     if (!payload || !payload.email) {
       showError('Restart the application so we can verify the right email.');
       return;
@@ -784,14 +838,14 @@ const ElecApp = (() => {
       if (token.length !== 6) throw new Error('Enter the 6-digit code from your email.');
       await Store.verifySignupOtp(payload.email, token);
       await Store.finishElectricianSignup(payload);
-      pendingElectricianSignupPayload = null;
+      clearPendingElectricianSignup();
       document.getElementById('pending-token').value = '';
       await resumeSession({ screen: 'elec-dashboard', data: null, source: 'signup' });
     });
   }
 
   async function resendPendingElectricianSignupCode() {
-    const payload = pendingElectricianSignupPayload;
+    const payload = loadPendingElectricianSignup();
     if (!payload || !payload.email) {
       showError('Restart the application so we can resend the right email code.');
       return;
@@ -811,9 +865,11 @@ const ElecApp = (() => {
 
   function renderPendingDashboard(electrician, options) {
     const profile = Store.getCurrentProfile() || {};
-    const payload = pendingElectricianSignupPayload || {};
+    const payload = loadPendingElectricianSignup() || {};
     const row = electrician || {};
     const isRejected = row.status === 'rejected';
+    const documentCount = (row.electrician_documents || []).length;
+    const missingDocuments = !isRejected && !(options && options.verificationRequired) && !documentCount;
     const verifyCard = document.getElementById('pending-verify-card');
     const summary = document.getElementById('pending-dashboard-summary');
     const note = document.getElementById('pending-status-note');
@@ -830,15 +886,19 @@ const ElecApp = (() => {
         ? 'Verify your email to complete setup. Your dashboard will remain pending until admin approval.'
         : isRejected
           ? 'Contact VoltFriq support if you need help with your application or account status.'
-          : 'You will be able to receive nearby requests after admin approval.';
+          : missingDocuments
+            ? 'Your account was created, but document uploads are missing on this device. Admin may request documents before approval.'
+            : 'You will be able to receive nearby requests after admin approval.';
     }
     if (summary) {
+      const serviceAreas = row.service_areas && row.service_areas.length ? row.service_areas : payload.serviceAreas || [];
       summary.innerHTML = [
         ['Name', profile.full_name || payload.fullName || '--'],
         ['Phone', profile.phone || payload.phone || '--'],
         ['Status', row.status || 'pending'],
         ['Availability', row.availability_status || payload.availabilityStatus || 'available'],
-        ['Service areas', (row.service_areas || payload.serviceAreas || []).join(', ') || '--']
+        ['Service areas', serviceAreas.join(', ') || '--'],
+        ['Documents', documentCount ? documentCount + ' uploaded' : 'Missing']
       ].map(profileRow).join('');
     }
   }
@@ -1451,25 +1511,24 @@ const ElecApp = (() => {
   }
 
   function getRegistrationServiceAreas(settings) {
-    const configured = Array.isArray(settings.service_areas) ? settings.service_areas.filter(Boolean) : [];
-    const fallbackLocation = document.getElementById('reg-location') ? document.getElementById('reg-location').value.trim() : '';
-    const areas = configured.slice();
-    if (fallbackLocation && !areas.some((area) => area.toLowerCase() === fallbackLocation.toLowerCase())) {
-      areas.unshift(fallbackLocation);
-    }
-    return areas.length ? areas : [];
+    if (Store.getServiceAreas) return Store.getServiceAreas();
+    return Array.isArray(settings.service_areas) ? settings.service_areas.filter(Boolean) : [];
   }
 
-  function renderLocationDatalist(areas) {
-    let datalist = document.getElementById('electrician-service-area-options');
-    if (!datalist) {
-      datalist = document.createElement('datalist');
-      datalist.id = 'electrician-service-area-options';
-      document.body.appendChild(datalist);
+  function renderLocationSelect(areas) {
+    const locationSelect = document.getElementById('reg-location');
+    if (!locationSelect) return '';
+    const currentValue = locationSelect.value;
+    const safeAreas = (areas || []).filter(Boolean);
+    locationSelect.innerHTML = '<option value="">Select your closest service area</option>' +
+      safeAreas.map((area) => '<option value="' + escapeAttribute(area) + '">' + escapeHtml(area) + '</option>').join('');
+    if (currentValue && safeAreas.some((area) => area.toLowerCase() === currentValue.toLowerCase())) {
+      const match = safeAreas.find((area) => area.toLowerCase() === currentValue.toLowerCase());
+      locationSelect.value = match;
+      return match;
     }
-    datalist.innerHTML = (areas || []).map((area) => '<option value="' + escapeAttribute(area) + '"></option>').join('');
-    const locationInput = document.getElementById('reg-location');
-    if (locationInput) locationInput.setAttribute('list', 'electrician-service-area-options');
+    locationSelect.value = '';
+    return '';
   }
 
   function getRegistrationSkillOptions(settings) {

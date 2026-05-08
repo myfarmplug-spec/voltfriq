@@ -9,6 +9,7 @@ const Store = (() => {
     'Trans Amadi, Port Harcourt',
     'Woji, Port Harcourt',
     'Rumuola, Port Harcourt',
+    'Rumuodomaya, Port Harcourt',
     'Rumuokoro, Port Harcourt',
     'Rumuigbo, Port Harcourt',
     'Ada George, Port Harcourt',
@@ -518,7 +519,7 @@ const Store = (() => {
     const areas = Array.isArray(next.service_areas) ? next.service_areas.map((area) => String(area || '').trim()).filter(Boolean) : [];
     const normalizedAreas = areas.map((area) => area.toLowerCase());
     const legacyOnly = areas.length > 0 && areas.every((area) => LEGACY_LAGOS_AREAS.map((legacy) => legacy.toLowerCase()).includes(area.toLowerCase()));
-    const hasPortHarcourtArea = normalizedAreas.some((area) => area.includes('port harcourt') || area.includes('phc') || area.includes('gra'));
+    const hasPortHarcourtArea = normalizedAreas.some((area) => area.includes('port harcourt') || area.includes('phc'));
     next.service_areas = (!areas.length || legacyOnly || !hasPortHarcourtArea)
       ? DEFAULT_SERVICE_AREAS.slice()
       : areas;
@@ -1164,7 +1165,10 @@ const Store = (() => {
       latitude: input.latitude || null,
       longitude: input.longitude || null
     }).catch(() => {});
-    return getJob(result.data.id);
+    if (!result.data || !result.data.id) {
+      throw new Error('Booking was created, but tracking details were not returned.');
+    }
+    return normalizeJob(result.data);
   }
 
   async function createGuestBooking(input) {

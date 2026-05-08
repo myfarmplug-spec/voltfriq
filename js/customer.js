@@ -1377,6 +1377,13 @@
     routeJob(job, false, { routeData: { ticket: job.ticket || currentTrackedTicket } });
     refreshWelcomeActions();
     renderSidecars();
+    Store.getJob(job.id).then((freshJob) => {
+      if (!freshJob || !currentJob || freshJob.id !== currentJob.id) return;
+      currentJob = freshJob;
+      currentTrackedTicket = freshJob.ticket || currentTrackedTicket;
+      routeJob(freshJob, true, { routeData: { ticket: freshJob.ticket || currentTrackedTicket }, replace: true });
+      refreshWelcomeActions();
+    }).catch(() => {});
   }
 
   async function resumeLatestJob(options) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voltfriq-shell-v20260508-mobile-ops';
+const CACHE_NAME = 'voltfriq-shell-v20260508-booking-signup-hotfix';
 const APP_SHELL = [
   '/offline.html',
   '/manifest.json',
