@@ -2664,7 +2664,7 @@
 .tracking-note,
 .issue-picker-disclaimer,
 .bank-acct-name,
-.manual-location-sheet .form-label + * {
+.address-entry-panel .form-label + * {
   color: var(--text-secondary);
   line-height: 1.45;
 }
@@ -2793,7 +2793,7 @@
   background: rgba(255, 255, 255, 0.09);
 }
 
-.manual-location-sheet,
+.address-entry-panel,
 .match-summary-card,
 .transparency-card,
 .issue-summary,
@@ -2807,7 +2807,7 @@
   border-radius: 22px;
 }
 
-.manual-location-sheet,
+.address-entry-panel,
 .match-summary-card,
 .transparency-card,
 .issue-summary,
@@ -2825,19 +2825,13 @@
   backdrop-filter: blur(10px);
 }
 
-.manual-location-sheet {
+.address-entry-panel {
   padding: 20px;
 }
 
-.manual-location-sheet {
+.address-entry-panel {
   display: grid;
   gap: 14px;
-}
-
-.manual-address-helper {
-  color: var(--text-secondary);
-  line-height: 1.45;
-  font-size: 0.95rem;
 }
 
 .flow-ready-line {
@@ -4358,5 +4352,82 @@
   #screen-assigned .tracking-metric {
     min-height: auto;
     padding: 0 0 0 16px;
+  }
+}
+
+#screen-assigned .tracking-details-card {
+  grid-template-columns: minmax(280px, 1fr) auto auto;
+  grid-template-areas:
+    "main toggle contact"
+    "metrics metrics metrics";
+}
+
+#screen-assigned .tracking-detail-toggle {
+  grid-area: toggle;
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+#screen-assigned .tracking-detail-toggle:hover,
+#screen-assigned .tracking-detail-toggle:focus-visible {
+  border-color: rgba(255, 184, 0, 0.5);
+  color: var(--yellow);
+}
+
+#screen-assigned .tracking-detail-metrics {
+  display: none;
+}
+
+#screen-assigned .tracking-detail-metrics.is-expanded {
+  display: grid;
+}
+
+#screen-assigned .tracking-metric-ticket {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+#screen-assigned .tracking-metric-ticket span,
+#screen-assigned .tracking-metric-ticket strong {
+  grid-column: 1 / -1;
+}
+
+#screen-assigned .tracking-metric-ticket .tracking-copy-ticket {
+  align-self: end;
+  justify-self: start;
+}
+
+@media (max-width: 1100px) {
+  #screen-assigned .tracking-details-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "main contact"
+      "toggle contact"
+      "metrics metrics";
+  }
+
+  #screen-assigned .tracking-detail-toggle {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 767px) {
+  #screen-assigned .tracking-details-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "main"
+      "toggle"
+      "contact"
+      "metrics";
+  }
+
+  #screen-assigned .tracking-detail-toggle {
+    width: 100%;
   }
 }

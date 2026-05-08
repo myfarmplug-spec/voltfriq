@@ -105,6 +105,18 @@ const ElecApp = (() => {
     Solar: 'Solar',
     Other: 'Other'
   };
+  const ISSUE_ESTIMATES = {
+    'Light fitting': [4000, 8000],
+    'Socket repair': [5000, 8000],
+    'Wiring issue': [6000, null],
+    Inverter: [15000, null],
+    Generator: [15000, null],
+    'Tripped breaker': [8000, 12000],
+    'General Installation': [8000, null],
+    Inspection: [5000, null],
+    Solar: [15000, null],
+    Other: [5000, null]
+  };
   const DEFAULT_SKILL_OPTIONS = Object.keys(ISSUE_LABELS);
   const VALIDATION_PASS_THRESHOLD = 60;
   const ELECTRICIAN_ROUTE_TITLES = {
@@ -967,7 +979,9 @@ const ElecApp = (() => {
     document.getElementById('dash-live-status').textContent = electrician.availability_status === 'available' ? 'Available for jobs' : 'Offline for now';
     document.getElementById('stat-jobs-month').textContent = nearbyRequests;
     document.getElementById('stat-earnings').textContent = Store.formatCurrency(completedEarnings);
-    document.getElementById('stat-rating').textContent = acceptedJobs;
+    document.getElementById('stat-rating').textContent = electrician.average_rating
+      ? Number(electrician.average_rating).toFixed(1) + '/5'
+      : '--';
     document.getElementById('stat-payouts').textContent = Store.formatCurrency(pendingPayout);
     renderTrustPanel(electrician, {
       nearbyRequests,
@@ -1062,6 +1076,9 @@ const ElecApp = (() => {
   }
 
   function dashboardJobCard(job, isNew) {
+    const issue = humanizeIssue(job.issueCategory);
+    const estimate = estimateRangeLabel(job);
+    const location = job.locationLabel || job.serviceArea || 'Location shared after accept';
     const photoPreview = (job.photos || []).length
       ? '<div class="elec-job-photo-stack">' + job.photos.slice(0, 3).map((photo, index) => photo.url
         ? '<img class="elec-job-photo-thumb" src="' + escapeHtml(photo.url) + '" alt="Job photo ' + (index + 1) + '" loading="lazy" />'
@@ -1071,16 +1088,24 @@ const ElecApp = (() => {
       ? '<div class="elec-inline-actions"><button class="btn-primary btn-full" data-inline-action="accept" data-job-id="' + job.id + '">Accept</button><button class="btn-secondary btn-full" data-inline-action="reject" data-job-id="' + job.id + '">Reject</button></div>'
       : '';
     return '<div class="' + (isNew ? 'elec-alert-card' : 'elec-job-item') + '" data-job-id="' + job.id + '">' +
-      '<div class="elec-job-item-head"><div class="elec-job-item-name">' + (isNew ? 'New job request' : escapeHtml(humanizeIssue(job.issueCategory))) + '</div><div class="elec-job-item-time">' + timeAgo(new Date(job.updatedAt).getTime()) + '</div></div>' +
-      '<div class="elec-job-item-tags"><span class="badge badge-yellow">' + escapeHtml(job.serviceArea) + '</span><span class="badge ' + urgencyBadgeClass(job.urgency) + '">' + escapeHtml(formatUrgency(job.urgency)) + '</span>' + (job.quote.total ? '<span class="badge badge-green">' + escapeHtml(Store.formatCurrency(job.quote.total)) + '</span>' : '') + '</div>' +
+      '<div class="elec-job-item-head"><div class="elec-job-item-name">' + escapeHtml(issue) + '</div><div class="elec-job-item-time">' + timeAgo(new Date(job.updatedAt).getTime()) + '</div></div>' +
+      '<div class="elec-job-item-tags"><span class="badge badge-yellow">' + escapeHtml(job.serviceArea) + '</span><span class="badge ' + urgencyBadgeClass(job.urgency) + '">' + escapeHtml(formatUrgency(job.urgency)) + '</span><span class="badge badge-green">' + escapeHtml(estimate) + '</span></div>' +
       '<div class="elec-job-item-status"><span class="dot-live"></span>' + escapeHtml(job.statusLabel) + '</div>' +
-      '<div class="elec-job-item-status" style="color:var(--mid)">' + escapeHtml(job.locationLabel || job.serviceArea) + ' · ' + escapeHtml(humanizeIssue(job.issueCategory)) + '</div>' +
+      '<div class="elec-job-item-status" style="color:var(--mid)">' + escapeHtml(location) + ' · ' + escapeHtml(issue) + '</div>' +
       '<div class="elec-job-item-note">' + escapeHtml(job.description || 'No customer note added.') + '</div>' +
       customerTrustMini(job) +
       '<div class="elec-job-item-meta"><span>' + escapeHtml(distanceLabel(job)) + '</span><span>' + escapeHtml(String((job.photos || []).length)) + ' photo(s)</span></div>' +
       photoPreview +
       actions +
     '</div>';
+  }
+
+  function estimateRangeLabel(job) {
+    if (job && job.quote && Number(job.quote.total || 0)) return Store.formatCurrency(job.quote.total);
+    const range = ISSUE_ESTIMATES[job && job.issueCategory] || ISSUE_ESTIMATES[humanizeIssue(job && job.issueCategory)] || ISSUE_ESTIMATES.Other;
+    if (!range) return 'Estimate after assessment';
+    if (!range[1]) return Store.formatCurrency(range[0]) + '+ estimate';
+    return Store.formatCurrency(range[0]) + ' - ' + Store.formatCurrency(range[1]) + ' estimate';
   }
 
   async function openJob(jobId) {

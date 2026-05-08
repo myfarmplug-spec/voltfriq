@@ -353,7 +353,7 @@ grant execute on function public.create_guest_customer_job(text,text,text,double
 grant execute on function public.get_guest_job(uuid,text) to anon, authenticated;
 grant execute on function public.update_guest_job_status(uuid,text,public.job_status,text,jsonb) to anon, authenticated;
 grant execute on function public.submit_guest_payment_proof(uuid,text,public.payment_type,numeric,text,text) to anon, authenticated;
-grant execute on function public.attach_guest_job_photos(uuid,text,text[]) to anon, authenticated;
+grant execute on function public.attach_guest_job_photos(uuid,text,text[]) to service_role;
 
 grant execute on function public.admin_set_electrician_status(uuid,public.electrician_status,text) to authenticated;
 grant execute on function public.admin_set_electrician_watchlist(uuid,boolean,text) to authenticated;

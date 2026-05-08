@@ -28,11 +28,7 @@ begin
         'full_name', coalesce(nullif(p.full_name, ''), 'VoltFriq'),
         'avatar_url', p.avatar_url
       ),
-      'average_rating', e.average_rating,
-      'total_ratings', e.total_ratings,
-      'completed_jobs', e.completed_jobs,
-      'level_badge', e.level_badge,
-      'service_areas', e.service_areas
+      'average_rating', e.average_rating
     ) end,
     'job_timeline', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -45,8 +41,6 @@ begin
     ), '[]'::jsonb),
     'job_quotes', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'id', q.id,
-        'findings', q.findings,
         'labor_total', q.labor_total,
         'material_total', q.material_total,
         'grand_total', q.grand_total,
@@ -58,7 +52,6 @@ begin
     'job_payments', coalesce((
       select jsonb_agg(jsonb_build_object(
         'payment_type', payment.payment_type,
-        'amount', payment.amount,
         'status', payment.status,
         'created_at', payment.created_at
       ) order by payment.created_at)

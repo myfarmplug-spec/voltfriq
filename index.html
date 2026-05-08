@@ -144,39 +144,10 @@
         </button>
       </div>
 
-      <div class="manual-location-sheet" id="manual-location-sheet" style="display:none;">
-        <div class="manual-address-helper">VoltFriq uses this to route the nearest available electrician. You can continue without GPS.</div>
+      <div class="address-entry-panel" id="address-entry-panel" hidden>
         <div class="form-group">
-          <label class="form-label">Country</label>
-          <select class="form-select" id="manual-country">
-            <option value="Nigeria" selected>Nigeria</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">State</label>
-          <select class="form-select" id="manual-state">
-            <option value="">Select state</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">City / LGA</label>
-          <select class="form-select" id="manual-city">
-            <option value="">Select city or LGA</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Street Address / House Number</label>
-          <input type="text" class="form-input" id="manual-street-address" placeholder="Example: No. 12 Ada George Road" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Landmark <span class="optional">(optional)</span></label>
-          <input type="text" class="form-input" id="manual-landmark" placeholder="Example: near Genesis Cinema" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Closest Service Area</label>
-          <select class="form-select" id="service-area-select">
-            <option value="">Select a service area</option>
-          </select>
+          <label class="form-label">Address</label>
+          <input type="text" class="form-input" id="manual-street-address" list="service-area-options" placeholder="Example: 13 Rumadolu Market Road, Port Harcourt" />
         </div>
       </div>
 
@@ -217,7 +188,7 @@
         <div class="form-group" id="issue-other-group" style="display:none;">
           <label class="form-label">Describe the issue</label>
           <textarea class="form-input" id="issue-other-input" rows="3" maxlength="160" placeholder="Describe the issue so VoltFriq can review and add it to the issue list"></textarea>
-          <div class="helper-note">This will be shared with admin as a suggestion for the issue list.</div>
+          <div class="helper-note">This helps VoltFriq improve the issue list.</div>
         </div>
         <div class="issue-estimate-card" id="issue-estimate-card" style="display:none;">
           <span>Estimated Workmanship Fee</span>
@@ -341,7 +312,7 @@
       <section class="dashboard-hero card">
         <div class="dashboard-kicker">Account</div>
         <h2 id="dashboard-name">Customer</h2>
-        <p id="dashboard-sub">Manage active jobs, saved addresses, and account details in one place.</p>
+        <p id="dashboard-sub">Manage active jobs, history, and account details in one place.</p>
         <div class="dashboard-hero-actions">
           <button class="btn-primary" id="btn-dashboard-new-booking">Book Another Job</button>
           <button class="btn-secondary" id="btn-dashboard-track">Open Active Job</button>
@@ -504,7 +475,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.2 2.2 4.8-5"/></svg>
             <span>BOOKING CONFIRMED</span>
           </div>
-          <h2 id="tracking-hero-title">We’re pairing you with the best <span>VoltFriq</span></h2>
+          <h2 id="tracking-hero-title">Booking confirmed</h2>
           <p id="tracking-hero-sub">Finding a verified electrician near you...</p>
           <div class="tracking-reassurance">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -619,7 +590,7 @@
       <div class="issue-summary card trust-assurance-card">
         <div class="issue-summary-title">Before work starts</div>
         <div class="mini-meta-list">
-          <div class="mini-meta-row"><span class="mini-meta-label">Payment check</span><span class="mini-meta-value">Manual verification by VoltFriq admin</span></div>
+          <div class="mini-meta-row"><span class="mini-meta-label">Payment check</span><span class="mini-meta-value">Verified by the VoltFriq team</span></div>
           <div class="mini-meta-row"><span class="mini-meta-label">Work start</span><span class="mini-meta-value">No work starts without your approval</span></div>
           <div class="mini-meta-row"><span class="mini-meta-label">Support</span><span class="mini-meta-value">Report any issue instantly from your tracking screen</span></div>
         </div>
@@ -761,7 +732,7 @@
     <div class="screen-body">
       <div class="issue-summary card">
         <div class="issue-summary-title">Tell VoltFriq what went wrong</div>
-        <div class="helper-note">Admin can refund, penalize, or reassign manually after reviewing your report.</div>
+        <div class="helper-note">We will review your report and guide the next step.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Issue Type</label>
@@ -775,7 +746,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">Details <span class="optional">(optional)</span></label>
-        <textarea class="form-input" id="dispute-details" rows="4" maxlength="240" placeholder="Share what happened so admin can intervene quickly."></textarea>
+        <textarea class="form-input" id="dispute-details" rows="4" maxlength="240" placeholder="Share what happened so VoltFriq can step in quickly."></textarea>
       </div>
       <button class="btn-primary btn-large" id="btn-submit-dispute">Submit Issue Report</button>
     </div>

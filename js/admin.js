@@ -299,7 +299,7 @@
       ? alerts.map((alert) => actionCardMarkup(alert)).join('')
       : emptyState('No urgent alerts right now.');
     $('#admin-pending-actions').querySelectorAll('.admin-pending-card').forEach((card) => {
-      card.addEventListener('click', () => navigateTo(card.dataset.target));
+      card.addEventListener('click', () => navigateTo(card.dataset.target, filterRouteData(card)));
     });
 
     const stats = {
@@ -317,13 +317,13 @@
     ].join('');
 
     $('#admin-control-queue').innerHTML = [
-      queueCard('Dispatch board', newBookingCount, 'Customer-facing queue', 'Review fresh requests, rematching, and overrides.', 'admin-requests'),
-      queueCard('Electrician approvals', pendingElectricianCount, 'Internal onboarding', 'Review pending VoltFriq applications and approve or reject.', 'admin-electricians'),
+      queueCard('Dispatch board', newBookingCount, 'Customer-facing queue', 'Review fresh requests, rematching, and overrides.', 'admin-requests', 'requests', 'all'),
+      queueCard('Electrician approvals', pendingElectricianCount, 'Internal onboarding', 'Review pending VoltFriq applications and approve or reject.', 'admin-electricians', 'electricians', 'pending'),
       queueCard('Trust & disputes', openDisputeCount, 'Customer resolution', 'Resolve open disputes and trust interventions.', 'admin-disputes'),
       queueCard('Payment review', paymentVerificationCount, 'Internal finance', 'Verify proofs before jobs move forward.', 'admin-finance')
     ].join('');
     $('#admin-control-queue').querySelectorAll('.admin-queue-card').forEach((card) => {
-      card.addEventListener('click', () => navigateTo(card.dataset.target));
+      card.addEventListener('click', () => navigateTo(card.dataset.target, filterRouteData(card)));
     });
 
     const activity = currentJobs
@@ -898,6 +898,7 @@
 
   function bindFilterTabs(selector, key) {
     $$(selector + ' .admin-filter-tab').forEach((tab) => {
+      tab.classList.toggle('active', tab.dataset.filter === currentFilter[key]);
       tab.onclick = () => {
         $$(selector + ' .admin-filter-tab').forEach((item) => item.classList.remove('active'));
         tab.classList.add('active');
@@ -1281,8 +1282,9 @@
     return '<div class="admin-stat"><div class="admin-stat-icon">' + icon + '</div><div class="admin-stat-value">' + escapeHtml(String(value || '0')) + '</div><div class="admin-stat-label">' + escapeHtml(label) + '</div></div>';
   }
 
-  function queueCard(title, count, eyebrow, copy, target) {
-    return '<div class="admin-queue-card" data-target="' + target + '">' +
+  function queueCard(title, count, eyebrow, copy, target, filterKey, filterValue) {
+    const filterAttrs = filterKey && filterValue ? ' data-filter-key="' + escapeAttribute(filterKey) + '" data-filter-value="' + escapeAttribute(filterValue) + '"' : '';
+    return '<div class="admin-queue-card" data-target="' + target + '"' + filterAttrs + '>' +
       '<div class="admin-queue-eyebrow">' + escapeHtml(eyebrow) + '</div>' +
       '<div class="admin-queue-count">' + escapeHtml(String(count)) + '</div>' +
       '<div class="admin-queue-title">' + escapeHtml(title) + '</div>' +
@@ -1291,10 +1293,21 @@
   }
 
   function actionCardMarkup(item) {
-    return '<div class="admin-pending-card" data-target="' + item.target + '">' +
+    const filterAttrs = item.filterKey && item.filterValue ? ' data-filter-key="' + escapeAttribute(item.filterKey) + '" data-filter-value="' + escapeAttribute(item.filterValue) + '"' : '';
+    return '<div class="admin-pending-card" data-target="' + item.target + '"' + filterAttrs + '>' +
       '<div class="admin-pending-info"><div class="admin-pending-priority">' + escapeHtml(item.tag) + '</div><div class="admin-pending-label">' + escapeHtml(item.label) + '</div><div class="admin-pending-count">' + escapeHtml(item.count) + '</div></div>' +
       '<div class="admin-pending-arrow">&rsaquo;</div>' +
     '</div>';
+  }
+
+  function filterRouteData(element) {
+    if (!element || !element.dataset.filterKey || !element.dataset.filterValue) return {};
+    return {
+      routeData: {
+        filterKey: element.dataset.filterKey,
+        filterValue: element.dataset.filterValue
+      }
+    };
   }
 
   function formField(label, input) {
@@ -1463,11 +1476,15 @@
   }
 
   function navigateTo(screen, options) {
+    const routeData = options && options.routeData ? options.routeData : null;
+    if (routeData && routeData.filterKey && routeData.filterValue && Object.prototype.hasOwnProperty.call(currentFilter, routeData.filterKey)) {
+      currentFilter[routeData.filterKey] = routeData.filterValue;
+    }
     const navScreen = adminNavScreen(screen);
     $$('.admin-nav-item').forEach((item) => item.classList.toggle('active', item.dataset.screen === navScreen));
     goTo(screen, {
       replace: !!(options && options.replace),
-      routeData: options && options.routeData ? options.routeData : null
+      routeData
     });
     refreshScreen(screen);
   }
@@ -1543,11 +1560,11 @@
     }
     const pendingElectricianCount = currentElectricians.filter((electrician) => electrician.status === 'pending').length;
     if (pendingElectricianCount) {
-      alerts.push({ tag: 'Onboarding', label: 'Pending electricians', count: pendingElectricianCount + ' application(s) need review', target: 'admin-electricians' });
+      alerts.push({ tag: 'Onboarding', label: 'Pending electricians', count: pendingElectricianCount + ' application(s) need review', target: 'admin-electricians', filterKey: 'electricians', filterValue: 'pending' });
     }
     const stuckCount = currentJobs.filter(isStuckJob).length;
     if (stuckCount) {
-      alerts.push({ tag: 'Dispatch', label: 'Stuck pairing', count: stuckCount + ' job(s) need intervention', target: 'admin-requests' });
+      alerts.push({ tag: 'Dispatch', label: 'Stuck pairing', count: stuckCount + ' job(s) need intervention', target: 'admin-requests', filterKey: 'requests', filterValue: 'manual' });
     }
     const openDisputeCount = currentDisputes.filter((dispute) => (dispute.status || 'open') === 'open').length;
     if (openDisputeCount) {

@@ -108,7 +108,6 @@ const Store = (() => {
   let authHydrationTimer = null;
 
   const GUEST_ACCESS_KEY = 'voltfriq_guest_job_access';
-  const GUEST_ADDRESSES_KEY = 'voltfriq_guest_saved_addresses';
   const GUEST_DEVICE_KEY = 'voltfriq_guest_device_id';
 
   function config() {
@@ -225,94 +224,6 @@ const Store = (() => {
       longitude: Number.isFinite(longitude) ? longitude : null,
       lastUsedAt: raw.lastUsedAt || raw.last_used_at || new Date().toISOString()
     };
-  }
-
-  function addressKey(address) {
-    const normalized = normalizeAddress(address);
-    const text = normalized.addressText.toLowerCase().replace(/\s+/g, ' ').trim();
-    const lat = normalized.latitude == null ? '' : normalized.latitude.toFixed(4);
-    const lng = normalized.longitude == null ? '' : normalized.longitude.toFixed(4);
-    return text + '|' + lat + '|' + lng;
-  }
-
-  function loadGuestSavedAddresses() {
-    try {
-      const raw = window.localStorage.getItem(GUEST_ADDRESSES_KEY);
-      const rows = raw ? JSON.parse(raw) : [];
-      return Array.isArray(rows) ? rows.map(normalizeAddress).filter((address) => address.addressText) : [];
-    } catch (error) {
-      return [];
-    }
-  }
-
-  function saveGuestSavedAddress(address) {
-    const normalized = normalizeAddress(address);
-    if (!normalized.addressText) return null;
-    const key = addressKey(normalized);
-    const next = loadGuestSavedAddresses()
-      .filter((item) => addressKey(item) !== key);
-    next.unshift(Object.assign({}, normalized, {
-      id: normalized.id || 'guest-' + Date.now(),
-      lastUsedAt: new Date().toISOString()
-    }));
-    const trimmed = next.slice(0, 6);
-    try {
-      window.localStorage.setItem(GUEST_ADDRESSES_KEY, JSON.stringify(trimmed));
-    } catch (error) {
-      // Guest address history is a convenience only.
-    }
-    return trimmed[0];
-  }
-
-  async function listSavedAddresses() {
-    const client = ensureClient();
-    if (!client || !state.profile || state.profile.role !== 'customer') {
-      return loadGuestSavedAddresses();
-    }
-    const result = await client
-      .from('customer_addresses')
-      .select('*')
-      .eq('profile_id', state.profile.id)
-      .order('last_used_at', { ascending: false })
-      .limit(8);
-    if (result.error) throw normalizeError(result.error, 'Could not load saved addresses.');
-    return (result.data || []).map(normalizeAddress);
-  }
-
-  async function saveCustomerAddress(address) {
-    const client = ensureClient();
-    const normalized = normalizeAddress(address);
-    if (!normalized.addressText) return null;
-
-    if (!client || !state.profile || state.profile.role !== 'customer') {
-      return saveGuestSavedAddress(normalized);
-    }
-
-    const existing = await client
-      .from('customer_addresses')
-      .select('id')
-      .eq('profile_id', state.profile.id)
-      .eq('address_text', normalized.addressText)
-      .limit(1)
-      .maybeSingle();
-    if (existing.error) throw normalizeError(existing.error, 'Could not check saved addresses.');
-
-    const payload = {
-      profile_id: state.profile.id,
-      label: normalized.label || 'Saved address',
-      address_text: normalized.addressText,
-      location_label: normalized.locationLabel || normalized.addressText,
-      latitude: normalized.latitude,
-      longitude: normalized.longitude,
-      last_used_at: new Date().toISOString()
-    };
-
-    const query = existing.data
-      ? client.from('customer_addresses').update(payload).eq('id', existing.data.id).select('*').single()
-      : client.from('customer_addresses').insert(payload).select('*').single();
-    const result = await query;
-    if (result.error) throw normalizeError(result.error, 'Could not save this address.');
-    return normalizeAddress(result.data);
   }
 
   function selectDraftAddress(address) {
@@ -1381,31 +1292,13 @@ const Store = (() => {
     }
     saveGuestAccess({ jobId, accessToken, phone });
 
-    let photoUploadWarning = '';
-    if (photos.length) {
-      try {
-        const photoPaths = [];
-        const prefix = 'guest/' + jobId + '/' + guestTokenPrefix(accessToken);
-        for (let index = 0; index < photos.length; index += 1) {
-          photoPaths.push(await uploadFile('jobPhotos', photos[index], prefix + '/photo-' + index));
-        }
-        const attachResult = await client.rpc('attach_guest_job_photos', {
-          p_job_id: jobId,
-          p_access_token: accessToken,
-          p_photo_paths: photoPaths
-        });
-        if (attachResult.error) throw normalizeError(attachResult.error, 'Could not attach booking photos.');
-        jobRow = attachResult.data || jobRow;
-      } catch (error) {
-        photoUploadWarning = normalizeError(error, 'Booking is saved, but the photos could not be uploaded.').message;
-      }
-    }
-
     jobRow.id = jobRow.id || jobId;
     jobRow.is_guest = true;
     const normalized = await hydrateProtectedAssets(normalizeJob(jobRow));
     normalized.guestAccessToken = accessToken;
-    if (photoUploadWarning) normalized.photoUploadWarning = photoUploadWarning;
+    if (photos.length) {
+      normalized.photoUploadWarning = 'Your booking is saved. We will request photos later if the VoltFriq needs them.';
+    }
     return normalized;
   }
 
@@ -1814,7 +1707,7 @@ const Store = (() => {
 
   async function markPayoutComplete(jobId) {
     requireRole('admin');
-    return updateJobStatus(jobId, 'payout_complete', 'Admin released payout.');
+    return updateJobStatus(jobId, 'payout_complete', 'Payout released.');
   }
 
   async function submitRating(jobId, score, comment, behaviorTags) {
@@ -2252,8 +2145,6 @@ const Store = (() => {
     clearGuestAccess,
     getPublicSiteUrl,
     siteUrlForPath,
-    listSavedAddresses,
-    saveCustomerAddress,
     selectDraftAddress,
     getRoleHome,
     getSettings,

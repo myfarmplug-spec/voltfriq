@@ -20,7 +20,6 @@
   let trackingDetailsExpanded = false;
   let bookingSubmitInFlight = false;
   let bookingConfirmationTimer = null;
-  let savedAddresses = [];
 
   const ISSUE_OPTIONS = [
     { issue_type: 'Socket / Switch', value: 'Socket repair', description: 'Faulty socket, switch, or new socket point.', estimated_fee_min: 5000, estimated_fee_max: 8000 },
@@ -58,11 +57,6 @@
 
   const CUSTOMER_DRAFT_KEY = 'voltfriq_customer_draft_v1';
   const DEFAULT_COUNTRY = 'Nigeria';
-  const SUPPORTED_STATES = ['Rivers', 'Imo'];
-  const CITY_OPTIONS = {
-    Rivers: ['Port Harcourt', 'Obio-Akpor', 'Eleme', 'Oyigbo', 'Ikwerre'],
-    Imo: ['Owerri Municipal', 'Owerri North', 'Owerri West', 'Orlu', 'Okigwe']
-  };
 
   function wantsPasswordReset() {
     const query = new URLSearchParams(window.location.search || '');
@@ -183,28 +177,7 @@
       }
     });
 
-    on('service-area-select', 'change', () => {
-      syncManualAddressDraft();
-      updateAvailabilityCard();
-    });
-    on('manual-country', 'change', () => {
-      syncManualAddressDraft();
-      updateAvailabilityCard();
-    });
-    on('manual-state', 'change', () => {
-      renderManualCityOptions();
-      syncManualAddressDraft();
-      updateAvailabilityCard();
-    });
-    on('manual-city', 'change', () => {
-      syncManualAddressDraft();
-      updateAvailabilityCard();
-    });
     on('manual-street-address', 'input', () => {
-      syncManualAddressDraft();
-      updateAvailabilityCard();
-    });
-    on('manual-landmark', 'input', () => {
       syncManualAddressDraft();
       updateAvailabilityCard();
     });
@@ -219,7 +192,7 @@
     on('btn-area-continue', 'click', () => {
       if (addressMode === 'manual') syncManualAddressDraft();
       if (!hasDraftLocation()) {
-        showError('Enter country, state, city, and street address before continuing, or use GPS.');
+        showError('Enter an address before continuing, or use current location.');
         return;
       }
       goTo('problem');
@@ -540,18 +513,8 @@
     await openBookingRoute(route.screen, { replace: route.source !== 'popstate' });
   }
 
-  async function loadSavedAddresses() {
-    try {
-      savedAddresses = await Store.listSavedAddresses();
-    } catch (error) {
-      savedAddresses = [];
-    }
-    return savedAddresses;
-  }
-
   async function openBookingRoute(targetScreen, options) {
     hydrateDraftState();
-    await loadSavedAddresses();
 
     if (!hasDraftLocation()) {
       goTo('service-area', { replace: options && options.replace });
@@ -602,22 +565,14 @@
   }
 
   function showConfigurationMessage() {
-    document.getElementById('availability-meta').textContent = 'Add your Supabase URL and anon key in js/config.js to enable live booking.';
     document.getElementById('auth-error').style.display = 'block';
     document.getElementById('auth-error').textContent = 'Supabase is not configured yet.';
   }
 
   function renderSettings() {
     const areas = getConfiguredServiceAreas();
-    renderManualAddressControls();
-    const serviceAreaSelect = document.getElementById('service-area-select');
-    if (serviceAreaSelect) {
-      serviceAreaSelect.innerHTML = '<option value="">Select a service area</option>' +
-        areas.map((area) => '<option value="' + escapeAttribute(area) + '">' + escapeHtml(area) + '</option>').join('');
-      if (draft.serviceArea) syncServiceAreaSelect(draft.serviceArea);
-    }
+    setInputValue('manual-street-address', draft.streetAddress);
     renderLocationDatalist(areas);
-
     renderIssueSelect();
   }
 
@@ -638,34 +593,7 @@
   }
 
   function renderManualAddressControls() {
-    renderSelectOptions('manual-country', [DEFAULT_COUNTRY], draft.country || DEFAULT_COUNTRY, 'Select country');
-    renderSelectOptions('manual-state', SUPPORTED_STATES, draft.state, 'Select state');
-    renderManualCityOptions();
     setInputValue('manual-street-address', draft.streetAddress);
-    setInputValue('manual-landmark', draft.landmark);
-  }
-
-  function renderManualCityOptions() {
-    const state = getElementValue('manual-state') || draft.state;
-    const cities = CITY_OPTIONS[state] || [];
-    if (draft.city && !cities.some((city) => city.toLowerCase() === draft.city.toLowerCase())) {
-      draft.city = '';
-    }
-    renderSelectOptions('manual-city', cities, draft.city, 'Select city or LGA');
-  }
-
-  function renderSelectOptions(id, options, currentValue, placeholder) {
-    const select = document.getElementById(id);
-    if (!select) return;
-    const cleanValue = String(currentValue || '').trim();
-    select.innerHTML = '<option value="">' + escapeHtml(placeholder || 'Select') + '</option>' +
-      (options || []).map((option) => '<option value="' + escapeAttribute(option) + '">' + escapeHtml(option) + '</option>').join('');
-    if (cleanValue && (options || []).some((option) => option.toLowerCase() === cleanValue.toLowerCase())) {
-      const match = (options || []).find((option) => option.toLowerCase() === cleanValue.toLowerCase());
-      select.value = match;
-    } else if (id === 'manual-country' && !cleanValue) {
-      select.value = DEFAULT_COUNTRY;
-    }
   }
 
   function setInputValue(id, value) {
@@ -679,17 +607,7 @@
   }
 
   function syncServiceAreaSelect(value) {
-    const select = document.getElementById('service-area-select');
-    const cleanValue = String(value || '').trim();
-    if (!select || !cleanValue) return;
-    const hasOption = Array.from(select.options).some((option) => option.value.toLowerCase() === cleanValue.toLowerCase());
-    if (!hasOption) {
-      const option = document.createElement('option');
-      option.value = cleanValue;
-      option.textContent = cleanValue;
-      select.appendChild(option);
-    }
-    select.value = cleanValue;
+    draft.serviceArea = String(value || '').trim();
   }
 
   async function startBooking() {
@@ -706,7 +624,7 @@
       button.classList.toggle('active', button.dataset.addressMode === addressMode);
     });
 
-    togglePanel('manual-location-sheet', addressMode === 'manual');
+    togglePanel('address-entry-panel', addressMode === 'manual');
 
     if (addressMode === 'gps' && !draft.latitude && !draft.longitude) {
       useCurrentLocation(!!(options && options.autoStarted));
@@ -724,7 +642,9 @@
 
   function togglePanel(id, visible) {
     const panel = document.getElementById(id);
-    if (panel) panel.style.display = visible ? '' : 'none';
+    if (!panel) return;
+    panel.hidden = !visible;
+    panel.style.display = visible ? '' : 'none';
   }
 
   function applyAddressSelection(address, source) {
@@ -736,34 +656,21 @@
     draft.longitude = normalized.longitude == null ? null : Number(normalized.longitude);
     draft.addressSource = source || normalized.source || 'gps';
     syncServiceAreaSelect(label);
-    const detectedText = document.getElementById('detected-location-text');
-    if (detectedText && source === 'gps') {
-      detectedText.textContent = label;
-    }
     persistDraftState();
     updateAvailabilityCard();
   }
 
   function syncManualAddressDraft() {
-    const country = getElementValue('manual-country') || DEFAULT_COUNTRY;
-    const state = getElementValue('manual-state');
-    const city = getElementValue('manual-city');
     const streetAddress = getElementValue('manual-street-address');
-    const landmark = getElementValue('manual-landmark');
-    const closestServiceArea = getElementValue('service-area-select');
 
-    draft.country = country;
-    draft.state = state;
-    draft.city = city;
+    draft.country = DEFAULT_COUNTRY;
+    draft.state = '';
+    draft.city = '';
     draft.streetAddress = streetAddress;
-    draft.landmark = landmark;
-
-    const hasManualInput = Boolean(country || state || city || streetAddress || landmark || closestServiceArea);
-    if (hasManualInput) {
-      draft.addressSource = 'manual';
-    }
+    draft.landmark = '';
 
     if (streetAddress) {
+      draft.addressSource = 'manual';
       draft.latitude = null;
       draft.longitude = null;
     }
@@ -776,45 +683,26 @@
     }
     const inferredServiceArea = Store.inferServiceAreaFromAddress
       ? Store.inferServiceAreaFromAddress({
-          serviceArea: closestServiceArea,
           locationLabel: manualLabel,
           streetAddress,
-          landmark,
-          city,
-          state,
-          country
+          country: DEFAULT_COUNTRY
         })
       : '';
-    draft.serviceArea = closestServiceArea || inferredServiceArea || manualServiceAreaFallback();
-    if (!closestServiceArea && inferredServiceArea) {
-      syncServiceAreaSelect(inferredServiceArea);
-    }
-    updateManualLocationSummary();
+    draft.serviceArea = inferredServiceArea || manualServiceAreaFallback();
     persistDraftState();
   }
 
   function composeManualLocationLabel() {
     if (!draft.streetAddress) return '';
-    return [draft.streetAddress, draft.landmark, draft.city, draft.state, draft.country]
-      .map((part) => String(part || '').trim())
-      .filter(Boolean)
-      .join(', ');
+    return String(draft.streetAddress || '').trim();
   }
 
   function manualServiceAreaFallback() {
-    return [draft.city, draft.state].filter(Boolean).join(', ') || draft.locationLabel || '';
+    return draft.locationLabel || draft.streetAddress || '';
   }
 
   function hasManualAddress() {
-    return Boolean(draft.country && draft.state && draft.city && draft.streetAddress);
-  }
-
-  function updateManualLocationSummary() {
-    const summary = document.getElementById('manual-location-summary');
-    if (!summary) return;
-    summary.textContent = hasManualAddress()
-      ? composeManualLocationLabel()
-      : 'Country, state, city, and street address';
+    return Boolean(draft.streetAddress);
   }
 
   function bindChoiceRow(id, callback) {
@@ -830,16 +718,10 @@
   }
 
   async function useCurrentLocation(autoStarted) {
-    const helperNote = document.getElementById('location-helper-note');
     if (!navigator.geolocation) {
-      if (helperNote) helperNote.textContent = 'GPS is not available on this device. Enter your address to continue.';
       setAddressMode('manual');
       return;
     }
-
-    const detectedText = document.getElementById('detected-location-text');
-    if (detectedText) detectedText.textContent = 'Finding your location...';
-    if (helperNote) helperNote.textContent = 'Allow location access so VoltFriq can route the nearest available electrician.';
 
     navigator.geolocation.getCurrentPosition(async (position) => {
       const latitude = position.coords.latitude;
@@ -853,11 +735,7 @@
         latitude,
         longitude
       }, 'gps');
-      if (detectedText) detectedText.textContent = draft.locationLabel;
-      if (helperNote) helperNote.textContent = 'Confirm this location or edit the area before continuing.';
     }, () => {
-      if (detectedText) detectedText.textContent = 'Location access was blocked.';
-      if (helperNote) helperNote.textContent = 'Enter your address to continue without GPS.';
       setAddressMode('manual');
       updateAvailabilityCard();
     }, {
@@ -920,15 +798,7 @@
     }
     const bookingLocation = getFinalBookingLocation();
     const hasLocation = Boolean(bookingLocation.locationLabel);
-    const availabilityCount = document.getElementById('availability-count');
-    const availabilityMeta = document.getElementById('availability-meta');
     const continueButton = document.getElementById('btn-area-continue');
-    if (availabilityCount) availabilityCount.textContent = hasLocation ? 'Ready' : 'Waiting';
-    if (availabilityMeta) {
-      availabilityMeta.textContent = hasLocation
-        ? 'Location saved. You can continue without GPS.'
-        : 'Enter your street address or use current location.';
-    }
     if (continueButton) continueButton.disabled = !hasLocation;
     persistDraftState();
   }
@@ -1632,8 +1502,8 @@
     }
 
     title.textContent = 'Booking confirmed';
-    sub.textContent = 'Finding the best VoltFriq near you...';
-    note.textContent = 'Progress is happening. We will update this page as soon as pairing moves.';
+    sub.textContent = 'Pairing you with a VoltFriq';
+    note.textContent = 'Finding a verified electrician near you.';
   }
 
   function getTrackingStageIndex(job) {
@@ -1694,27 +1564,30 @@
     const estimate = getTrackingEstimate(job);
     const assessment = getTrackingAssessmentValue(job);
     const detailsState = trackingDetailsExpanded ? ' is-expanded' : '';
+    const assignedName = job && job.assignedElectrician && job.assignedElectrician.name;
+    const headline = assignedName ? 'VoltFriq assigned' : 'Pairing you with a VoltFriq';
+    const reassurance = assignedName
+      ? (String(assignedName).trim() + ' is connected to your booking.')
+      : 'Finding a verified electrician near you.';
     const contactCta = shouldShowTrackingContact(job)
       ? '<button class="tracking-contact-btn" id="btn-tracking-contact" type="button">' + trackingIcon('message') + '<span>Contact Us</span></button>'
       : '';
     container.innerHTML = [
-      '<div class="tracking-detail-main' + detailsState + '">',
+      '<div class="tracking-detail-main">',
         '<span class="tracking-detail-icon" aria-hidden="true">' + trackingIcon('socket') + '</span>',
         '<div class="tracking-detail-copy">',
-          '<h3>' + escapeHtml(issue) + '</h3>',
-          '<p>' + escapeHtml(location) + '</p>',
-          '<div class="tracking-ticket-line">',
-            '<span>Ticket ID: ' + escapeHtml(ticket) + '</span>',
-            '<button class="tracking-copy-ticket" type="button" data-copy-ticket="' + escapeHtml(ticket) + '" aria-label="Copy ticket ID">' + trackingIcon('copy') + '</button>',
-          '</div>',
+          '<h3>' + escapeHtml(headline) + '</h3>',
+          '<p>' + escapeHtml(reassurance) + '</p>',
         '</div>',
       '</div>',
       '<button class="tracking-detail-toggle" id="btn-toggle-tracking-details" type="button">' + escapeHtml(trackingDetailsExpanded ? 'Hide details' : 'View details') + '</button>',
       contactCta,
       '<div class="tracking-detail-metrics' + detailsState + '">',
-        '<div class="tracking-metric"><span>Service type</span><strong>' + escapeHtml(serviceType) + '</strong><em>' + escapeHtml(urgency) + '</em></div>',
+        '<div class="tracking-metric"><span>Service type</span><strong>' + escapeHtml(serviceType) + '</strong><em>' + escapeHtml(urgency) + '</em><small>' + escapeHtml(issue) + '</small></div>',
+        '<div class="tracking-metric"><span>Location</span><strong>' + escapeHtml(location) + '</strong></div>',
         '<div class="tracking-metric"><span>Estimated price</span><strong>' + escapeHtml(estimate) + '</strong><small>After assessment</small></div>',
         '<div class="tracking-metric"><span>Assessment visit</span><strong>' + escapeHtml(assessment) + '</strong></div>',
+        '<div class="tracking-metric tracking-metric-ticket"><span>Ticket ID</span><strong>' + escapeHtml(ticket) + '</strong><button class="tracking-copy-ticket" type="button" data-copy-ticket="' + escapeAttribute(ticket) + '" aria-label="Copy ticket ID">' + trackingIcon('copy') + '</button></div>',
       '</div>'
     ].join('');
   }
@@ -1794,7 +1667,7 @@
     document.getElementById('quot-labour-items').innerHTML = quote.items.filter((item) => item.itemType !== 'material').map(renderQuoteItem).join('') || '<div class="quot-empty">No labour items listed.</div>';
     document.getElementById('quot-material-items').innerHTML = quote.items.filter((item) => item.itemType === 'material').map(renderQuoteItem).join('') || '<div class="quot-empty">No materials listed.</div>';
     document.getElementById('quot-total-amount').textContent = Store.formatCurrency(quote.total || 0);
-    document.getElementById('quotation-note').textContent = 'Admin verifies any payment proof before the job moves into work.';
+    document.getElementById('quotation-note').textContent = 'We will verify any payment proof before the job moves into work.';
   }
 
   function renderQuoteItem(item) {
@@ -1809,7 +1682,7 @@
     document.getElementById('payment-snapshot').innerHTML = [
       ['Status', job.statusLabel],
       ['Ticket', job.ticket],
-      ['Verification', 'Manual admin review']
+      ['Verification', 'VoltFriq review']
     ].map(renderKeyValueRow).join('');
     document.getElementById('pay-bank-name').textContent = settings.platform_bank_name || '';
     document.getElementById('pay-account-number').textContent = settings.platform_account_number || '';
@@ -1832,7 +1705,7 @@
 
     document.getElementById('confirm-elec-status').innerHTML = job.status === 'electrician_completed'
       ? '<span class="dot-live"></span> VoltFriq marked the work complete. Confirm when satisfied.'
-      : '<span class="dot-live"></span> Completion confirmed. Waiting for admin payout release.';
+      : '<span class="dot-live"></span> Completion confirmed. Waiting for final payout release.';
 
     document.getElementById('final-settlement-card').innerHTML = [
       ['Job status', job.statusLabel],
@@ -1974,7 +1847,7 @@
     if (authScreenIntent === 'dashboard') {
       if (title) title.textContent = authMode === 'register' ? 'Create Account' : 'Sign In';
       heading.textContent = authMode === 'register' ? 'Create your customer dashboard' : 'Sign in to your customer dashboard';
-      sub.textContent = 'Manage active jobs, history, saved addresses, and account details in one place.';
+        sub.textContent = 'Manage active jobs, history, and account details in one place.';
       return;
     }
     if (authScreenIntent === 'claim-guest') {
@@ -2015,7 +1888,6 @@
     try {
       setScreenBusy(true, 'Loading your dashboard...');
       renderDashboardLoading();
-      await loadSavedAddresses();
       await renderSidecars();
       await renderDashboard();
       goTo('dashboard', { replace: !!(options && options.replace) });
@@ -2201,17 +2073,11 @@
     draft.selectedElectricianId = null;
     draft.matches = [];
     uploadedFiles = [];
-    if (document.getElementById('service-area-select')) document.getElementById('service-area-select').value = '';
-    if (document.getElementById('manual-country')) document.getElementById('manual-country').value = DEFAULT_COUNTRY;
-    if (document.getElementById('manual-state')) document.getElementById('manual-state').value = '';
-    if (document.getElementById('manual-city')) document.getElementById('manual-city').value = '';
     if (document.getElementById('manual-street-address')) document.getElementById('manual-street-address').value = '';
-    if (document.getElementById('manual-landmark')) document.getElementById('manual-landmark').value = '';
     document.getElementById('problem-category').value = '';
     document.getElementById('problem-desc').value = '';
     if (document.getElementById('review-phone')) document.getElementById('review-phone').value = '';
-    if (document.getElementById('detected-location-text')) document.getElementById('detected-location-text').textContent = 'Finding your location...';
-    if (document.getElementById('manual-location-sheet')) document.getElementById('manual-location-sheet').style.display = 'none';
+    if (document.getElementById('address-entry-panel')) document.getElementById('address-entry-panel').hidden = true;
     document.getElementById('auth-referral-code').value = '';
     authScreenIntent = 'default';
     applyAuthScreenContext();

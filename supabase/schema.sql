@@ -384,6 +384,30 @@ CREATE TABLE "public"."jobs" (
 ALTER TABLE "public"."jobs" OWNER TO "postgres";
 
 --
+-- Name: guest_booking_attempts; Type: TABLE; Schema: public; Owner: postgres
+--
+
+create table if not exists public.guest_booking_attempts (
+  id uuid primary key default gen_random_uuid(),
+  phone_hash text not null,
+  device_key text,
+  job_id uuid references public.jobs(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists guest_booking_attempts_phone_created_idx
+  on public.guest_booking_attempts (phone_hash, created_at desc);
+
+create index if not exists guest_booking_attempts_device_created_idx
+  on public.guest_booking_attempts (device_key, created_at desc)
+  where device_key is not null;
+
+alter table public.guest_booking_attempts enable row level security;
+revoke all on table public.guest_booking_attempts from public, anon, authenticated;
+grant all on table public.guest_booking_attempts to service_role;
+
+
+--
 -- Name: create_customer_job("text", "text", double precision, double precision, "text", "public"."job_urgency", "text", boolean, "text", "text"[]); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -528,24 +552,87 @@ $$;
 ALTER FUNCTION "public"."create_dispute"("p_job_id" "uuid", "p_issue_type" "text", "p_details" "text") OWNER TO "postgres";
 
 --
--- Name: create_guest_customer_job("text", "text", "text", double precision, double precision, "text", "public"."job_urgency", "text", boolean, "text", "text"[]); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: create_guest_customer_job(text,text,text,double precision,double precision,text,public.job_urgency,text,boolean,text,text[],text); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[] DEFAULT '{}'::"text"[]) RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
+create or replace function public.create_guest_customer_job(
+  p_phone text,
+  p_service_area text,
+  p_location_label text,
+  p_latitude double precision,
+  p_longitude double precision,
+  p_issue_category text,
+  p_urgency public.job_urgency,
+  p_customer_note text,
+  p_requires_assessment boolean,
+  p_material_handling text,
+  p_photo_paths text[] default '{}'::text[],
+  p_client_fingerprint text default null
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
   guest_row public.guest_customers;
   created_job public.jobs;
   access_token text;
+  normalized_phone text;
+  phone_hash_value text;
+  device_key_value text;
+  recent_count integer;
+  attempt_id uuid;
 begin
-  if nullif(trim(p_phone), '') is null then
-    raise exception 'Phone number is required';
+  normalized_phone := regexp_replace(coalesce(p_phone, ''), '\D', '', 'g');
+  if length(normalized_phone) < 7 then
+    raise exception 'Enter a valid mobile number before submitting.';
   end if;
 
+  if coalesce(array_length(p_photo_paths, 1), 0) > 0 then
+    raise exception 'Photos must be attached after the booking is confirmed.';
+  end if;
+
+  phone_hash_value := md5('voltfriq:' || normalized_phone);
+  device_key_value := nullif(
+    left(regexp_replace(lower(coalesce(p_client_fingerprint, '')), '[^a-z0-9_-]', '', 'g'), 96),
+    ''
+  );
+
+  select count(*) into recent_count
+  from public.guest_booking_attempts
+  where phone_hash = phone_hash_value
+    and created_at > now() - interval '10 minutes';
+
+  if recent_count > 0 then
+    raise exception 'A booking was recently submitted with this phone. Please wait a few minutes before trying again.';
+  end if;
+
+  if device_key_value is not null then
+    select count(*) into recent_count
+    from public.guest_booking_attempts
+    where device_key = device_key_value
+      and created_at > now() - interval '10 minutes';
+
+    if recent_count > 0 then
+      raise exception 'A booking was recently submitted from this device. Please wait a few minutes before trying again.';
+    end if;
+  end if;
+
+  select count(*) into recent_count
+  from public.guest_booking_attempts
+  where phone_hash = phone_hash_value
+    and created_at > now() - interval '1 hour';
+
+  if recent_count >= 3 then
+    raise exception 'Too many recent booking attempts. Please wait a little while before submitting another booking.';
+  end if;
+
+  insert into public.guest_booking_attempts (phone_hash, device_key)
+  values (phone_hash_value, device_key_value)
+  returning id into attempt_id;
+
   insert into public.guest_customers (phone, location_label, latitude, longitude)
-  values (trim(p_phone), p_location_label, p_latitude, p_longitude)
+  values (btrim(p_phone), p_location_label, p_latitude, p_longitude)
   on conflict (phone) do update
     set location_label = excluded.location_label,
         latitude = excluded.latitude,
@@ -587,9 +674,9 @@ begin
   )
   returning * into created_job;
 
-  insert into public.job_photos (job_id, file_path)
-  select created_job.id, photo_path
-  from unnest(coalesce(p_photo_paths, '{}'::text[])) as photo_path;
+  update public.guest_booking_attempts
+  set job_id = created_job.id
+  where id = attempt_id;
 
   insert into public.job_timeline (job_id, status, note, actor_profile_id, metadata)
   values
@@ -605,8 +692,7 @@ begin
 end;
 $$;
 
-
-ALTER FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]) OWNER TO "postgres";
+ALTER FUNCTION public.create_guest_customer_job(text,text,text,double precision,double precision,text,public.job_urgency,text,boolean,text,text[],text) OWNER TO postgres;
 
 --
 -- Name: create_notification("uuid", "uuid", "public"."notification_event", "text", "text", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -1435,7 +1521,7 @@ CREATE FUNCTION "public"."guest_public_timeline_note"("p_status" "public"."job_s
     AS $$
   select case p_status::text
     when 'requested' then 'Booking confirmed.'
-    when 'matching' then 'Finding the best VoltFriq near you.'
+    when 'matching' then 'Finding a verified electrician near you.'
     when 'assigned' then 'A verified VoltFriq has been assigned.'
     when 'accepted' then 'Your VoltFriq has accepted the booking.'
     when 'assessment_fee_pending' then 'Assessment payment is ready.'
@@ -1462,17 +1548,22 @@ $$;
 ALTER FUNCTION "public"."guest_public_timeline_note"("p_status" "public"."job_status") OWNER TO "postgres";
 
 --
--- Name: guest_job_payload("uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: guest_job_payload(uuid,text); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION "public"."guest_job_payload"("p_job_id" "uuid", "p_access_token" "text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
+create or replace function public.guest_job_payload(
+  p_job_id uuid,
+  p_access_token text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
   payload jsonb;
 begin
   select jsonb_strip_nulls(jsonb_build_object(
+    'id', j.id,
     'ticket', j.ticket,
     'is_guest', true,
     'service_area', j.service_area,
@@ -1487,11 +1578,7 @@ begin
         'full_name', coalesce(nullif(p.full_name, ''), 'VoltFriq'),
         'avatar_url', p.avatar_url
       ),
-      'average_rating', e.average_rating,
-      'total_ratings', e.total_ratings,
-      'completed_jobs', e.completed_jobs,
-      'level_badge', e.level_badge,
-      'service_areas', e.service_areas
+      'average_rating', e.average_rating
     ) end,
     'job_timeline', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -1504,8 +1591,6 @@ begin
     ), '[]'::jsonb),
     'job_quotes', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'id', q.id,
-        'findings', q.findings,
         'labor_total', q.labor_total,
         'material_total', q.material_total,
         'grand_total', q.grand_total,
@@ -1517,7 +1602,6 @@ begin
     'job_payments', coalesce((
       select jsonb_agg(jsonb_build_object(
         'payment_type', payment.payment_type,
-        'amount', payment.amount,
         'status', payment.status,
         'created_at', payment.created_at
       ) order by payment.created_at)
@@ -1540,8 +1624,7 @@ begin
 end;
 $$;
 
-
-ALTER FUNCTION "public"."guest_job_payload"("p_job_id" "uuid", "p_access_token" "text") OWNER TO "postgres";
+ALTER FUNCTION public.guest_job_payload(uuid,text) OWNER TO postgres;
 
 --
 -- Name: handle_job_status_notifications(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -2462,17 +2545,21 @@ ALTER TABLE "public"."job_payments" OWNER TO "postgres";
 CREATE UNIQUE INDEX "job_payments_one_submitted_per_job_idx" ON "public"."job_payments" USING "btree" ("job_id") WHERE ("status" = 'submitted'::"public"."payment_status");
 
 --
--- Name: submit_guest_payment_proof("uuid", "text", "public"."payment_type", numeric, "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: attach_guest_job_photos(uuid,text,text[]); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") RETURNS "public"."job_payments"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
+create or replace function public.attach_guest_job_photos(
+  p_job_id uuid,
+  p_access_token text,
+  p_photo_paths text[]
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
   job_row public.jobs;
-  payment_row public.job_payments;
-  next_status job_status;
+  expected_prefix text;
 begin
   select * into job_row
   from public.jobs
@@ -2483,6 +2570,77 @@ begin
 
   if not found then
     raise exception 'Guest job not found';
+  end if;
+
+  if coalesce(array_length(p_photo_paths, 1), 0) > 3 then
+    raise exception 'Add up to 3 photos only.';
+  end if;
+
+  expected_prefix := 'guest/' || p_job_id::text || '/' || left(p_access_token, 16) || '/';
+
+  if exists (
+    select 1
+    from unnest(coalesce(p_photo_paths, '{}'::text[])) as paths(photo_path)
+    where photo_path is null
+       or photo_path = ''
+       or length(photo_path) > 500
+       or photo_path not like expected_prefix || '%'
+  ) then
+    raise exception 'Upload photos again before submitting them.';
+  end if;
+
+  insert into public.job_photos (job_id, file_path)
+  select p_job_id, paths.photo_path
+  from unnest(coalesce(p_photo_paths, '{}'::text[])) as paths(photo_path)
+  where not exists (
+    select 1
+    from public.job_photos existing
+    where existing.job_id = p_job_id
+      and existing.file_path = paths.photo_path
+  );
+
+  return public.guest_job_payload(p_job_id, p_access_token);
+end;
+$$;
+
+ALTER FUNCTION public.attach_guest_job_photos(uuid,text,text[]) OWNER TO postgres;
+
+--
+-- Name: submit_guest_payment_proof(uuid,text,public.payment_type,numeric,text,text); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+create or replace function public.submit_guest_payment_proof(
+  p_job_id uuid,
+  p_access_token text,
+  p_payment_type public.payment_type,
+  p_amount numeric,
+  p_reference text,
+  p_proof_path text
+) returns public.job_payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  job_row public.jobs;
+  payment_row public.job_payments;
+  next_status public.job_status;
+  expected_prefix text;
+begin
+  select * into job_row
+  from public.jobs
+  where id = p_job_id
+    and customer_access_token = p_access_token
+    and guest_customer_id is not null
+  for update;
+
+  if not found then
+    raise exception 'Guest job not found';
+  end if;
+
+  expected_prefix := 'guest/' || p_job_id::text || '/' || left(p_access_token, 16) || '/';
+  if nullif(btrim(p_proof_path), '') is not null and p_proof_path not like expected_prefix || '%' then
+    raise exception 'Upload the payment proof again before submitting.';
   end if;
 
   if job_row.status in ('electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated', 'cancelled') then
@@ -2551,8 +2709,7 @@ begin
 end;
 $$;
 
-
-ALTER FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") OWNER TO "postgres";
+ALTER FUNCTION public.submit_guest_payment_proof(uuid,text,public.payment_type,numeric,text,text) OWNER TO postgres;
 
 --
 -- Name: job_quotes; Type: TABLE; Schema: public; Owner: postgres
@@ -5839,7 +5996,19 @@ CREATE POLICY "voltfriq electrician docs write" ON "storage"."objects" FOR INSER
 -- Name: objects voltfriq guest upload write; Type: POLICY; Schema: storage; Owner: supabase_storage_admin
 --
 
-CREATE POLICY "voltfriq guest upload write" ON "storage"."objects" FOR INSERT TO "anon" WITH CHECK ((("bucket_id" = ANY (ARRAY['job-photos'::"text", 'payment-proofs'::"text"])) AND ("split_part"("name", '/'::"text", 1) = 'guest'::"text")));
+create policy "voltfriq guest upload write" on storage.objects
+for insert to anon
+with check (
+  bucket_id in ('job-photos', 'payment-proofs')
+  and split_part(name, '/', 1) = 'guest'
+  and length(split_part(name, '/', 2)) = 36
+  and length(split_part(name, '/', 3)) >= 12
+  and split_part(name, '/', 4) <> ''
+  and (
+    (bucket_id = 'job-photos' and ((metadata->>'size') is null or (metadata->>'size')::bigint <= 5242880))
+    or (bucket_id = 'payment-proofs' and ((metadata->>'size') is null or (metadata->>'size')::bigint <= 8388608))
+  )
+);;
 
 
 --
@@ -5901,36 +6070,31 @@ GRANT ALL ON TABLE "public"."electricians" TO "service_role";
 -- Name: FUNCTION "admin_set_electrician_status"("p_electrician_id" "uuid", "p_status" "public"."electrician_status", "p_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."admin_set_electrician_status"("p_electrician_id" "uuid", "p_status" "public"."electrician_status", "p_reason" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."admin_set_electrician_status"("p_electrician_id" "uuid", "p_status" "public"."electrician_status", "p_reason" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."admin_set_electrician_status"("p_electrician_id" "uuid", "p_status" "public"."electrician_status", "p_reason" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."admin_set_electrician_status"("p_electrician_id" "uuid", "p_status" "public"."electrician_status", "p_reason" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."admin_set_electrician_status"("p_electrician_id" "uuid", "p_status" "public"."electrician_status", "p_reason" "text") TO "service_role";
 
 
 --
 -- Name: FUNCTION "admin_set_electrician_watchlist"("p_electrician_id" "uuid", "p_watchlist" boolean, "p_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."admin_set_electrician_watchlist"("p_electrician_id" "uuid", "p_watchlist" boolean, "p_reason" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."admin_set_electrician_watchlist"("p_electrician_id" "uuid", "p_watchlist" boolean, "p_reason" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."admin_set_electrician_watchlist"("p_electrician_id" "uuid", "p_watchlist" boolean, "p_reason" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."admin_set_electrician_watchlist"("p_electrician_id" "uuid", "p_watchlist" boolean, "p_reason" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."admin_set_electrician_watchlist"("p_electrician_id" "uuid", "p_watchlist" boolean, "p_reason" "text") TO "service_role";
 
 
 --
 -- Name: FUNCTION "append_job_timeline"("p_job_id" "uuid", "p_status" "public"."job_status", "p_note" "text", "p_actor_profile_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."append_job_timeline"("p_job_id" "uuid", "p_status" "public"."job_status", "p_note" "text", "p_actor_profile_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."append_job_timeline"("p_job_id" "uuid", "p_status" "public"."job_status", "p_note" "text", "p_actor_profile_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."append_job_timeline"("p_job_id" "uuid", "p_status" "public"."job_status", "p_note" "text", "p_actor_profile_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."append_job_timeline"("p_job_id" "uuid", "p_status" "public"."job_status", "p_note" "text", "p_actor_profile_id" "uuid") TO "service_role";
 
 
 --
 -- Name: FUNCTION "calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) TO "anon";
-GRANT ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) TO "service_role";
 
 
 --
@@ -5946,9 +6110,8 @@ GRANT ALL ON TABLE "public"."jobs" TO "service_role";
 -- Name: FUNCTION "create_customer_job"("p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."create_customer_job"("p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]) TO "anon";
-GRANT ALL ON FUNCTION "public"."create_customer_job"("p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_customer_job"("p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]) TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."create_customer_job"("p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]) TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."create_customer_job"("p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]) TO "service_role";
 
 
 --
@@ -5964,87 +6127,74 @@ GRANT ALL ON TABLE "public"."disputes" TO "service_role";
 -- Name: FUNCTION "create_dispute"("p_job_id" "uuid", "p_issue_type" "text", "p_details" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."create_dispute"("p_job_id" "uuid", "p_issue_type" "text", "p_details" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_dispute"("p_job_id" "uuid", "p_issue_type" "text", "p_details" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_dispute"("p_job_id" "uuid", "p_issue_type" "text", "p_details" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."create_dispute"("p_job_id" "uuid", "p_issue_type" "text", "p_details" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."create_dispute"("p_job_id" "uuid", "p_issue_type" "text", "p_details" "text") TO "service_role";
 
 
 --
 -- Name: FUNCTION "create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]) TO "anon";
-GRANT ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[]) TO "service_role";
-
-
 --
 -- Name: FUNCTION "create_notification"("p_profile_id" "uuid", "p_job_id" "uuid", "p_event" "public"."notification_event", "p_title" "text", "p_body" "text", "p_metadata" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."create_notification"("p_profile_id" "uuid", "p_job_id" "uuid", "p_event" "public"."notification_event", "p_title" "text", "p_body" "text", "p_metadata" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_notification"("p_profile_id" "uuid", "p_job_id" "uuid", "p_event" "public"."notification_event", "p_title" "text", "p_body" "text", "p_metadata" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_notification"("p_profile_id" "uuid", "p_job_id" "uuid", "p_event" "public"."notification_event", "p_title" "text", "p_body" "text", "p_metadata" "jsonb") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."create_notification"("p_profile_id" "uuid", "p_job_id" "uuid", "p_event" "public"."notification_event", "p_title" "text", "p_body" "text", "p_metadata" "jsonb") TO "service_role";
 
 
 --
 -- Name: FUNCTION "current_customer_id"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."current_customer_id"() TO "anon";
-GRANT ALL ON FUNCTION "public"."current_customer_id"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."current_customer_id"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."current_customer_id"() TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."current_customer_id"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "current_electrician_id"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."current_electrician_id"() TO "anon";
-GRANT ALL ON FUNCTION "public"."current_electrician_id"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."current_electrician_id"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."current_electrician_id"() TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."current_electrician_id"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "dispatch_job"("p_job_id" "uuid", "p_manual_electrician_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."dispatch_job"("p_job_id" "uuid", "p_manual_electrician_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."dispatch_job"("p_job_id" "uuid", "p_manual_electrician_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."dispatch_job"("p_job_id" "uuid", "p_manual_electrician_id" "uuid") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."dispatch_job"("p_job_id" "uuid", "p_manual_electrician_id" "uuid") TO "service_role";
 
 
 --
 -- Name: FUNCTION "dispatch_job_internal"("p_job_id" "uuid", "p_manual_electrician_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."dispatch_job_internal"("p_job_id" "uuid", "p_manual_electrician_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."dispatch_job_internal"("p_job_id" "uuid", "p_manual_electrician_id" "uuid") TO "service_role";
 
 
 --
 -- Name: FUNCTION "electrician_accept_job"("p_job_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") TO "service_role";
 
 
 --
 -- Name: FUNCTION "electrician_level_rank"("p_level" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."electrician_level_rank"("p_level" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."electrician_level_rank"("p_level" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."electrician_level_rank"("p_level" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."electrician_level_rank"("p_level" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."electrician_level_rank"("p_level" "text") TO "service_role";
 
 
 --
 -- Name: FUNCTION "electrician_reject_job"("p_job_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") TO "service_role";
 
 
 --
@@ -6060,23 +6210,23 @@ GRANT ALL ON TABLE "public"."profiles" TO "service_role";
 -- Name: FUNCTION "sync_app_account_for_auth_user"("p_user_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."sync_app_account_for_auth_user"("p_user_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."sync_app_account_for_auth_user"("p_user_id" "uuid") TO "service_role";
 
 
 --
 -- Name: FUNCTION "ensure_app_account_for_current_user"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."ensure_app_account_for_current_user"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."ensure_app_account_for_current_user"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."ensure_app_account_for_current_user"() TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."ensure_app_account_for_current_user"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "ensure_profile_for_current_user"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."ensure_profile_for_current_user"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."ensure_profile_for_current_user"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."ensure_profile_for_current_user"() TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."ensure_profile_for_current_user"() TO "service_role";
 
 
 --
@@ -6092,99 +6242,82 @@ GRANT ALL ON TABLE "public"."wallets" TO "service_role";
 -- Name: FUNCTION "ensure_wallet_for_profile"("p_profile_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."ensure_wallet_for_profile"("p_profile_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."ensure_wallet_for_profile"("p_profile_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."ensure_wallet_for_profile"("p_profile_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."ensure_wallet_for_profile"("p_profile_id" "uuid") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."ensure_wallet_for_profile"("p_profile_id" "uuid") TO "service_role";
 
 
 --
 -- Name: FUNCTION "find_matching_electricians"("p_service_area" "text", "p_issue_category" "text", "p_latitude" double precision, "p_longitude" double precision, "p_limit" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."find_matching_electricians"("p_service_area" "text", "p_issue_category" "text", "p_latitude" double precision, "p_longitude" double precision, "p_limit" integer) TO "anon";
-GRANT ALL ON FUNCTION "public"."find_matching_electricians"("p_service_area" "text", "p_issue_category" "text", "p_latitude" double precision, "p_longitude" double precision, "p_limit" integer) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."find_matching_electricians"("p_service_area" "text", "p_issue_category" "text", "p_latitude" double precision, "p_longitude" double precision, "p_limit" integer) TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."find_matching_electricians"("p_service_area" "text", "p_issue_category" "text", "p_latitude" double precision, "p_longitude" double precision, "p_limit" integer) TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."find_matching_electricians"("p_service_area" "text", "p_issue_category" "text", "p_latitude" double precision, "p_longitude" double precision, "p_limit" integer) TO "service_role";
 
 
 --
 -- Name: FUNCTION "generate_referral_code"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."generate_referral_code"() TO "anon";
-GRANT ALL ON FUNCTION "public"."generate_referral_code"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."generate_referral_code"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."generate_referral_code"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "get_guest_job"("p_job_id" "uuid", "p_access_token" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."get_guest_job"("p_job_id" "uuid", "p_access_token" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_guest_job"("p_job_id" "uuid", "p_access_token" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_guest_job"("p_job_id" "uuid", "p_access_token" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."get_guest_job"("p_job_id" "uuid", "p_access_token" "text") TO "anon";
+GRANT EXECUTE ON FUNCTION "public"."get_guest_job"("p_job_id" "uuid", "p_access_token" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."get_guest_job"("p_job_id" "uuid", "p_access_token" "text") TO "service_role";
 
 
 --
 -- Name: FUNCTION "guest_job_payload"("p_job_id" "uuid", "p_access_token" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."guest_job_payload"("p_job_id" "uuid", "p_access_token" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."guest_job_payload"("p_job_id" "uuid", "p_access_token" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."guest_job_payload"("p_job_id" "uuid", "p_access_token" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."guest_job_payload"("p_job_id" "uuid", "p_access_token" "text") TO "service_role";
 
 
 --
 -- Name: FUNCTION "handle_job_status_notifications"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."handle_job_status_notifications"() TO "anon";
-GRANT ALL ON FUNCTION "public"."handle_job_status_notifications"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."handle_job_status_notifications"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."handle_job_status_notifications"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "handle_new_user"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
-GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."handle_new_user"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "handle_profile_rewards_setup"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."handle_profile_rewards_setup"() TO "anon";
-GRANT ALL ON FUNCTION "public"."handle_profile_rewards_setup"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."handle_profile_rewards_setup"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."handle_profile_rewards_setup"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "handle_profile_wallet_setup"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."handle_profile_wallet_setup"() TO "anon";
-GRANT ALL ON FUNCTION "public"."handle_profile_wallet_setup"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."handle_profile_wallet_setup"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."handle_profile_wallet_setup"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "handle_wallets_touch_updated_at"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."handle_wallets_touch_updated_at"() TO "anon";
-GRANT ALL ON FUNCTION "public"."handle_wallets_touch_updated_at"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."handle_wallets_touch_updated_at"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."handle_wallets_touch_updated_at"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "is_admin"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."is_admin"() TO "anon";
-GRANT ALL ON FUNCTION "public"."is_admin"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."is_admin"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."is_admin"() TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."is_admin"() TO "service_role";
 
 
 --
@@ -6200,9 +6333,8 @@ GRANT ALL ON TABLE "public"."referrals" TO "service_role";
 -- Name: FUNCTION "link_referral_code"("p_referral_code" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."link_referral_code"("p_referral_code" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."link_referral_code"("p_referral_code" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."link_referral_code"("p_referral_code" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."link_referral_code"("p_referral_code" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."link_referral_code"("p_referral_code" "text") TO "service_role";
 
 
 --
@@ -6225,27 +6357,22 @@ GRANT ALL ON TABLE "public"."customers" TO "service_role";
 -- Name: FUNCTION "refresh_customer_trust_metrics"("p_customer_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."refresh_customer_trust_metrics"("p_customer_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."refresh_customer_trust_metrics"("p_customer_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."refresh_customer_trust_metrics"("p_customer_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."refresh_customer_trust_metrics"("p_customer_id" "uuid") TO "service_role";
 
 
 --
 -- Name: FUNCTION "refresh_electrician_trust_metrics"("p_electrician_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."refresh_electrician_trust_metrics"("p_electrician_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."refresh_electrician_trust_metrics"("p_electrician_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."refresh_electrician_trust_metrics"("p_electrician_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."refresh_electrician_trust_metrics"("p_electrician_id" "uuid") TO "service_role";
 
 
 --
 -- Name: FUNCTION "resolve_dispute"("p_dispute_id" "uuid", "p_status" "text", "p_resolution_action" "text", "p_resolution_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."resolve_dispute"("p_dispute_id" "uuid", "p_status" "text", "p_resolution_action" "text", "p_resolution_note" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."resolve_dispute"("p_dispute_id" "uuid", "p_status" "text", "p_resolution_action" "text", "p_resolution_note" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."resolve_dispute"("p_dispute_id" "uuid", "p_status" "text", "p_resolution_action" "text", "p_resolution_note" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."resolve_dispute"("p_dispute_id" "uuid", "p_status" "text", "p_resolution_action" "text", "p_resolution_note" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."resolve_dispute"("p_dispute_id" "uuid", "p_status" "text", "p_resolution_action" "text", "p_resolution_note" "text") TO "service_role";
 
 
 --
@@ -6261,27 +6388,23 @@ GRANT ALL ON TABLE "public"."electrician_appeals" TO "service_role";
 -- Name: FUNCTION "resolve_electrician_appeal"("p_appeal_id" "uuid", "p_approved" boolean, "p_admin_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."resolve_electrician_appeal"("p_appeal_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."resolve_electrician_appeal"("p_appeal_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."resolve_electrician_appeal"("p_appeal_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."resolve_electrician_appeal"("p_appeal_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."resolve_electrician_appeal"("p_appeal_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "service_role";
 
 
 --
 -- Name: FUNCTION "reward_completed_referral"("p_referred_profile_id" "uuid", "p_job_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."reward_completed_referral"("p_referred_profile_id" "uuid", "p_job_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."reward_completed_referral"("p_referred_profile_id" "uuid", "p_job_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."reward_completed_referral"("p_referred_profile_id" "uuid", "p_job_id" "uuid") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."reward_completed_referral"("p_referred_profile_id" "uuid", "p_job_id" "uuid") TO "service_role";
 
 
 --
 -- Name: FUNCTION "set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "service_role";
 
 
 --
@@ -6297,18 +6420,16 @@ GRANT ALL ON TABLE "public"."ratings" TO "service_role";
 -- Name: FUNCTION "submit_customer_review"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."submit_customer_review"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "anon";
-GRANT ALL ON FUNCTION "public"."submit_customer_review"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."submit_customer_review"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."submit_customer_review"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."submit_customer_review"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "service_role";
 
 
 --
 -- Name: FUNCTION "submit_electrician_appeal"("p_appeal_note" "text", "p_supporting_file_path" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."submit_electrician_appeal"("p_appeal_note" "text", "p_supporting_file_path" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."submit_electrician_appeal"("p_appeal_note" "text", "p_supporting_file_path" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."submit_electrician_appeal"("p_appeal_note" "text", "p_supporting_file_path" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."submit_electrician_appeal"("p_appeal_note" "text", "p_supporting_file_path" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."submit_electrician_appeal"("p_appeal_note" "text", "p_supporting_file_path" "text") TO "service_role";
 
 
 --
@@ -6324,9 +6445,9 @@ GRANT ALL ON TABLE "public"."job_payments" TO "service_role";
 -- Name: FUNCTION "submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "anon";
+GRANT EXECUTE ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "service_role";
 
 
 --
@@ -6342,54 +6463,48 @@ GRANT ALL ON TABLE "public"."job_quotes" TO "service_role";
 -- Name: FUNCTION "submit_job_quote"("p_job_id" "uuid", "p_findings" "text", "p_measurements" "text", "p_items" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."submit_job_quote"("p_job_id" "uuid", "p_findings" "text", "p_measurements" "text", "p_items" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."submit_job_quote"("p_job_id" "uuid", "p_findings" "text", "p_measurements" "text", "p_items" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."submit_job_quote"("p_job_id" "uuid", "p_findings" "text", "p_measurements" "text", "p_items" "jsonb") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."submit_job_quote"("p_job_id" "uuid", "p_findings" "text", "p_measurements" "text", "p_items" "jsonb") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."submit_job_quote"("p_job_id" "uuid", "p_findings" "text", "p_measurements" "text", "p_items" "jsonb") TO "service_role";
 
 
 --
 -- Name: FUNCTION "submit_payment_proof"("p_job_id" "uuid", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."submit_payment_proof"("p_job_id" "uuid", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."submit_payment_proof"("p_job_id" "uuid", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."submit_payment_proof"("p_job_id" "uuid", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."submit_payment_proof"("p_job_id" "uuid", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."submit_payment_proof"("p_job_id" "uuid", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") TO "service_role";
 
 
 --
 -- Name: FUNCTION "submit_rating"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."submit_rating"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "anon";
-GRANT ALL ON FUNCTION "public"."submit_rating"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."submit_rating"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."submit_rating"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."submit_rating"("p_job_id" "uuid", "p_score" integer, "p_comment" "text", "p_behavior_tags" "text"[]) TO "service_role";
 
 
 --
 -- Name: FUNCTION "touch_updated_at"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."touch_updated_at"() TO "anon";
-GRANT ALL ON FUNCTION "public"."touch_updated_at"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."touch_updated_at"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."touch_updated_at"() TO "service_role";
 
 
 --
 -- Name: FUNCTION "update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "anon";
+GRANT EXECUTE ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "service_role";
 
 
 --
 -- Name: FUNCTION "verify_job_payment"("p_payment_id" "uuid", "p_approved" boolean, "p_admin_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."verify_job_payment"("p_payment_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."verify_job_payment"("p_payment_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."verify_job_payment"("p_payment_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."verify_job_payment"("p_payment_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."verify_job_payment"("p_payment_id" "uuid", "p_approved" boolean, "p_admin_note" "text") TO "service_role";
 
 
 --
@@ -6603,8 +6718,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL 
 --
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON FUNCTIONS FROM "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON FUNCTIONS FROM "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "service_role";
 
 
@@ -6613,8 +6728,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 --
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";
-ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" REVOKE ALL ON FUNCTIONS FROM "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" REVOKE ALL ON FUNCTIONS FROM "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "service_role";
 
 
@@ -6673,3 +6788,15 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TA
 --
 
 \unrestrict TtFFXOux5TxedzkAASB8ayF6wpMvPfR2Rvt8eFyAuw2MC75rim6iiJ6Fhil76Bw
+
+
+-- Final hardening function ACL overlay
+revoke all on all functions in schema public from public;
+revoke all on all functions in schema public from anon;
+revoke all on all functions in schema public from authenticated;
+grant execute on all functions in schema public to service_role;
+grant execute on function public.create_guest_customer_job(text,text,text,double precision,double precision,text,public.job_urgency,text,boolean,text,text[],text) to anon, authenticated;
+grant execute on function public.get_guest_job(uuid,text) to anon, authenticated;
+grant execute on function public.update_guest_job_status(uuid,text,public.job_status,text,jsonb) to anon, authenticated;
+grant execute on function public.submit_guest_payment_proof(uuid,text,public.payment_type,numeric,text,text) to anon, authenticated;
+grant execute on function public.attach_guest_job_photos(uuid,text,text[]) to service_role;
