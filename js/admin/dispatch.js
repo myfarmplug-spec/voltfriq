@@ -1,11 +1,11 @@
   function renderRequests() {
-    const jobs = currentJobs.filter((job) => {
-      if (currentFilter.requests === 'matching') return job.status === 'matching' && !job.needsManualAssignment;
-      if (currentFilter.requests === 'manual') return job.needsManualAssignment || !job.assignedElectricianId;
-      if (currentFilter.requests === 'timeout') return hasTimeoutTimeline(job);
-      if (currentFilter.requests === 'rejected') return hasRejectedTimeline(job);
-      return job.status === 'matching' || job.status === 'assigned' || job.needsManualAssignment || hasRejectedTimeline(job) || hasTimeoutTimeline(job);
-    });
+	    const jobs = currentJobs.filter((job) => {
+	      if (currentFilter.requests === 'matching') return job.status === 'matching' && !job.needsManualAssignment;
+	      if (currentFilter.requests === 'manual') return job.needsManualAssignment || isStuckJob(job) || !job.assignedElectricianId;
+	      if (currentFilter.requests === 'timeout') return isExpiredAssignment(job) || hasTimeoutTimeline(job);
+	      if (currentFilter.requests === 'rejected') return hasRejectedTimeline(job);
+	      return job.status === 'matching' || job.status === 'assigned' || job.needsManualAssignment || hasRejectedTimeline(job) || hasTimeoutTimeline(job) || isExpiredAssignment(job);
+	    });
 
     $('#requests-list').innerHTML = jobs.length ? jobs.map(dispatchJobCard).join('') : emptyState('No jobs in the dispatch queue.');
     bindJobCards('#requests-list', openRequestDetail);
@@ -39,11 +39,10 @@
       ]) +
       photoCard(selectedJob.photos) +
       assignmentCard(matches, selectedJob) +
-      timelineCard(selectedJob.timeline);
+	      timelineCard(selectedJob.internalEvents && selectedJob.internalEvents.length ? selectedJob.internalEvents : selectedJob.timeline);
 
     bindAssignmentControls(selectedJob);
     navigateTo('admin-request-detail', {
       routeData: { ticket: selectedJob.ticket }
     });
   }
-

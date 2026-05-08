@@ -357,18 +357,18 @@
           <div class="stat-value" id="stat-jobs-month">0</div>
           <div class="stat-label">Nearby requests</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-earnings">₦0</div>
-          <div class="stat-label">Paid earnings</div>
-        </div>
+	        <div class="stat-card">
+	          <div class="stat-value" id="stat-earnings">₦0</div>
+	          <div class="stat-label">Today's earnings</div>
+	        </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-rating">--</div>
           <div class="stat-label">Rating</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-payouts">₦0</div>
-          <div class="stat-label">Awaiting payout</div>
-        </div>
+	        <div class="stat-card">
+	          <div class="stat-value" id="stat-payouts">₦0</div>
+	          <div class="stat-label">Response score</div>
+	        </div>
       </div>
 
       <div class="elec-section">
@@ -741,13 +741,6 @@
     </div>
   </div>
 
-  <script src="/vendor/supabase.min.js"></script>
-  <script src="/api/env.js?v=20260508-production-checklist"></script>
-  <script src="/js/config.js?v=20260508-production-checklist"></script>
-  <script src="/js/store.js?v=20260508-production-checklist"></script>
-  <script src="/js/navigation.js?v=20260508-production-checklist"></script>
-  <script src="/js/chat.js?v=20260503-ia3"></script>
-  <script src="/js/electrician.js?v=20260508-production-checklist"></script>
-  <script src="/js/sw-register.js?v=20260508-production-checklist"></script>
+  <script type="module" src="/js/entries/electrician.js?v=20260508-production-checklist"></script>
 </body>
 </html>

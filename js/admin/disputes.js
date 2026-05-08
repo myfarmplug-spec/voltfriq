@@ -1,7 +1,11 @@
   function renderDisputes() {
     $('#disputes-list').innerHTML = currentDisputes.length ? currentDisputes.map((dispute) => {
       const job = dispute.jobs || {};
-      const customerName = dispute.customer && dispute.customer.profile ? dispute.customer.profile.full_name : 'Customer';
+	      const customerName = dispute.customer && dispute.customer.profile
+	        ? dispute.customer.profile.full_name
+	        : dispute.guest_customer && dispute.guest_customer.phone
+	          ? 'Guest ' + dispute.guest_customer.phone
+	          : 'Customer';
       const electricianName = dispute.electrician && dispute.electrician.profile ? dispute.electrician.profile.full_name : 'Unassigned';
       return '<div class="admin-job-card" data-dispute-id="' + dispute.id + '" data-job-id="' + escapeAttribute(dispute.job_id) + '">' +
         cardHeader(dispute.issue_type || 'Dispute', dispute.status || 'open', dispute.status === 'open' ? 'status-rejected' : 'status-completed') +
@@ -36,4 +40,3 @@
       });
     });
   }
-

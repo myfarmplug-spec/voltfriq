@@ -37,7 +37,8 @@
         p_payment_type: payload.paymentType,
         p_amount: payload.amount || 0,
         p_reference: payload.reference || '',
-        p_proof_path: proofPath
+        p_proof_path: proofPath,
+        p_phone_confirmation: payload.phoneConfirmation || ''
       });
       if (guestResult.error) throw normalizeError(guestResult.error, 'Could not submit payment proof.');
       return guestResult.data;
@@ -63,4 +64,3 @@
     if (result.error) throw normalizeError(result.error, 'Could not verify the payment.');
     return result.data;
   }
-

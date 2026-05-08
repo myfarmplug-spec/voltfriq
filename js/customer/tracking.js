@@ -219,6 +219,13 @@
     const contactCta = shouldShowTrackingContact(job)
       ? '<button class="tracking-contact-btn" id="btn-tracking-contact" type="button">' + trackingIcon('message') + '<span>Contact Us</span></button>'
       : '';
+    const guestPhotoUpload = canUploadGuestPhotos(job)
+      ? '<div class="tracking-guest-upload">' +
+          '<input type="file" id="guest-photo-input" accept="image/jpeg,image/png,image/webp" multiple hidden />' +
+          '<button class="btn-secondary" id="btn-guest-photo-upload" type="button">Add photos</button>' +
+          '<small>Up to 3 JPG, PNG, or WebP photos. Each photo must be under 2MB.</small>' +
+        '</div>'
+      : '';
     container.innerHTML = [
       '<div class="tracking-detail-main">',
         '<span class="tracking-detail-icon" aria-hidden="true">' + trackingIcon('socket') + '</span>',
@@ -229,6 +236,7 @@
       '</div>',
       '<button class="tracking-detail-toggle" id="btn-toggle-tracking-details" type="button">' + escapeHtml(trackingDetailsExpanded ? 'Hide details' : 'View details') + '</button>',
       contactCta,
+      guestPhotoUpload,
       '<div class="tracking-detail-metrics' + detailsState + '">',
         '<div class="tracking-metric"><span>Service type</span><strong>' + escapeHtml(serviceType) + '</strong><em>' + escapeHtml(urgency) + '</em><small>' + escapeHtml(issue) + '</small></div>',
         '<div class="tracking-metric"><span>Location</span><strong>' + escapeHtml(location) + '</strong></div>',
@@ -237,6 +245,11 @@
         '<div class="tracking-metric tracking-metric-ticket"><span>Ticket ID</span><strong>' + escapeHtml(ticket) + '</strong><button class="tracking-copy-ticket" type="button" data-copy-ticket="' + escapeAttribute(ticket) + '" aria-label="Copy ticket ID">' + trackingIcon('copy') + '</button></div>',
       '</div>'
     ].join('');
+  }
+
+  function canUploadGuestPhotos(job) {
+    const guest = Store.getGuestAccess && Store.getGuestAccess();
+    return !!(job && job.isGuest && guest && guest.jobId === job.id && guest.accessToken && !['rated', 'cancelled'].includes(job.status));
   }
 
   function shouldShowTrackingContact(job) {
@@ -289,4 +302,3 @@
     };
     return icons[name] || '';
   }
-

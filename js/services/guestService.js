@@ -49,6 +49,55 @@
     return hydrateProtectedAssets(normalizeJob(row));
   }
 
+  async function uploadGuestJobPhotos(jobId, files) {
+    const guest = getGuestAccess();
+    const selectedFiles = Array.from(files || []);
+    if (!guest || guest.jobId !== jobId || !guest.accessToken) {
+      throw new Error('Open this booking from its tracking link before adding photos.');
+    }
+    if (!selectedFiles.length || selectedFiles.length > 3) {
+      throw new Error('Add up to 3 photos only.');
+    }
+    const encodedFiles = [];
+    for (const file of selectedFiles) {
+      validateFile(file, {
+        maxBytes: 2 * 1024 * 1024,
+        acceptedTypes: ['image/jpeg', 'image/png', 'image/webp']
+      });
+      encodedFiles.push({
+        name: file.name || 'photo',
+        type: file.type,
+        data: await readFileAsBase64(file)
+      });
+    }
+    const response = await fetch('/api/guest-photo-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        accessToken: guest.accessToken,
+        files: encodedFiles
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || 'Could not upload photos.');
+    }
+    const row = payload.job || {};
+    row.id = row.id || jobId;
+    row.is_guest = true;
+    return hydrateProtectedAssets(normalizeJob(row));
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || '').replace(/^data:[^,]+,/, ''));
+      reader.onerror = () => reject(new Error('Could not read the selected photo.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function acceptAssignedJob(jobId) {
     const client = ensureClient();
     const result = await client.rpc('electrician_accept_job', { p_job_id: jobId });

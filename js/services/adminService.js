@@ -1,24 +1,37 @@
-  async function createDispute(jobId, issueType, details) {
-    const client = ensureClient();
-    const result = await client.rpc('create_dispute', {
-      p_job_id: jobId,
-      p_issue_type: issueType,
+	  async function createDispute(jobId, issueType, details, phoneConfirmation) {
+	    const client = ensureClient();
+	    const guest = getGuestAccess();
+	    if (!state.profile && guest && guest.jobId === jobId && guest.accessToken) {
+	      const guestResult = await client.rpc('create_guest_dispute', {
+	        p_job_id: jobId,
+	        p_access_token: guest.accessToken,
+	        p_issue_type: issueType,
+	        p_details: details || null,
+	        p_phone_confirmation: phoneConfirmation || null
+	      });
+	      if (guestResult.error) throw normalizeError(guestResult.error, 'Could not report the issue.');
+	      return guestResult.data;
+	    }
+	    const result = await client.rpc('create_dispute', {
+	      p_job_id: jobId,
+	      p_issue_type: issueType,
       p_details: details || null
     });
     if (result.error) throw normalizeError(result.error, 'Could not report the issue.');
     return result.data;
   }
 
-  async function listDisputes() {
+	  async function listDisputes() {
     const client = ensureClient();
     if (!state.profile) return [];
     let query = client
       .from('disputes')
       .select(`
         *,
-        jobs(ticket, service_area, status),
-        customer:customers(*, profile:profiles(full_name, phone)),
-        electrician:electricians(*, profile:profiles(full_name, phone))
+	        jobs(ticket, service_area, status),
+	        customer:customers(*, profile:profiles(full_name, phone)),
+	        guest_customer:guest_customers(*),
+	        electrician:electricians(*, profile:profiles(full_name, phone))
       `)
       .order('created_at', { ascending: false });
     if (state.profile.role === 'customer') {
@@ -27,9 +40,39 @@
       query = query.eq('electrician_id', state.electrician && state.electrician.id);
     }
     const result = await query;
-    if (result.error) throw normalizeError(result.error, 'Could not load disputes.');
-    return result.data || [];
-  }
+	    if (result.error) throw normalizeError(result.error, 'Could not load disputes.');
+	    return result.data || [];
+	  }
+
+	  async function getPublicJobEvents(jobId, accessToken) {
+	    const client = ensureClient();
+	    const result = await client.rpc('get_public_job_events', {
+	      p_job_id: jobId,
+	      p_access_token: accessToken || null
+	    });
+	    if (result.error) throw normalizeError(result.error, 'Could not load job progress.');
+	    return (result.data || []).map(normalizeJobEvent);
+	  }
+
+	  async function getAdminJobEvents(jobId) {
+	    requireRole('admin');
+	    const client = ensureClient();
+	    const result = await client.rpc('get_admin_job_events', {
+	      p_job_id: jobId || null
+	    });
+	    if (result.error) throw normalizeError(result.error, 'Could not load internal job events.');
+	    return (result.data || []).map(normalizeJobEvent);
+	  }
+
+	  async function getOperationalSummary() {
+	    const client = ensureClient();
+	    if (!state.profile || state.profile.role !== 'admin') {
+	      return defaultOperationalSummary();
+	    }
+	    const result = await client.rpc('admin_operational_summary');
+	    if (result.error) throw normalizeError(result.error, 'Could not load operational metrics.');
+	    return normalizeOperationalSummary(result.data || {});
+	  }
 
   async function resolveDispute(disputeId, status, resolutionAction, resolutionNote) {
     requireRole('admin');
@@ -111,8 +154,8 @@
     return updateJobStatus(jobId, 'electrician_completed', 'VoltFriq marked work complete.');
   }
 
-  async function markCustomerConfirmed(jobId) {
-    return updateJobStatus(jobId, 'customer_confirmed', 'Customer confirmed the work.');
+  async function markCustomerConfirmed(jobId, metadata) {
+    return updateJobStatus(jobId, 'customer_confirmed', 'Customer confirmed the work.', metadata || {});
   }
 
   async function markPayoutComplete(jobId) {
@@ -306,22 +349,45 @@
     };
   }
 
-  function subscribeToPortalFeed(callback) {
-    const client = ensureClient();
-    if (!client) return { unsubscribe() {} };
-    const channel = client.channel('portal-feed-' + Math.random().toString(36).slice(2, 8))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, callback)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'electricians' }, callback)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_payments' }, callback)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ratings' }, callback)
+	  function subscribeToPortalFeed(callback) {
+	    const client = ensureClient();
+	    if (!client) return { unsubscribe() {} };
+	    const channel = client.channel('portal-feed-' + Math.random().toString(36).slice(2, 8))
+	      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, callback)
+	      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_events' }, callback)
+	      .on('postgres_changes', { event: '*', schema: 'public', table: 'electricians' }, callback)
+	      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_payments' }, callback)
+	      .on('postgres_changes', { event: '*', schema: 'public', table: 'ratings' }, callback)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'electrician_appeals' }, callback)
       .subscribe();
     return {
       unsubscribe() {
         client.removeChannel(channel);
       }
-    };
-  }
+	    };
+	  }
+
+	  async function hydrateOperationalEvents(job) {
+	    if (!job || !job.id) return job;
+	    try {
+	      if (state.profile && state.profile.role === 'admin') {
+	        const events = await getAdminJobEvents(job.id);
+	        job.internalEvents = events;
+	        job.timeline = events.filter((event) => event.publicMessage).map(publicEventAsTimeline);
+	        job.lastTimeline = job.timeline.length ? job.timeline[job.timeline.length - 1] : job.lastTimeline;
+	        return job;
+	      }
+
+	      const guest = getGuestAccess();
+	      const accessToken = !state.profile && guest && guest.jobId === job.id ? guest.accessToken : null;
+	      const events = await getPublicJobEvents(job.id, accessToken);
+	      job.timeline = events.map(publicEventAsTimeline);
+	      job.lastTimeline = job.timeline.length ? job.timeline[job.timeline.length - 1] : job.lastTimeline;
+	    } catch (error) {
+	      if (state.profile && state.profile.role === 'admin') throw error;
+	    }
+	    return job;
+	  }
 
   async function listNotifications() {
     const client = ensureClient();
@@ -428,7 +494,7 @@
     };
   }
 
-  function normalizeJob(row) {
+	  function normalizeJob(row) {
     const customerProfile = row.customer && row.customer.profile ? row.customer.profile : {};
     const guestCustomer = row.guest_customer || row.guestCustomer || null;
     const assignedElectricianRow = row.assigned_electrician || null;
@@ -440,12 +506,16 @@
         ? [{ status: row.payment_status }]
         : [];
     const payments = paymentRows.slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-    const timelineRows = Array.isArray(row.job_timeline)
-      ? row.job_timeline
-      : Array.isArray(row.progress_timeline)
-        ? row.progress_timeline
-        : [];
-    const timeline = timelineRows.slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+	    const timelineRows = Array.isArray(row.progress_timeline)
+	      ? row.progress_timeline
+	      : Array.isArray(row.job_events)
+	        ? row.job_events
+	        : Array.isArray(row.job_timeline)
+	          ? row.job_timeline
+	          : [];
+	    const timeline = timelineRows
+	      .map((entry) => entry.event_type ? publicEventAsTimeline(normalizeJobEvent(entry)) : entry)
+	      .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
     const reviews = row.ratings || [];
     const electricianReview = reviews.find((rating) => rating.review_direction === 'customer_to_electrician') || reviews[0] || null;
     const customerReview = reviews.find((rating) => rating.review_direction === 'electrician_to_customer') || null;
@@ -508,11 +578,13 @@
           notes: 'Guest booking'
         }
       } : null,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      assignmentExpiresAt: row.assignment_expires_at,
-      customerConfirmedAt: row.customer_confirmed_at,
-      electricianCompletedAt: row.electrician_completed_at,
+	      createdAt: row.created_at,
+	      updatedAt: row.updated_at,
+	      assignmentExpiresAt: row.assignment_expires_at,
+	      acceptedAt: row.accepted_at,
+	      lastDispatchAt: row.last_dispatch_at,
+	      customerConfirmedAt: row.customer_confirmed_at,
+	      electricianCompletedAt: row.electrician_completed_at,
       assignedElectrician: assignedElectricianRow ? {
         id: assignedElectricianRow.id || null,
         name: assignedElectricianRow.display_name || assignedElectricianRow.name || electricianProfile.full_name || 'VoltFriq',
@@ -544,17 +616,107 @@
       latestPayment: payments[0] ? Object.assign({}, payments[0], {
         statusLabel: getPaymentStatusLabel(payments[0].status)
       }) : null,
-      timeline: timeline,
-      lastTimeline: lastTimeline,
+	      timeline: timeline,
+	      internalEvents: Array.isArray(row.job_events) ? row.job_events.map(normalizeJobEvent) : [],
+	      lastTimeline: lastTimeline,
       needsManualAssignment: row.status === 'matching' && !row.assigned_electrician_id && Number(row.dispatch_attempts || 0) > 0 && !(row.candidate_queue || []).length,
       reviews: reviews,
       rating: electricianReview,
       electricianReview: electricianReview,
-      customerReview: customerReview
-    };
-  }
+	      customerReview: customerReview
+	    };
+	  }
 
-  function buildTrustBadges(electrician) {
+	  function normalizeJobEvent(row) {
+	    return {
+	      id: row.id,
+	      jobId: row.job_id,
+	      eventType: row.event_type,
+	      actorRole: row.actor_role || '',
+	      actorId: row.actor_id || null,
+	      publicMessage: row.public_message || row.note || '',
+	      internalNote: row.internal_note || '',
+	      metadata: row.metadata || {},
+	      created_at: row.created_at,
+	      createdAt: row.created_at
+	    };
+	  }
+
+	  function publicEventAsTimeline(event) {
+	    return {
+	      id: event.id,
+	      status: statusForEventType(event.eventType),
+	      event_type: event.eventType,
+	      note: event.publicMessage || 'Status updated.',
+	      created_at: event.createdAt || event.created_at,
+	      metadata: event.metadata || {}
+	    };
+	  }
+
+	  function statusForEventType(eventType) {
+	    const map = {
+	      JOB_CREATED: 'requested',
+	      PAIRING_STARTED: 'matching',
+	      ELECTRICIAN_ASSIGNED: 'assigned',
+	      ASSIGNMENT_ACCEPTED: 'accepted',
+	      ASSIGNMENT_REJECTED: 'matching',
+	      ASSIGNMENT_EXPIRED: 'matching',
+	      PAYMENT_SUBMITTED: 'work_payment_pending_verification',
+	      PAYMENT_VERIFIED: 'payment_confirmed',
+	      WORK_STARTED: 'work_in_progress',
+	      WORK_COMPLETED: 'electrician_completed',
+	      CUSTOMER_CONFIRMED: 'customer_confirmed',
+	      DISPUTE_OPENED: 'customer_confirmed',
+	      JOB_CANCELLED: 'cancelled',
+	      QUOTE_SUBMITTED: 'quoted',
+	      PAYOUT_RELEASED: 'payout_complete',
+	      RATING_SUBMITTED: 'rated',
+	      JOB_UPDATED: 'matching'
+	    };
+	    return map[eventType] || 'matching';
+	  }
+
+	  function defaultOperationalSummary() {
+	    return {
+	      queues: {
+	        pendingPayments: 0,
+	        pendingElectricians: 0,
+	        stuckPairingJobs: 0,
+	        openDisputes: 0,
+	        expiredAssignments: 0
+	      },
+	      metrics: {
+	        averageTimeToAssignSeconds: 0,
+	        averageTimeToAcceptSeconds: 0,
+	        rejectionRate: 0,
+	        paymentVerificationDelaySeconds: 0,
+	        stuckJobsCount: 0
+	      }
+	    };
+	  }
+
+	  function normalizeOperationalSummary(payload) {
+	    const rawQueues = payload.queues || {};
+	    const rawMetrics = payload.metrics || {};
+	    return {
+	      queues: {
+	        pendingPayments: Number(rawQueues.pending_payments || rawQueues.pendingPayments || 0),
+	        pendingElectricians: Number(rawQueues.pending_electricians || rawQueues.pendingElectricians || 0),
+	        stuckPairingJobs: Number(rawQueues.stuck_pairing_jobs || rawQueues.stuckPairingJobs || 0),
+	        openDisputes: Number(rawQueues.open_disputes || rawQueues.openDisputes || 0),
+	        expiredAssignments: Number(rawQueues.expired_assignments || rawQueues.expiredAssignments || 0)
+	      },
+	      metrics: {
+	        averageTimeToAssignSeconds: Number(rawMetrics.average_time_to_assign_seconds || rawMetrics.averageTimeToAssignSeconds || 0),
+	        averageTimeToAcceptSeconds: Number(rawMetrics.average_time_to_accept_seconds || rawMetrics.averageTimeToAcceptSeconds || 0),
+	        rejectionRate: Number(rawMetrics.rejection_rate || rawMetrics.rejectionRate || 0),
+	        paymentVerificationDelaySeconds: Number(rawMetrics.payment_verification_delay_seconds || rawMetrics.paymentVerificationDelaySeconds || 0),
+	        stuckJobsCount: Number(rawMetrics.stuck_jobs_count || rawMetrics.stuckJobsCount || 0)
+	      }
+	    };
+	  }
+
+	  function buildTrustBadges(electrician) {
     const badges = [electrician.level_badge || 'Verified Pro'];
     if (Number(electrician.average_rating || 0) >= 4.7 && Number(electrician.total_ratings || 0) >= 5 && badges.indexOf('Top Rated') === -1) {
       badges.push('Top Rated');
@@ -603,6 +765,7 @@
     listAdminJobs,
     getJob,
     getGuestJob,
+    uploadGuestJobPhotos,
     previewMatches,
     createBooking,
     createGuestBooking,
@@ -623,10 +786,13 @@
     hydrateElectricianDocuments,
     getWalletSummary,
     getReferralSummary,
-    linkReferralCode,
-    createDispute,
-    listDisputes,
-    resolveDispute,
+	    linkReferralCode,
+	    createDispute,
+	    listDisputes,
+	    getPublicJobEvents,
+	    getAdminJobEvents,
+	    getOperationalSummary,
+	    resolveDispute,
     listAppeals,
     submitElectricianAppeal,
     resolveElectricianAppeal,

@@ -112,11 +112,13 @@
       if (!file || !file.files || !file.files[0]) {
         throw new Error('Attach your payment proof before submitting.');
       }
+      const phoneConfirmation = currentJob.isGuest ? promptForGuestPhoneConfirmation() : '';
       await Store.submitPaymentProof(currentJob.id, {
         paymentType: paymentType,
         amount: amount,
         reference: paymentType === 'assessment_fee' ? '' : document.getElementById('payment-reference').value.trim(),
-        file: file && file.files ? file.files[0] : null
+        file: file && file.files ? file.files[0] : null,
+        phoneConfirmation: phoneConfirmation
       });
       await openTrackedJob(currentJob.id);
     });
@@ -125,7 +127,10 @@
   async function confirmCompletion() {
     await withButtonLoading('btn-confirm-complete', 'Confirming...', async () => {
       if (!currentJob) return;
-      await Store.markCustomerConfirmed(currentJob.id);
+      const metadata = currentJob.isGuest
+        ? { phone_confirmation: promptForGuestPhoneConfirmation() }
+        : {};
+      await Store.markCustomerConfirmed(currentJob.id, metadata);
       await openTrackedJob(currentJob.id);
     });
   }
@@ -139,4 +144,3 @@
       await openTrackedJob(currentJob.id);
     });
   }
-

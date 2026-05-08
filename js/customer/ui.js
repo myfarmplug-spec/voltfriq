@@ -274,7 +274,16 @@
     on('btn-negotiate-quote', 'click', openChat);
     on('btn-decline-quote', 'click', () => {
       if (currentJob) {
-        Store.updateJobStatus(currentJob.id, 'cancelled', 'Customer cancelled the job.')
+        let metadata = {};
+        try {
+          if (currentJob.isGuest) {
+            metadata = { phone_confirmation: promptForGuestPhoneConfirmation() };
+          }
+        } catch (error) {
+          showError(error);
+          return;
+        }
+        Store.updateJobStatus(currentJob.id, 'cancelled', 'Customer cancelled the job.', metadata)
           .then(() => resumeLatestJob())
           .catch(showError);
       }
@@ -320,12 +329,23 @@
           handleTrackingSupport();
           return;
         }
+        const upload = event.target.closest('#btn-guest-photo-upload');
+        if (upload) {
+          const input = document.getElementById('guest-photo-input');
+          if (input) input.click();
+          return;
+        }
         const copy = event.target.closest('[data-copy-ticket]');
         if (copy) copyTrackingTicket(copy);
         const toggle = event.target.closest('#btn-toggle-tracking-details');
         if (toggle) {
           trackingDetailsExpanded = !trackingDetailsExpanded;
           renderTrackingDetails(currentJob);
+        }
+      });
+      trackingDetails.addEventListener('change', (event) => {
+        if (event.target && event.target.id === 'guest-photo-input') {
+          uploadGuestTrackingPhotos(event.target);
         }
       });
     }
@@ -512,4 +532,3 @@
 
     await openBookingRoute(route.screen, { replace: route.source !== 'popstate' });
   }
-

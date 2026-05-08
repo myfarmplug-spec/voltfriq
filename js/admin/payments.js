@@ -580,11 +580,25 @@
     '</div>';
   }
 
-  function timelineCard(timeline) {
-    return '<div class="admin-info-card"><div class="admin-info-card-title">Job timeline</div><div class="admin-timeline">' +
-      (timeline || []).map((entry) => '<div class="admin-timeline-item"><div class="admin-timeline-dot">•</div><div class="admin-timeline-content"><div class="admin-timeline-title">' + escapeHtml(Store.getStatusLabel(entry.status)) + '</div><div class="admin-feed-text">' + escapeHtml(entry.note || 'No note recorded.') + '</div><div class="admin-timeline-time">' + formatRelative(entry.created_at || entry.timestamp) + '</div></div></div>').join('') +
-    '</div></div>';
-  }
+	  function timelineCard(timeline) {
+	    return '<div class="admin-info-card"><div class="admin-info-card-title">Job timeline</div><div class="admin-timeline">' +
+	      (timeline || []).map((entry) => {
+	        const title = entry.eventType || entry.event_type
+	          ? humanizeEventType(entry.eventType || entry.event_type)
+	          : Store.getStatusLabel(entry.status);
+	        const note = entry.internalNote || entry.internal_note || entry.note || entry.publicMessage || entry.public_message || 'No note recorded.';
+	        const publicNote = entry.publicMessage || entry.public_message;
+	        const publicLine = publicNote && publicNote !== note
+	          ? '<div class="admin-feed-text" style="color:var(--mid)">Customer: ' + escapeHtml(publicNote) + '</div>'
+	          : '';
+	        return '<div class="admin-timeline-item"><div class="admin-timeline-dot">•</div><div class="admin-timeline-content"><div class="admin-timeline-title">' + escapeHtml(title) + '</div><div class="admin-feed-text">' + escapeHtml(note) + '</div>' + publicLine + '<div class="admin-timeline-time">' + formatRelative(entry.created_at || entry.createdAt || entry.timestamp) + '</div></div></div>';
+	      }).join('') +
+	    '</div></div>';
+	  }
+
+	  function humanizeEventType(value) {
+	    return String(value || 'JOB_UPDATED').toLowerCase().split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+	  }
 
   function electricianActionsCard(electrician) {
     const buttons = [];
@@ -959,9 +973,9 @@
     return cleaned || '/admin/login';
   }
 
-  function buildAlerts() {
-    const alerts = [];
-    const newBookingCount = currentJobs.filter((job) => ['requested', 'matching', 'assigned'].includes(job.status) || job.needsManualAssignment).length;
+	  function buildAlerts() {
+	    const alerts = [];
+	    const newBookingCount = currentJobs.filter((job) => ['requested', 'matching', 'assigned'].includes(job.status) || job.needsManualAssignment).length;
     if (currentPayments.length) {
       alerts.push({ tag: 'Finance', label: 'Pending payments', count: currentPayments.length + ' proof submission(s) need review', target: 'admin-finance' });
     }
@@ -969,11 +983,15 @@
     if (pendingElectricianCount) {
       alerts.push({ tag: 'Onboarding', label: 'Pending electricians', count: pendingElectricianCount + ' application(s) need review', target: 'admin-electricians', filterKey: 'electricians', filterValue: 'pending' });
     }
-    const stuckCount = currentJobs.filter(isStuckJob).length;
-    if (stuckCount) {
-      alerts.push({ tag: 'Dispatch', label: 'Stuck pairing', count: stuckCount + ' job(s) need intervention', target: 'admin-requests', filterKey: 'requests', filterValue: 'manual' });
-    }
-    const openDisputeCount = currentDisputes.filter((dispute) => (dispute.status || 'open') === 'open').length;
+	    const stuckCount = currentJobs.filter(isStuckJob).length;
+	    if (stuckCount) {
+	      alerts.push({ tag: 'Dispatch', label: 'Stuck pairing', count: stuckCount + ' job(s) need intervention', target: 'admin-requests', filterKey: 'requests', filterValue: 'manual' });
+	    }
+	    const expiredAssignmentCount = currentJobs.filter(isExpiredAssignment).length;
+	    if (expiredAssignmentCount) {
+	      alerts.push({ tag: 'Timeout', label: 'Expired assignments', count: expiredAssignmentCount + ' offer(s) need rematching', target: 'admin-requests', filterKey: 'requests', filterValue: 'timeout' });
+	    }
+	    const openDisputeCount = currentDisputes.filter((dispute) => (dispute.status || 'open') === 'open').length;
     if (openDisputeCount) {
       alerts.push({ tag: 'Trust', label: 'Open disputes', count: openDisputeCount + ' case(s) need customer follow-up', target: 'admin-disputes' });
     }
@@ -989,22 +1007,38 @@
     renderDisputes();
   }
 
-  function isCustomerStuck(job) {
-    if (!['assessment_fee_pending', 'quoted', 'quote_accepted', 'customer_confirmed'].includes(job.status)) return false;
-    return hoursSince(job.updatedAt) >= 6;
-  }
+	  function isCustomerStuck(job) {
+	    if (job.status === 'electrician_completed') {
+	      return hoursSince(job.electricianCompletedAt || job.updatedAt) >= 24;
+	    }
+	    return false;
+	  }
 
-  function isStuckJob(job) {
-    return !!(job.needsManualAssignment || hasTimeoutTimeline(job) || hasRejectedTimeline(job) || isCustomerStuck(job));
-  }
+	  function isPairingStuck(job) {
+	    return job.status === 'matching' && hoursSince(job.lastDispatchAt || job.updatedAt || job.createdAt) >= 5 / 60;
+	  }
 
-  function hasRejectedTimeline(job) {
-    return (job.timeline || []).some((entry) => /declined the booking/i.test(entry.note || ''));
-  }
+	  function isExpiredAssignment(job) {
+	    if (job.status !== 'assigned') return false;
+	    if (job.assignmentExpiresAt) return new Date(job.assignmentExpiresAt).getTime() <= Date.now();
+	    return hoursSince(job.lastDispatchAt || job.updatedAt || job.createdAt) >= 5 / 60;
+	  }
 
-  function hasTimeoutTimeline(job) {
-    return (job.timeline || []).some((entry) => /did not respond within 5 minutes/i.test(entry.note || ''));
-  }
+	  function isPaymentStuck(job) {
+	    return ['assessment_payment_pending_verification', 'work_payment_pending_verification'].includes(job.status) && hoursSince(job.updatedAt) >= 0.5;
+	  }
+
+	  function isStuckJob(job) {
+	    return !!(job.needsManualAssignment || isPairingStuck(job) || isExpiredAssignment(job) || isPaymentStuck(job) || hasTimeoutTimeline(job) || hasRejectedTimeline(job) || isCustomerStuck(job));
+	  }
+
+	  function hasRejectedTimeline(job) {
+	    return (job.timeline || []).some((entry) => entry.event_type === 'ASSIGNMENT_REJECTED' || /declined the booking/i.test(entry.note || ''));
+	  }
+
+	  function hasTimeoutTimeline(job) {
+	    return (job.timeline || []).some((entry) => entry.event_type === 'ASSIGNMENT_EXPIRED' || /did not respond within 5 minutes/i.test(entry.note || ''));
+	  }
 
   function isCompletedJob(job) {
     return ['payout_complete', 'rated'].includes(job.status);
@@ -1077,9 +1111,21 @@
     return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   }
 
-  function formatRelative(value) {
-    return timeAgo(new Date(value).getTime());
-  }
+	  function formatRelative(value) {
+	    return timeAgo(new Date(value).getTime());
+	  }
+
+	  function formatDuration(seconds) {
+	    const value = Number(seconds || 0);
+	    if (!value) return '0m';
+	    if (value < 60) return Math.round(value) + 's';
+	    if (value < 3600) return Math.round(value / 60) + 'm';
+	    return (value / 3600).toFixed(1) + 'h';
+	  }
+
+	  function formatPercent(value) {
+	    return Math.round(Number(value || 0)) + '%';
+	  }
 
   function hoursSince(value) {
     return (Date.now() - new Date(value).getTime()) / 3600000;

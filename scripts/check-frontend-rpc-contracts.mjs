@@ -15,6 +15,8 @@ const serviceRoleOnly = new Set([
 
 const anonAllowed = new Set([
   'create_guest_customer_job',
+  'create_guest_dispute',
+  'get_public_job_events',
   'get_guest_job',
   'submit_guest_payment_proof',
   'update_guest_job_status'
@@ -27,6 +29,7 @@ const internalOrAuthenticatedOnly = new Set([
   'attach_guest_job_photos',
   'create_dispute',
   'create_notification',
+  'admin_operational_summary',
   'dispatch_job',
   'electrician_accept_job',
   'electrician_reject_job',
@@ -35,6 +38,7 @@ const internalOrAuthenticatedOnly = new Set([
   'link_referral_code',
   'resolve_dispute',
   'resolve_electrician_appeal',
+  'get_admin_job_events',
   'reward_completed_referral',
   'set_job_status',
   'submit_customer_review',
@@ -78,7 +82,7 @@ function schemaFunctionNames(schema) {
 function anonGrantedRpcNames(schema) {
   const names = new Set();
   for (const statement of schema.split(';')) {
-    if (!/\bgrant\s+execute\s+on\s+function\b/i.test(statement)) continue;
+    if (!/\bgrant\s+(execute|all)\s+on\s+function\b/i.test(statement)) continue;
     if (!/\bto\s+"?anon"?\b/i.test(statement)) continue;
     const quoted = statement.match(/\bfunction\s+"public"\."([^"]+)"/i);
     if (quoted) {

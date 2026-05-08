@@ -4,16 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node scripts/build-frontend-bundles.mjs --out . && vite --host 0.0.0.0",
-    "build": "vite build && node scripts/build-frontend-bundles.mjs --out dist && node scripts/copy-vite-static.mjs",
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build && node scripts/copy-vite-static.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "build:frontend": "node scripts/build-frontend-bundles.mjs --out .tmp/frontend-bundles",
-    "check": "npm run build:frontend && npm run check:js && npm run check:backend && npm run check:rpc && npm run build",
-    "check:js": "node --check .tmp/frontend-bundles/js/store.js && node --check .tmp/frontend-bundles/js/customer.js && node --check .tmp/frontend-bundles/js/electrician.js && node --check .tmp/frontend-bundles/js/admin.js",
+    "check": "npm run check:js && npm run check:backend && npm run check:rpc && npm run build",
+    "check:js": "node --check vite.config.js && node --check js/entries/runtime.js && node --check js/entries/customer.js && node --check js/entries/electrician.js && node --check js/entries/admin.js && node --check js/navigation.js && node --check js/chat.js && node --check api/guest-photo-upload.js && node --check api/dispatch-heartbeat.js && node --check api/env.js",
     "check:backend": "node scripts/check-backend-contracts.mjs",
     "check:rpc": "node scripts/check-frontend-rpc-contracts.mjs"
   },
   "devDependencies": {
     "vite": "^8.0.11"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4"
   }
 }

@@ -1,6 +1,6 @@
-  async function listCustomerJobs() {
-    const client = ensureClient();
-    const customerId = state.customer && state.customer.id;
+	  async function listCustomerJobs() {
+	    const client = ensureClient();
+	    const customerId = state.customer && state.customer.id;
     if (!customerId) {
       const guest = getGuestAccess();
       if (!guest || !guest.jobId || !guest.accessToken) return [];
@@ -30,10 +30,10 @@
       .eq('customer_id', customerId)
       .order('created_at', { ascending: false });
     if (result.error) throw normalizeError(result.error, 'Could not load customer jobs.');
-    const jobs = (result.data || []).map(normalizeJob);
-    await Promise.all(jobs.map(hydrateProtectedAssets));
-    return jobs;
-  }
+	    const jobs = (result.data || []).map(normalizeJob);
+	    await Promise.all(jobs.map((job) => hydrateOperationalEvents(job).then(hydrateProtectedAssets)));
+	    return jobs;
+	  }
 
   async function listElectricianJobs() {
     const client = ensureClient();
@@ -54,10 +54,10 @@
       .eq('assigned_electrician_id', electricianId)
       .order('created_at', { ascending: false });
     if (result.error) throw normalizeError(result.error, 'Could not load assigned jobs.');
-    const jobs = (result.data || []).map(normalizeJob);
-    await Promise.all(jobs.map(hydrateProtectedAssets));
-    return jobs;
-  }
+	    const jobs = (result.data || []).map(normalizeJob);
+	    await Promise.all(jobs.map((job) => hydrateOperationalEvents(job).then(hydrateProtectedAssets)));
+	    return jobs;
+	  }
 
   async function listAdminJobs(options) {
     const client = ensureClient();
@@ -111,9 +111,11 @@
       `)
       .eq('id', jobId)
       .single();
-    if (result.error) throw normalizeError(result.error, 'Could not load the job details.');
-    return hydrateProtectedAssets(normalizeJob(result.data));
-  }
+	    if (result.error) throw normalizeError(result.error, 'Could not load the job details.');
+	    const job = normalizeJob(result.data);
+	    await hydrateOperationalEvents(job);
+	    return hydrateProtectedAssets(job);
+	  }
 
   async function previewMatches(input) {
     const client = ensureClient();
@@ -173,4 +175,3 @@
     }
     return normalizeJob(result.data);
   }
-

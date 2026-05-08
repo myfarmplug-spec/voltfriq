@@ -179,3 +179,9 @@ const Chat = (() => {
     destroy
   };
 })();
+
+if (typeof window !== 'undefined') {
+  window.Chat = Chat;
+}
+
+export default Chat;

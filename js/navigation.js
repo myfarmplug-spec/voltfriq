@@ -214,3 +214,34 @@ function timeAgo(ts) {
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
 }
+
+if (typeof window !== 'undefined') {
+  Object.assign(window, {
+    configureRoutes,
+    getCurrentRouteState,
+    goTo,
+    goBack,
+    fmt,
+    fmtDate,
+    timeAgo
+  });
+  Object.defineProperty(window, 'currentScreen', {
+    configurable: true,
+    get() {
+      return currentScreen;
+    },
+    set(value) {
+      currentScreen = value;
+    }
+  });
+}
+
+export {
+  configureRoutes,
+  getCurrentRouteState,
+  goTo,
+  goBack,
+  fmt,
+  fmtDate,
+  timeAgo
+};

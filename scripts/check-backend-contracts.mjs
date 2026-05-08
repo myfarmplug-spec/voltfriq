@@ -3,15 +3,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const generatedStorePath = path.join(root, '.tmp', 'frontend-bundles', 'js', 'store.js');
-const legacyStorePath = path.join(root, 'js', 'store.js');
 const migrationsDir = path.join(root, 'supabase', 'migrations');
 const schemaPath = path.join(root, 'supabase', 'schema.sql');
 
-const storeSource = fs.readFileSync(
-  fs.existsSync(generatedStorePath) ? generatedStorePath : legacyStorePath,
-  'utf8'
-);
+function readJsCorpus(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  return entries.map((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return readJsCorpus(full);
+    if (!entry.name.endsWith('.js')) return '';
+    return fs.readFileSync(full, 'utf8');
+  }).join('\n');
+}
+
+const storeSource = readJsCorpus(path.join(root, 'js', 'services'));
 const schemaSource = fs.existsSync(schemaPath) ? fs.readFileSync(schemaPath, 'utf8') : '';
 const migrationFiles = fs.readdirSync(migrationsDir)
   .filter((file) => file.endsWith('.sql'))
@@ -28,6 +33,7 @@ const requiredTables = [
   'wallet_transactions',
   'referrals',
   'disputes',
+  'job_events',
   'electrician_appeals',
   'guest_customers'
 ];

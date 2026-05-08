@@ -468,10 +468,11 @@
 
   async function submitDispute() {
     await withButtonLoading('btn-submit-dispute', 'Submitting...', async () => {
-      if (!currentJob) throw new Error('Open a job before reporting an issue.');
-      const issueType = document.getElementById('dispute-type').value;
-      if (!issueType) throw new Error('Select the issue you want to report.');
-      await Store.createDispute(currentJob.id, issueType, document.getElementById('dispute-details').value.trim());
+	      if (!currentJob) throw new Error('Open a job before reporting an issue.');
+	      const issueType = document.getElementById('dispute-type').value;
+	      if (!issueType) throw new Error('Select the issue you want to report.');
+	      const phoneConfirmation = currentJob.isGuest ? promptForGuestPhoneConfirmation() : null;
+	      await Store.createDispute(currentJob.id, issueType, document.getElementById('dispute-details').value.trim(), phoneConfirmation);
       document.getElementById('dispute-type').value = '';
       document.getElementById('dispute-details').value = '';
       await openTrackedJob(currentJob.id);
@@ -757,6 +758,30 @@
       return 'Your account setup is finishing. Please tap Submit Booking again in a moment.';
     }
     return text || 'Something went wrong.';
+  }
+
+  async function uploadGuestTrackingPhotos(input) {
+    try {
+      if (!currentJob || !input || !input.files || !input.files.length) return;
+      setScreenBusy(true, 'Uploading photos...');
+      const job = await Store.uploadGuestJobPhotos(currentJob.id, Array.from(input.files));
+      currentJob = job;
+      showNotice('Photos added to your booking.');
+      renderAssigned(job);
+    } catch (error) {
+      showError(error);
+    } finally {
+      if (input) input.value = '';
+      setScreenBusy(false);
+    }
+  }
+
+  function promptForGuestPhoneConfirmation() {
+    const value = window.prompt('Confirm the last 4 digits of the phone number used for this booking.');
+    if (!value || value.replace(/\D/g, '').length < 4) {
+      throw new Error('Confirm the phone number used for this booking.');
+    }
+    return value.replace(/\D/g, '').slice(-4);
   }
 
   function showNotice(message) {

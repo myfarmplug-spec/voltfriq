@@ -113,15 +113,9 @@ $$;
 alter default privileges for role postgres in schema public revoke all on functions from public, anon, authenticated;
 alter default privileges for role postgres in schema public revoke all on tables from public, anon, authenticated;
 alter default privileges for role postgres in schema public revoke all on sequences from public, anon, authenticated;
-alter default privileges for role supabase_admin in schema public revoke all on functions from public, anon, authenticated;
-alter default privileges for role supabase_admin in schema public revoke all on tables from public, anon, authenticated;
-alter default privileges for role supabase_admin in schema public revoke all on sequences from public, anon, authenticated;
 alter default privileges for role postgres in schema public grant all on functions to service_role;
 alter default privileges for role postgres in schema public grant all on tables to service_role;
 alter default privileges for role postgres in schema public grant all on sequences to service_role;
-alter default privileges for role supabase_admin in schema public grant all on functions to service_role;
-alter default privileges for role supabase_admin in schema public grant all on tables to service_role;
-alter default privileges for role supabase_admin in schema public grant all on sequences to service_role;
 
 revoke all on function public.process_dispatch_queue() from public, anon, authenticated;
 revoke all on function public.append_job_timeline(uuid,public.job_status,text,uuid) from public, anon, authenticated;

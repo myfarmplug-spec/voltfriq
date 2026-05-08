@@ -131,7 +131,7 @@
       paymentVerificationCard(selectedJob) +
       payoutCard(selectedJob) +
       assignmentSummaryCard(selectedJob) +
-      timelineCard(selectedJob.timeline) +
+	      timelineCard(selectedJob.internalEvents && selectedJob.internalEvents.length ? selectedJob.internalEvents : selectedJob.timeline) +
       '<div class="admin-chat-wrap"><div class="admin-chat-header">Job Chat</div><div id="admin-job-chat" class="chat-container" style="flex:1;min-height:0"></div></div>';
 
     bindPaymentButtons(selectedJob);
@@ -142,4 +142,3 @@
     });
     await Chat.init('admin-job-chat', selectedJob.id, 'admin', (Store.getCurrentProfile() || {}).full_name || 'Admin');
   }
-

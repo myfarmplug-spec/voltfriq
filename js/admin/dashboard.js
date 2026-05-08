@@ -5,10 +5,11 @@
 
   let currentJobs = [];
   let currentElectricians = [];
-  let currentPayments = [];
-  let currentNotifications = [];
-  let currentDisputes = [];
-  let currentAppeals = [];
+	  let currentPayments = [];
+	  let currentNotifications = [];
+	  let currentDisputes = [];
+	  let currentAppeals = [];
+	  let currentOperationalSummary = null;
   let selectedJob = null;
   let selectedElectrician = null;
   let portalSubscription = null;
@@ -236,24 +237,27 @@
       payments,
       notifications,
       disputes,
-      appeals
-    ] = await Promise.all([
-      Store.listAdminJobs({ includeProtectedAssets: false }),
-      Store.listElectricians('all', { includeDocumentUrls: false }),
-      Store.listPaymentsNeedingVerification(),
-      Store.listNotifications(),
-      Store.listDisputes(),
-      Store.listAppeals(),
-      Store.loadExpertiseCategories()
-    ]);
+	      appeals,
+	      operationalSummary
+	    ] = await Promise.all([
+	      Store.listAdminJobs({ includeProtectedAssets: false }),
+	      Store.listElectricians('all', { includeDocumentUrls: false }),
+	      Store.listPaymentsNeedingVerification(),
+	      Store.listNotifications(),
+	      Store.listDisputes(),
+	      Store.listAppeals(),
+	      Store.loadExpertiseCategories(),
+	      Store.getOperationalSummary()
+	    ]);
     currentJobs = jobs || [];
     currentElectricians = electricians || [];
     currentPayments = payments || [];
     currentNotifications = notifications || [];
-    currentDisputes = disputes || [];
-    currentAppeals = appeals || [];
-    clearLoginError();
-  }
+	    currentDisputes = disputes || [];
+	    currentAppeals = appeals || [];
+	    currentOperationalSummary = operationalSummary || null;
+	    clearLoginError();
+	  }
 
   function refreshScreen(screen) {
     Chat.destroy();
@@ -275,18 +279,24 @@
     const alerts = buildAlerts();
     const newBookingCount = currentJobs.filter((job) => ['requested', 'matching', 'assigned'].includes(job.status) || job.needsManualAssignment).length;
     const pendingElectricianCount = currentElectricians.filter((electrician) => electrician.status === 'pending').length;
-    const manualAssignmentCount = currentJobs.filter((job) => job.needsManualAssignment || (job.status === 'matching' && !job.assignedElectricianId)).length;
-    const paymentVerificationCount = currentPayments.length;
-    const stuckJobCount = currentJobs.filter(isStuckJob).length;
-    const openDisputeCount = currentDisputes.filter((dispute) => (dispute.status || 'open') === 'open').length;
-    const actionSummary = [
-      paymentVerificationCount ? paymentVerificationCount + ' payment' + (paymentVerificationCount === 1 ? '' : 's') + ' pending' : null,
-      pendingElectricianCount
-        ? pendingElectricianCount + ' electrician' + (pendingElectricianCount === 1 ? '' : 's') + ' pending approval'
-        : null,
-      stuckJobCount ? stuckJobCount + ' stuck job' + (stuckJobCount === 1 ? '' : 's') : null,
-      openDisputeCount ? openDisputeCount + ' dispute' + (openDisputeCount === 1 ? '' : 's') + ' open' : null
-    ].filter(Boolean);
+	    const manualAssignmentCount = currentJobs.filter((job) => job.needsManualAssignment || (job.status === 'matching' && !job.assignedElectricianId)).length;
+	    const paymentVerificationCount = currentPayments.length;
+	    const stuckJobCount = currentJobs.filter(isStuckJob).length;
+	    const expiredAssignmentCount = currentJobs.filter(isExpiredAssignment).length;
+	    const openDisputeCount = currentDisputes.filter((dispute) => (dispute.status || 'open') === 'open').length;
+	    const summaryQueues = currentOperationalSummary && currentOperationalSummary.queues ? currentOperationalSummary.queues : {};
+	    const summaryMetrics = currentOperationalSummary && currentOperationalSummary.metrics ? currentOperationalSummary.metrics : {};
+	    const operationalStuckCount = Number(summaryQueues.stuckPairingJobs || stuckJobCount || 0);
+	    const operationalExpiredCount = Number(summaryQueues.expiredAssignments || expiredAssignmentCount || 0);
+	    const actionSummary = [
+	      paymentVerificationCount ? paymentVerificationCount + ' payment' + (paymentVerificationCount === 1 ? '' : 's') + ' pending' : null,
+	      pendingElectricianCount
+	        ? pendingElectricianCount + ' electrician' + (pendingElectricianCount === 1 ? '' : 's') + ' pending approval'
+	        : null,
+	      operationalStuckCount ? operationalStuckCount + ' stuck job' + (operationalStuckCount === 1 ? '' : 's') : null,
+	      operationalExpiredCount ? operationalExpiredCount + ' expired assignment' + (operationalExpiredCount === 1 ? '' : 's') : null,
+	      openDisputeCount ? openDisputeCount + ' dispute' + (openDisputeCount === 1 ? '' : 's') + ' open' : null
+	    ].filter(Boolean);
 
     if ($('#admin-action-banner')) {
       $('#admin-action-banner').textContent = actionSummary.length
@@ -302,26 +312,29 @@
       card.addEventListener('click', () => navigateTo(card.dataset.target, filterRouteData(card)));
     });
 
-    const stats = {
-      pendingPayments: paymentVerificationCount,
-      pendingElectricians: pendingElectricianCount,
-      stuckPairing: stuckJobCount,
-      openDisputes: openDisputeCount
-    };
+	    const stats = {
+	      assignTime: formatDuration(summaryMetrics.averageTimeToAssignSeconds || 0),
+	      acceptTime: formatDuration(summaryMetrics.averageTimeToAcceptSeconds || 0),
+	      rejectionRate: formatPercent(summaryMetrics.rejectionRate || 0),
+	      paymentDelay: formatDuration(summaryMetrics.paymentVerificationDelaySeconds || 0),
+	      stuckJobs: String(summaryMetrics.stuckJobsCount || operationalStuckCount || 0)
+	    };
 
-    $('#admin-stats').innerHTML = [
-      statCard('💳', stats.pendingPayments, 'Pending payments'),
-      statCard('🧰', stats.pendingElectricians, 'Pending electricians'),
-      statCard('⚠️', stats.stuckPairing, 'Stuck pairing'),
-      statCard('🛡️', stats.openDisputes, 'Open disputes')
-    ].join('');
+	    $('#admin-stats').innerHTML = [
+	      statCard('↗', stats.assignTime, 'Avg assign'),
+	      statCard('✓', stats.acceptTime, 'Avg accept'),
+	      statCard('%', stats.rejectionRate, 'Rejection rate'),
+	      statCard('₦', stats.paymentDelay, 'Payment delay'),
+	      statCard('!', stats.stuckJobs, 'Stuck jobs')
+	    ].join('');
 
-    $('#admin-control-queue').innerHTML = [
-      queueCard('Dispatch board', newBookingCount, 'Customer-facing queue', 'Review fresh requests, rematching, and overrides.', 'admin-requests', 'requests', 'all'),
-      queueCard('Electrician approvals', pendingElectricianCount, 'Internal onboarding', 'Review pending VoltFriq applications and approve or reject.', 'admin-electricians', 'electricians', 'pending'),
-      queueCard('Trust & disputes', openDisputeCount, 'Customer resolution', 'Resolve open disputes and trust interventions.', 'admin-disputes'),
-      queueCard('Payment review', paymentVerificationCount, 'Internal finance', 'Verify proofs before jobs move forward.', 'admin-finance')
-    ].join('');
+	    $('#admin-control-queue').innerHTML = [
+	      queueCard('Pending payments', paymentVerificationCount, 'Finance queue', 'Verify proofs before jobs move forward.', 'admin-finance'),
+	      queueCard('Pending electricians', pendingElectricianCount, 'Onboarding queue', 'Review pending VoltFriq applications and approve or reject.', 'admin-electricians', 'electricians', 'pending'),
+	      queueCard('Stuck pairing jobs', operationalStuckCount, 'Dispatch queue', 'Review jobs that need routing attention.', 'admin-requests', 'requests', 'manual'),
+	      queueCard('Open disputes', openDisputeCount, 'Trust queue', 'Resolve open disputes and customer interventions.', 'admin-disputes'),
+	      queueCard('Expired assignments', operationalExpiredCount, 'Timeout queue', 'Review offers that expired before acceptance.', 'admin-requests', 'requests', 'timeout')
+	    ].join('');
     $('#admin-control-queue').querySelectorAll('.admin-queue-card').forEach((card) => {
       card.addEventListener('click', () => navigateTo(card.dataset.target, filterRouteData(card)));
     });
@@ -340,4 +353,3 @@
       }).join('');
     $('#admin-feed').innerHTML = activity || emptyState('No job activity yet.');
   }
-

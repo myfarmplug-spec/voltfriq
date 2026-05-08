@@ -18,27 +18,32 @@
     const nearbyRequests = currentJobs.filter((job) => job.status === 'assigned').length;
     const acceptedJobs = currentJobs.filter((job) => ['accepted', 'assessment_fee_pending', 'assessment_payment_pending_verification', 'assessment_confirmed', 'quoted', 'quote_accepted', 'work_payment_pending_verification', 'payment_confirmed'].includes(job.status)).length;
     const inProgressJobs = currentJobs.filter((job) => ['en_route', 'on_site', 'work_in_progress', 'electrician_completed'].includes(job.status)).length;
-    const pendingPayout = currentJobs
-      .filter((job) => ['customer_confirmed', 'payout_pending'].includes(job.status))
-      .reduce((sum, job) => sum + (job.quote.total || 0), 0);
-    const completedEarnings = currentJobs
-      .filter((job) => ['payout_complete', 'rated'].includes(job.status))
-      .reduce((sum, job) => sum + (job.quote.total || 0), 0);
-    document.getElementById('dash-avatar').textContent = '⚡';
-    document.getElementById('dash-name').textContent = profile.full_name || 'VoltFriq';
-    document.getElementById('dash-live-status').textContent = electrician.availability_status === 'available' ? 'Available for jobs' : 'Offline for now';
-    document.getElementById('stat-jobs-month').textContent = nearbyRequests;
-    document.getElementById('stat-earnings').textContent = Store.formatCurrency(completedEarnings);
-    document.getElementById('stat-rating').textContent = electrician.average_rating
-      ? Number(electrician.average_rating).toFixed(1) + '/5'
-      : '--';
-    document.getElementById('stat-payouts').textContent = Store.formatCurrency(pendingPayout);
-    renderTrustPanel(electrician, {
-      nearbyRequests,
-      acceptedJobs,
-      inProgressJobs,
-      pendingPayout
-    });
+	    const pendingPayout = currentJobs
+	      .filter((job) => ['customer_confirmed', 'payout_pending'].includes(job.status))
+	      .reduce((sum, job) => sum + (job.quote.total || 0), 0);
+	    const completedEarnings = currentJobs
+	      .filter((job) => ['payout_complete', 'rated'].includes(job.status))
+	      .reduce((sum, job) => sum + (job.quote.total || 0), 0);
+	    const todayEarnings = currentJobs
+	      .filter((job) => isToday(job.updatedAt) && ['customer_confirmed', 'payout_pending', 'payout_complete', 'rated'].includes(job.status))
+	      .reduce((sum, job) => sum + (job.quote.total || 0), 0);
+	    const responseScore = Math.round(Number(electrician.response_rate || 0));
+	    document.getElementById('dash-avatar').textContent = '⚡';
+	    document.getElementById('dash-name').textContent = profile.full_name || 'VoltFriq';
+	    document.getElementById('dash-live-status').textContent = electrician.availability_status === 'available' ? 'Available for jobs' : 'Offline for now';
+	    document.getElementById('stat-jobs-month').textContent = nearbyRequests;
+	    document.getElementById('stat-earnings').textContent = Store.formatCurrency(todayEarnings || completedEarnings);
+	    document.getElementById('stat-rating').textContent = electrician.average_rating
+	      ? Number(electrician.average_rating).toFixed(1) + '/5'
+	      : '--';
+	    document.getElementById('stat-payouts').textContent = responseScore ? responseScore + '%' : '--';
+	    renderTrustPanel(electrician, {
+	      nearbyRequests,
+	      acceptedJobs,
+	      inProgressJobs,
+	      pendingPayout,
+	      responseScore
+	    });
   }
 
   function renderTrustPanel(electrician, summary) {
@@ -61,9 +66,9 @@
         '<div class="elec-hero-stat"><strong>' + escapeHtml(String(summary.inProgressJobs || 0)) + '</strong><span>In progress</span></div>' +
       '</div>' +
       '<div class="elec-trust-meter"><span style="width:' + Math.min(100, Math.max(12, completed * 4)) + '%"></span></div>' +
-      '<div class="elec-trust-meta">' + completed + ' completed · ' + (rating ? rating.toFixed(1) + '/5' : 'No rating yet') + ' · ' + Number(electrician.negative_rating_count || 0) + ' negative</div>' +
-      '<div class="elec-hero-actions"><button class="btn-primary" id="btn-dash-toggle-availability">' + escapeHtml(availabilityButton) + '</button><button class="btn-secondary" id="btn-dash-open-active">Open active jobs</button></div>' +
-      '<div class="elec-payout-hero"><span class="elec-payout-label">Payout waiting</span><strong>' + escapeHtml(Store.formatCurrency(summary.pendingPayout || 0)) + '</strong><small>Customer-confirmed work waiting for release.</small></div>' +
+	      '<div class="elec-trust-meta">' + completed + ' completed · ' + (rating ? rating.toFixed(1) + '/5' : 'No rating yet') + ' · Response ' + (summary.responseScore ? summary.responseScore + '%' : '--') + '</div>' +
+	      '<div class="elec-hero-actions"><button class="btn-primary" id="btn-dash-toggle-availability">' + escapeHtml(availabilityButton) + '</button><button class="btn-secondary" id="btn-dash-open-active">Open active jobs</button></div>' +
+	      '<div class="elec-payout-hero"><span class="elec-payout-label">Payout status</span><strong>' + escapeHtml(Store.formatCurrency(summary.pendingPayout || 0)) + '</strong><small>Customer-confirmed work waiting for release.</small></div>' +
       watchlist;
     const toggleButton = document.getElementById('btn-dash-toggle-availability');
     if (toggleButton) {
@@ -150,11 +155,17 @@
     '</div>';
   }
 
-  function estimateRangeLabel(job) {
+	  function estimateRangeLabel(job) {
     if (job && job.quote && Number(job.quote.total || 0)) return Store.formatCurrency(job.quote.total);
     const range = ISSUE_ESTIMATES[job && job.issueCategory] || ISSUE_ESTIMATES[humanizeIssue(job && job.issueCategory)] || ISSUE_ESTIMATES.Other;
     if (!range) return 'Estimate after assessment';
     if (!range[1]) return Store.formatCurrency(range[0]) + '+ estimate';
     return Store.formatCurrency(range[0]) + ' - ' + Store.formatCurrency(range[1]) + ' estimate';
-  }
+	  }
 
+	  function isToday(value) {
+	    if (!value) return false;
+	    const date = new Date(value);
+	    const now = new Date();
+	    return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+	  }
