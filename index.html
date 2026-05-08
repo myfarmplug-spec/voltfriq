@@ -23,7 +23,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/css/shared.css?v=20260506-apply-test" />
   <link rel="stylesheet" href="/css/customer.css?v=20260508-auditor-location-hotfix" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
@@ -183,27 +182,7 @@
         </div>
       </div>
 
-      <div class="location-mode-panel saved-address-panel" id="saved-address-panel" style="display:none;"></div>
-
-      <div class="location-mode-panel" id="gps-location-panel" style="display:none;">
-        <button class="btn-secondary btn-full" id="btn-use-location">Use Current Location</button>
-        <div class="detected-location-card" id="detected-location-card" style="display:none;">
-          <span class="detected-location-label">Detected location</span>
-          <strong id="detected-location-fallback">Finding your location...</strong>
-        </div>
-        <div class="helper-note" id="location-helper-note">Location helps route the nearest available VoltFriq.</div>
-      </div>
-
-      <div class="location-mode-panel" id="manual-location-panel" style="display:none;"></div>
-
-      <div class="location-mode-panel map-picker-panel" id="map-picker-panel" style="display:none;">
-        <div class="address-map" id="address-map"></div>
-        <div class="detected-location-card" id="map-location-card" style="display:none;">
-          <span class="detected-location-label">Map location</span>
-          <strong id="map-location-text">Tap the map to choose a location.</strong>
-        </div>
-        <button class="btn-secondary btn-full" id="btn-use-map-location" disabled>Use This Map Location</button>
-      </div>
+      <div class="helper-note" id="location-helper-note">Location helps route the nearest available VoltFriq.</div>
 
       <div class="flow-ready-line" id="availability-card" style="display:none;">
         <span id="availability-count">Waiting</span>
@@ -403,8 +382,8 @@
         <section class="dashboard-panel card">
           <div class="dashboard-panel-head">
             <div>
-              <div class="issue-summary-title">Saved Addresses</div>
-              <div class="dashboard-panel-copy">Reuse the places you request service most often.</div>
+              <div class="issue-summary-title">Service Context</div>
+              <div class="dashboard-panel-copy">Your latest request area and account contact details.</div>
             </div>
           </div>
           <div class="mini-meta-list" id="dashboard-addresses"></div>
@@ -571,32 +550,6 @@
 
       <section class="tracking-details-card" id="tracking-details" aria-label="Booking details"></section>
 
-      <section class="tracking-trust-card" aria-label="VoltFriq customer protection">
-        <div class="tracking-trust-row">
-          <span class="tracking-trust-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v6c0 5 3.4 8 7 9 3.6-1 7-4 7-9V6l-7-3Z"/><path d="m8.8 12.2 2.1 2.1 4.4-5"/></svg>
-          </span>
-          <div>
-            <strong>Your safety is our priority</strong>
-            <span>All VoltFriq electricians are verified and manually approved.</span>
-          </div>
-          <span class="tracking-trust-arrow" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </span>
-        </div>
-        <div class="tracking-trust-row">
-          <span class="tracking-trust-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v6c0 5 3.4 8 7 9 3.6-1 7-4 7-9V6l-7-3Z"/><path d="m8.8 12.2 2.1 2.1 4.4-5"/></svg>
-          </span>
-          <div>
-            <strong>Manual verification</strong>
-            <span>No work starts without your approval.</span>
-          </div>
-          <span class="tracking-trust-arrow" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </span>
-        </div>
-      </section>
     </div>
   </div>
 
@@ -872,7 +825,6 @@
   </div>
 
   <script src="/vendor/supabase.min.js"></script>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/api/env.js?v=20260508-auditor-location-hotfix"></script>
   <script src="/js/config.js?v=20260506-auth-booking"></script>
   <script src="/js/store.js?v=20260508-auditor-location-hotfix"></script>

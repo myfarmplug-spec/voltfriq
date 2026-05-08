@@ -101,8 +101,7 @@ const Store = (() => {
     guestAccess: null,
     settings: DEFAULT_SETTINGS,
     expertiseCategories: DEFAULT_EXPERTISE_CATEGORIES.slice(),
-    authListenersBound: false,
-    dispatchHeartbeatId: null
+    authListenersBound: false
   };
 
   const GUEST_ACCESS_KEY = 'voltfriq_guest_job_access';
@@ -636,21 +635,6 @@ const Store = (() => {
       : DEFAULT_EXPERTISE_CATEGORIES.slice();
   }
 
-  function startDispatchHeartbeat() {
-    if (!config().enableClientDispatchHeartbeat) return;
-    if (state.dispatchHeartbeatId) return;
-    state.dispatchHeartbeatId = window.setInterval(() => {
-      processDispatchQueue().catch(() => {});
-    }, 60000);
-    processDispatchQueue().catch(() => {});
-  }
-
-  function stopDispatchHeartbeat() {
-    if (!state.dispatchHeartbeatId) return;
-    window.clearInterval(state.dispatchHeartbeatId);
-    state.dispatchHeartbeatId = null;
-  }
-
   function getStatusLabel(status) {
     return STATUS_LABELS[status] || status || 'Unknown';
   }
@@ -660,9 +644,16 @@ const Store = (() => {
   }
 
   function getRoleHome(role) {
-    if (role === 'admin') return '/admin/dashboard';
-    if (role === 'electrician') return '/electricians/dashboard';
-    return '/dashboard';
+    if (role === 'admin') return '/admin.html';
+    if (role === 'electrician') {
+      const electrician = getCurrentElectrician();
+      if (electrician && electrician.status === 'approved') {
+        return '/electrician.html';
+      } else {
+        return '/electrician.html';
+      }
+    }
+    return '/index.html#dashboard';
   }
 
   function customerSignupRedirectUrl() {
@@ -968,7 +959,6 @@ const Store = (() => {
     const client = ensureClient();
     if (!client) return;
     await client.auth.signOut();
-    stopDispatchHeartbeat();
     state.session = null;
     state.profile = null;
     state.customer = null;
@@ -1244,13 +1234,6 @@ const Store = (() => {
       p_photo_paths: photoPaths
     });
     if (result.error) throw normalizeError(result.error, 'Could not create the booking.');
-    await saveCustomerAddress({
-      label: input.locationLabel || input.serviceArea || 'Saved address',
-      addressText: input.locationLabel || input.serviceArea,
-      locationLabel: input.locationLabel || input.serviceArea,
-      latitude: input.latitude || null,
-      longitude: input.longitude || null
-    }).catch(() => {});
     if (!result.data || !result.data.id) {
       throw new Error('Booking was created, but tracking details were not returned.');
     }
@@ -1283,17 +1266,13 @@ const Store = (() => {
     const payload = result.data || {};
     const jobRow = payload.job || payload;
     const accessToken = payload.access_token || payload.accessToken;
-    if (!jobRow || !jobRow.id || !accessToken) {
+    const jobId = payload.job_id || payload.jobId || (jobRow && jobRow.id);
+    if (!jobRow || !jobId || !accessToken) {
       throw new Error('Booking was created, but tracking access was not returned.');
     }
-    saveGuestAccess({ jobId: jobRow.id, accessToken, phone });
-    await saveCustomerAddress({
-      label: input.locationLabel || input.serviceArea || 'Saved address',
-      addressText: input.locationLabel || input.serviceArea,
-      locationLabel: input.locationLabel || input.serviceArea,
-      latitude: input.latitude || null,
-      longitude: input.longitude || null
-    }).catch(() => {});
+    jobRow.id = jobRow.id || jobId;
+    jobRow.is_guest = true;
+    saveGuestAccess({ jobId, accessToken, phone });
     const normalized = await hydrateProtectedAssets(normalizeJob(jobRow));
     normalized.guestAccessToken = accessToken;
     return normalized;
@@ -1306,7 +1285,10 @@ const Store = (() => {
       p_access_token: accessToken
     });
     if (result.error) throw normalizeError(result.error, 'Could not load guest job tracking.');
-    return hydrateProtectedAssets(normalizeJob(result.data));
+    const row = result.data || {};
+    row.id = row.id || jobId;
+    row.is_guest = true;
+    return hydrateProtectedAssets(normalizeJob(row));
   }
 
   async function acceptAssignedJob(jobId) {
@@ -1929,14 +1911,6 @@ const Store = (() => {
     if (result.error) throw normalizeError(result.error, 'Could not mark the notification as read.');
   }
 
-  async function processDispatchQueue() {
-    const client = ensureClient();
-    if (!client || !state.session) return 0;
-    const result = await client.rpc('process_dispatch_queue');
-    if (result.error) throw normalizeError(result.error, 'Could not process the matching queue.');
-    return Number(result.data || 0);
-  }
-
   function normalizeUrgency(urgency) {
     if (urgency === 'this-week' || urgency === 'scheduled') return 'this_week';
     return urgency || 'today';
@@ -2025,7 +1999,7 @@ const Store = (() => {
       ticket: row.ticket,
       customerId: row.customer_id,
       guestCustomerId: row.guest_customer_id || null,
-      isGuest: !row.customer_id && !!(row.guest_customer_id || guestCustomer),
+      isGuest: !!row.is_guest || (!row.customer_id && !!(row.guest_customer_id || guestCustomer)),
       assignedElectricianId: row.assigned_electrician_id,
       serviceArea: row.service_area,
       locationLabel: row.location_label,
@@ -2222,7 +2196,6 @@ const Store = (() => {
     subscribeToNotifications,
     subscribeToPortalFeed,
     listNotifications,
-    markNotificationRead,
-    processDispatchQueue
+    markNotificationRead
   };
 })();

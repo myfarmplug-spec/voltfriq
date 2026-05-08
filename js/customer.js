@@ -12,15 +12,12 @@
   let ratingValue = 0;
   let selectedRatingTags = [];
   let screenBusy = false;
-  let addressMode = 'saved';
-  let savedAddresses = [];
-  let mapInstance = null;
-  let mapMarker = null;
-  let pendingMapLocation = null;
+  let addressMode = 'gps';
   let authScreenIntent = 'default';
   let pendingCustomerRoute = null;
   let currentTrackedTicket = null;
   let pendingCustomerSignup = null;
+  let trackingDetailsExpanded = false;
 
   const ISSUE_OPTIONS = [
     { issue_type: 'Socket / Switch', value: 'Socket repair', description: 'Faulty socket, switch, or new socket point.', estimated_fee_min: 5000, estimated_fee_max: 8000 },
@@ -216,8 +213,6 @@
         setAddressMode(button.dataset.addressMode);
       });
     }
-    on('btn-use-location', 'click', () => useCurrentLocation(false));
-    on('btn-use-map-location', 'click', applyMapLocation);
     on('btn-area-continue', 'click', () => {
       if (addressMode === 'manual') syncManualAddressDraft();
       if (!hasDraftLocation()) {
@@ -351,6 +346,11 @@
         }
         const copy = event.target.closest('[data-copy-ticket]');
         if (copy) copyTrackingTicket(copy);
+        const toggle = event.target.closest('#btn-toggle-tracking-details');
+        if (toggle) {
+          trackingDetailsExpanded = !trackingDetailsExpanded;
+          renderTrackingDetails(currentJob);
+        }
       });
     }
     on('btn-history-back', 'click', goBack);
@@ -685,57 +685,16 @@
     resetDraft();
     goTo('service-area');
     focusCustomerScreen('service-area');
-    await loadSavedAddresses();
-    if (savedAddresses.length) {
-      setAddressMode('saved');
-      return;
-    }
     setAddressMode('gps', { autoStarted: true });
   }
 
-  async function loadSavedAddresses() {
-    try {
-      savedAddresses = await Store.listSavedAddresses();
-    } catch (error) {
-      savedAddresses = [];
-    }
-    renderSavedAddresses();
-  }
-
-  function renderSavedAddresses() {
-    const panel = document.getElementById('saved-address-panel');
-    if (!panel) return;
-    if (!savedAddresses.length) {
-      panel.innerHTML = '<div class="saved-address-empty">No saved address yet. Use GPS, enter an address, or choose a point on the map.</div>';
-      return;
-    }
-    panel.innerHTML = '<div class="saved-address-list">' + savedAddresses.map((address, index) => {
-      const selected = addressKey(address) === addressKey(draft) ? ' active' : '';
-      return '<button class="saved-address-card' + selected + '" type="button" data-address-index="' + index + '">' +
-        '<strong>' + escapeHtml(address.label || 'Saved address') + '</strong>' +
-        '<span>' + escapeHtml(address.addressText || address.locationLabel || '') + '</span>' +
-      '</button>';
-    }).join('') + '</div>';
-
-    panel.querySelectorAll('[data-address-index]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const address = savedAddresses[parseInt(button.dataset.addressIndex, 10)];
-        applyAddressSelection(address, 'saved');
-      });
-    });
-  }
-
   function setAddressMode(mode, options) {
-    addressMode = mode || 'saved';
+    addressMode = mode === 'manual' ? 'manual' : 'gps';
     document.querySelectorAll('#address-mode-tabs [data-address-mode]').forEach((button) => {
       button.classList.toggle('active', button.dataset.addressMode === addressMode);
     });
 
-    togglePanel('saved-address-panel', addressMode === 'saved');
-    togglePanel('gps-location-panel', addressMode === 'gps');
     togglePanel('manual-location-sheet', addressMode === 'manual');
-    togglePanel('manual-location-panel', addressMode === 'manual');
-    togglePanel('map-picker-panel', addressMode === 'map');
 
     if (addressMode === 'gps' && !draft.latitude && !draft.longitude) {
       useCurrentLocation(!!(options && options.autoStarted));
@@ -749,21 +708,11 @@
         if (input) input.focus();
       }, 80);
     }
-    if (addressMode === 'map') {
-      initAddressMap();
-    }
   }
 
   function togglePanel(id, visible) {
     const panel = document.getElementById(id);
     if (panel) panel.style.display = visible ? '' : 'none';
-  }
-
-  function addressKey(address) {
-    const text = String(address.addressText || address.locationLabel || address.location_label || address.serviceArea || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    const latitude = address.latitude == null ? '' : Number(address.latitude).toFixed(4);
-    const longitude = address.longitude == null ? '' : Number(address.longitude).toFixed(4);
-    return text + '|' + latitude + '|' + longitude;
   }
 
   function applyAddressSelection(address, source) {
@@ -773,21 +722,12 @@
     draft.serviceArea = label;
     draft.latitude = normalized.latitude == null ? null : Number(normalized.latitude);
     draft.longitude = normalized.longitude == null ? null : Number(normalized.longitude);
-    draft.addressSource = source || normalized.source || 'saved';
+    draft.addressSource = source || normalized.source || 'gps';
     syncServiceAreaSelect(label);
-    const detectedCard = document.getElementById('detected-location-card');
     const detectedText = document.getElementById('detected-location-text');
-    if (detectedCard && detectedText && source === 'gps') {
-      detectedCard.style.display = '';
+    if (detectedText && source === 'gps') {
       detectedText.textContent = label;
     }
-    const mapCard = document.getElementById('map-location-card');
-    const mapText = document.getElementById('map-location-text');
-    if (mapCard && mapText && source === 'map') {
-      mapCard.style.display = '';
-      mapText.textContent = label;
-    }
-    renderSavedAddresses();
     persistDraftState();
     updateAvailabilityCard();
   }
@@ -879,19 +819,11 @@
 
   async function useCurrentLocation(autoStarted) {
     if (!navigator.geolocation) {
-      document.getElementById('location-helper-note').textContent = 'GPS is not available on this device. Enter your area manually.';
+      document.getElementById('location-helper-note').textContent = 'GPS is not available on this device. Enter your address to continue.';
       return;
     }
 
-    const button = document.getElementById('btn-use-location');
-    const originalText = button ? button.textContent : '';
-    const detectedCard = document.getElementById('detected-location-card');
     const detectedText = document.getElementById('detected-location-text');
-    if (button) {
-      button.disabled = true;
-      button.textContent = autoStarted ? 'Finding Your Location...' : 'Refreshing Location...';
-    }
-    if (detectedCard) detectedCard.style.display = '';
     if (detectedText) detectedText.textContent = 'Finding your location...';
     document.getElementById('location-helper-note').textContent = 'Allow location access so VoltFriq can route the nearest available electrician.';
 
@@ -909,17 +841,9 @@
       }, 'gps');
       if (detectedText) detectedText.textContent = draft.locationLabel;
       document.getElementById('location-helper-note').textContent = 'Confirm this location or edit the area before continuing.';
-      if (button) {
-        button.disabled = false;
-        button.textContent = 'Refresh Current Location';
-      }
     }, () => {
       if (detectedText) detectedText.textContent = 'Location access was blocked.';
-      document.getElementById('location-helper-note').textContent = 'Enter your area manually to continue.';
-      if (button) {
-        button.disabled = false;
-        button.textContent = originalText || 'Use Current Location';
-      }
+      document.getElementById('location-helper-note').textContent = 'Enter your address to continue without GPS.';
       setAddressMode('manual');
       updateAvailabilityCard();
     }, {
@@ -943,80 +867,6 @@
     } catch (error) {
       return '';
     }
-  }
-
-  function initAddressMap() {
-    const mapElement = document.getElementById('address-map');
-    const mapButton = document.getElementById('btn-use-map-location');
-    if (!mapElement) return;
-    if (!window.L) {
-      mapElement.innerHTML = '<div class="saved-address-empty">Map is unavailable right now. Enter your address manually.</div>';
-      if (mapButton) mapButton.disabled = true;
-      return;
-    }
-
-    const startLat = draft.latitude || 6.5244;
-    const startLng = draft.longitude || 3.3792;
-    const startZoom = draft.latitude && draft.longitude ? 15 : 11;
-
-    if (!mapInstance) {
-      mapInstance = window.L.map(mapElement, {
-        zoomControl: true,
-        attributionControl: true
-      }).setView([startLat, startLng], startZoom);
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap'
-      }).addTo(mapInstance);
-      mapInstance.on('click', (event) => setMapPoint(event.latlng.lat, event.latlng.lng));
-    } else {
-      mapInstance.setView([startLat, startLng], startZoom);
-    }
-
-    if (draft.latitude && draft.longitude) {
-      setMapPoint(draft.latitude, draft.longitude, draft.locationLabel);
-    }
-    window.setTimeout(() => mapInstance.invalidateSize(), 120);
-  }
-
-  async function setMapPoint(latitude, longitude, knownLabel) {
-    pendingMapLocation = {
-      label: 'Map location',
-      addressText: knownLabel || 'Map location (' + Number(latitude).toFixed(4) + ', ' + Number(longitude).toFixed(4) + ')',
-      locationLabel: knownLabel || 'Map location (' + Number(latitude).toFixed(4) + ', ' + Number(longitude).toFixed(4) + ')',
-      latitude,
-      longitude
-    };
-
-    if (mapInstance && window.L) {
-      if (!mapMarker) {
-        mapMarker = window.L.marker([latitude, longitude], { draggable: true }).addTo(mapInstance);
-        mapMarker.on('dragend', () => {
-          const point = mapMarker.getLatLng();
-          setMapPoint(point.lat, point.lng);
-        });
-      } else {
-        mapMarker.setLatLng([latitude, longitude]);
-      }
-    }
-
-    const mapCard = document.getElementById('map-location-card');
-    const mapText = document.getElementById('map-location-text');
-    if (mapCard) mapCard.style.display = '';
-    if (mapText) mapText.textContent = 'Finding address...';
-
-    const readableLocation = knownLabel || await reverseGeocode(latitude, longitude);
-    const fallbackLabel = 'Map location (' + Number(latitude).toFixed(4) + ', ' + Number(longitude).toFixed(4) + ')';
-    pendingMapLocation.addressText = readableLocation || fallbackLabel;
-    pendingMapLocation.locationLabel = readableLocation || fallbackLabel;
-    if (mapText) mapText.textContent = pendingMapLocation.locationLabel;
-    const mapButton = document.getElementById('btn-use-map-location');
-    if (mapButton) mapButton.disabled = false;
-  }
-
-  function applyMapLocation() {
-    if (!pendingMapLocation) return;
-    applyAddressSelection(pendingMapLocation, 'map');
   }
 
   function handlePhotoSelect(event) {
@@ -1706,6 +1556,7 @@
 
   function renderAssigned(job) {
     currentTrackedTicket = job.ticket || currentTrackedTicket;
+    currentJob = job;
     renderTrackingHero(job);
     renderTrackingProgress(job);
     renderTrackingDetails(job);
@@ -1717,13 +1568,6 @@
     const note = document.getElementById('tracking-hero-note');
     if (!title || !sub || !note) return;
 
-    if (job && job.needsManualAssignment) {
-      title.textContent = 'VoltFriq admin is assigning your electrician';
-      sub.textContent = 'No electrician is available automatically yet. Your request has been sent for manual assignment.';
-      note.textContent = 'You do not need to book again. This page will update when someone is assigned.';
-      return;
-    }
-
     if (job && job.assignedElectrician) {
       title.textContent = 'Your VoltFriq has been assigned';
       sub.textContent = job.assignedElectrician.name
@@ -1733,9 +1577,9 @@
       return;
     }
 
-    title.innerHTML = 'We are pairing you with the best <span>VoltFriq</span>';
-    sub.textContent = 'Finding a verified electrician near you...';
-    note.textContent = 'This usually takes less than a minute.';
+    title.textContent = 'Booking confirmed';
+    sub.textContent = 'Finding the best VoltFriq near you...';
+    note.textContent = 'Progress is happening. We will update this page as soon as pairing moves.';
   }
 
   function getTrackingStageIndex(job) {
@@ -1761,10 +1605,11 @@
     if (!container) return;
     const activeIndex = getTrackingStageIndex(job);
     const submittedTime = formatTrackingTime(job && job.createdAt);
-    const needsManualAssignment = Boolean(job && job.needsManualAssignment);
+    const screen = document.getElementById('screen-assigned');
+    if (screen) screen.classList.toggle('is-pairing', activeIndex === 1);
     const steps = [
       { title: 'Submitted', sub: submittedTime, icon: 'check' },
-      { title: 'Pairing', sub: needsManualAssignment ? 'Admin assigning' : activeIndex === 1 ? 'In progress' : 'Done', icon: 'bolt' },
+      { title: 'Pairing', sub: activeIndex === 1 ? 'Finding VoltFriq' : 'Done', icon: 'bolt' },
       { title: 'Assigned', sub: activeIndex >= 2 ? 'Done' : 'Pending', icon: 'person' },
       { title: 'On the way', sub: activeIndex >= 3 ? 'In progress' : 'Pending', icon: 'car' },
       { title: 'Completed', sub: activeIndex >= 4 ? 'Done' : 'Pending', icon: 'flag' }
@@ -1794,8 +1639,12 @@
     const serviceType = getTrackingServiceType(job);
     const estimate = getTrackingEstimate(job);
     const assessment = getTrackingAssessmentValue(job);
+    const detailsState = trackingDetailsExpanded ? ' is-expanded' : '';
+    const contactCta = shouldShowTrackingContact(job)
+      ? '<button class="tracking-contact-btn" id="btn-tracking-contact" type="button">' + trackingIcon('message') + '<span>Contact Us</span></button>'
+      : '';
     container.innerHTML = [
-      '<div class="tracking-detail-main">',
+      '<div class="tracking-detail-main' + detailsState + '">',
         '<span class="tracking-detail-icon" aria-hidden="true">' + trackingIcon('socket') + '</span>',
         '<div class="tracking-detail-copy">',
           '<h3>' + escapeHtml(issue) + '</h3>',
@@ -1806,13 +1655,19 @@
           '</div>',
         '</div>',
       '</div>',
-      '<button class="tracking-contact-btn" id="btn-tracking-contact" type="button">' + trackingIcon('message') + '<span>Contact Us</span></button>',
-      '<div class="tracking-detail-metrics">',
+      '<button class="tracking-detail-toggle" id="btn-toggle-tracking-details" type="button">' + escapeHtml(trackingDetailsExpanded ? 'Hide details' : 'View details') + '</button>',
+      contactCta,
+      '<div class="tracking-detail-metrics' + detailsState + '">',
         '<div class="tracking-metric"><span>Service type</span><strong>' + escapeHtml(serviceType) + '</strong><em>' + escapeHtml(urgency) + '</em></div>',
         '<div class="tracking-metric"><span>Estimated price</span><strong>' + escapeHtml(estimate) + '</strong><small>After assessment</small></div>',
         '<div class="tracking-metric"><span>Assessment visit</span><strong>' + escapeHtml(assessment) + '</strong></div>',
       '</div>'
     ].join('');
+  }
+
+  function shouldShowTrackingContact(job) {
+    if (!job) return false;
+    return ['accepted', 'en_route', 'on_site', 'work_in_progress', 'electrician_completed'].includes(job.status);
   }
 
   function getTrackingIssueLabel(job) {
@@ -2085,6 +1940,40 @@
       openCustomerAuthScreen('default', 'login', { replace: !!(options && options.replace) });
       return;
     }
+
+    const profile = Store.getCurrentProfile();
+    const role = profile.role;
+    const electrician = Store.getCurrentElectrician();
+
+    // Add debug logs
+    console.log('Current user ID:', profile.id);
+    console.log('Profile role:', role);
+    console.log('Electrician record found:', !!electrician);
+    if (electrician) {
+      console.log('Electrician status:', electrician.status);
+    }
+
+    let destination;
+    if (role === 'admin') {
+      destination = '/admin.html';
+    } else if (role === 'electrician' || electrician) {
+      if (electrician && electrician.status === 'approved') {
+        destination = '/electrician.html';
+      } else {
+        destination = '/electrician.html#pending';
+      }
+    } else {
+      // Customer - stay on current page and load dashboard
+      destination = null;
+    }
+
+    console.log('Resolved destination:', destination);
+
+    if (destination) {
+      window.location.href = destination;
+      return;
+    }
+
     try {
       setScreenBusy(true, 'Loading your dashboard...');
       renderDashboardLoading();
@@ -2124,11 +2013,12 @@
       card.addEventListener('click', () => openTrackedJob(card.dataset.jobId));
     });
 
-    document.getElementById('dashboard-addresses').innerHTML = savedAddresses.length
-      ? savedAddresses.slice(0, 4).map((address) => '<div class="mini-meta-row"><span class="mini-meta-label">' +
-          escapeHtml(address.label || 'Saved address') + '</span><span class="mini-meta-value">' +
-          escapeHtml(address.addressText || address.locationLabel || '--') + '</span></div>').join('')
-      : '<div class="mini-meta-row"><span class="mini-meta-label">Saved addresses</span><span class="mini-meta-value">No saved address yet</span></div>';
+    const latestJob = jobs[0] || null;
+    document.getElementById('dashboard-addresses').innerHTML = [
+      ['Latest area', latestJob ? latestJob.locationLabel || latestJob.serviceArea || '--' : '--'],
+      ['Service city', latestJob ? latestJob.serviceArea || '--' : 'Port Harcourt'],
+      ['Booking mode', latestJob ? 'Guided booking' : 'Ready when you are']
+    ].map(renderMiniMetaRow).join('');
 
     document.getElementById('dashboard-account').innerHTML = [
       ['Name', profile.full_name || '--'],
@@ -2282,16 +2172,8 @@
     document.getElementById('problem-category').value = '';
     document.getElementById('problem-desc').value = '';
     if (document.getElementById('review-phone')) document.getElementById('review-phone').value = '';
-    if (document.getElementById('detected-location-card')) document.getElementById('detected-location-card').style.display = 'none';
     if (document.getElementById('detected-location-text')) document.getElementById('detected-location-text').textContent = 'Finding your location...';
     if (document.getElementById('manual-location-sheet')) document.getElementById('manual-location-sheet').style.display = 'none';
-    if (document.getElementById('map-location-card')) document.getElementById('map-location-card').style.display = 'none';
-    if (document.getElementById('btn-use-map-location')) document.getElementById('btn-use-map-location').disabled = true;
-    pendingMapLocation = null;
-    if (mapMarker && mapInstance) {
-      mapInstance.removeLayer(mapMarker);
-      mapMarker = null;
-    }
     document.getElementById('auth-referral-code').value = '';
     authScreenIntent = 'default';
     applyAuthScreenContext();
@@ -2649,7 +2531,7 @@
       if (screen === 'service-area') {
         target = addressMode === 'manual'
           ? document.getElementById('manual-street-address')
-          : document.getElementById('service-area-select');
+          : document.getElementById('location-option-gps');
       } else if (screen === 'problem') {
         target = document.getElementById('problem-desc');
       } else if (screen === 'details') {
