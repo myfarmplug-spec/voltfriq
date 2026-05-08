@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voltfriq-shell-v20260508-auditor-location-hotfix';
+const CACHE_NAME = 'voltfriq-shell-v20260508-booking-flow-fix';
 const APP_SHELL = [
   '/offline.html',
   '/manifest.json',

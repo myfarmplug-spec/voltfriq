@@ -18,6 +18,8 @@
   let currentTrackedTicket = null;
   let pendingCustomerSignup = null;
   let trackingDetailsExpanded = false;
+  let bookingSubmitInFlight = false;
+  let bookingConfirmationTimer = null;
 
   const ISSUE_OPTIONS = [
     { issue_type: 'Socket / Switch', value: 'Socket repair', description: 'Faulty socket, switch, or new socket point.', estimated_fee_min: 5000, estimated_fee_max: 8000 },
@@ -1363,6 +1365,7 @@
   }
 
   async function continueFromMatch() {
+    if (bookingSubmitInFlight) return;
     if (draft.addressSource === 'manual' || addressMode === 'manual') {
       syncManualAddressDraft();
     }
@@ -1386,28 +1389,33 @@
       return;
     }
 
-    await withButtonLoading('btn-continue-match', 'Creating Booking...', async () => {
-      if (profile && !profileHasPhone) {
-        await Store.updateProfile({ phone: draft.guestPhone });
-      }
-      const bookingPayload = {
-        serviceArea: bookingLocation.serviceArea,
-        locationLabel: bookingLocation.locationLabel,
-        latitude: bookingLocation.latitude,
-        longitude: bookingLocation.longitude,
-        issueCategory: draft.issueCategory,
-        urgency: draft.urgency,
-        note: draft.note,
-        requiresAssessment: draft.requiresAssessment,
-        materialHandling: draft.materialHandling,
-        photos: uploadedFiles,
-        phone: draft.guestPhone
-      };
-      const job = Store.getCurrentProfile()
-        ? await Store.createBooking(bookingPayload)
-        : await Store.createGuestBooking(bookingPayload);
-      finishNewBooking(job);
-    });
+    bookingSubmitInFlight = true;
+    try {
+      await withButtonLoading('btn-continue-match', 'Creating Booking...', async () => {
+        if (profile && !profileHasPhone) {
+          await Store.updateProfile({ phone: draft.guestPhone });
+        }
+        const bookingPayload = {
+          serviceArea: bookingLocation.serviceArea,
+          locationLabel: bookingLocation.locationLabel,
+          latitude: bookingLocation.latitude,
+          longitude: bookingLocation.longitude,
+          issueCategory: draft.issueCategory,
+          urgency: draft.urgency,
+          note: draft.note,
+          requiresAssessment: draft.requiresAssessment,
+          materialHandling: draft.materialHandling,
+          photos: uploadedFiles,
+          phone: draft.guestPhone
+        };
+        const job = Store.getCurrentProfile()
+          ? await Store.createBooking(bookingPayload)
+          : await Store.createGuestBooking(bookingPayload);
+        finishNewBooking(job);
+      });
+    } finally {
+      bookingSubmitInFlight = false;
+    }
   }
 
   function finishNewBooking(job) {
@@ -1416,6 +1424,7 @@
     currentTrackedTicket = job.ticket || currentTrackedTicket;
     bindJobSubscription(job.id);
     routeJob(job, false, { routeData: { ticket: job.ticket || currentTrackedTicket } });
+    showBookingConfirmation(job);
     refreshWelcomeActions();
     renderSidecars();
     Store.getJob(job.id).then((freshJob) => {
@@ -1425,6 +1434,33 @@
       routeJob(freshJob, true, { routeData: { ticket: freshJob.ticket || currentTrackedTicket }, replace: true });
       refreshWelcomeActions();
     }).catch(() => {});
+  }
+
+  function showBookingConfirmation(job) {
+    let toast = document.getElementById('booking-confirmation-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'booking-confirmation-toast';
+      toast.className = 'booking-confirmation-toast';
+      toast.setAttribute('role', 'status');
+      toast.setAttribute('aria-live', 'polite');
+      document.body.appendChild(toast);
+    }
+    const ticket = job && job.ticket ? 'Ticket ' + escapeHtml(job.ticket) + ' is now live.' : 'Your request is now live.';
+    toast.innerHTML = [
+      '<span class="booking-confirmation-icon" aria-hidden="true">',
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.2 2.2 4.8-5"/></svg>',
+      '</span>',
+      '<span class="booking-confirmation-copy">',
+        '<strong>Thank you. Your booking is confirmed.</strong>',
+        '<small>' + ticket + ' We are matching you with a verified VoltFriq now.</small>',
+      '</span>'
+    ].join('');
+    toast.classList.add('is-visible');
+    if (bookingConfirmationTimer) window.clearTimeout(bookingConfirmationTimer);
+    bookingConfirmationTimer = window.setTimeout(() => {
+      toast.classList.remove('is-visible');
+    }, 8500);
   }
 
   async function resumeLatestJob(options) {
@@ -1943,31 +1979,15 @@
 
     const profile = Store.getCurrentProfile();
     const role = profile.role;
-    const electrician = Store.getCurrentElectrician();
-
-    // Add debug logs
-    console.log('Current user ID:', profile.id);
-    console.log('Profile role:', role);
-    console.log('Electrician record found:', !!electrician);
-    if (electrician) {
-      console.log('Electrician status:', electrician.status);
-    }
 
     let destination;
     if (role === 'admin') {
-      destination = '/admin.html';
-    } else if (role === 'electrician' || electrician) {
-      if (electrician && electrician.status === 'approved') {
-        destination = '/electrician.html';
-      } else {
-        destination = '/electrician.html#pending';
-      }
+      destination = Store.getRoleHome('admin');
+    } else if (role === 'electrician') {
+      destination = Store.getRoleHome('electrician');
     } else {
-      // Customer - stay on current page and load dashboard
       destination = null;
     }
-
-    console.log('Resolved destination:', destination);
 
     if (destination) {
       window.location.href = destination;
@@ -2600,11 +2620,12 @@
   }
 
   function showError(error) {
-    const message = typeof error === 'string'
+    const rawMessage = typeof error === 'string'
       ? error
       : error && error.message
         ? error.message
         : 'Something went wrong.';
+    const message = friendlyCustomerError(rawMessage);
     const authError = document.getElementById('auth-error');
     const activeScreen = document.querySelector('.screen.active');
     if (activeScreen && activeScreen.id !== 'screen-customer-auth') {
@@ -2624,6 +2645,21 @@
     authError.classList.remove('is-success');
     authError.style.display = 'block';
     authError.textContent = message;
+  }
+
+  function friendlyCustomerError(message) {
+    const text = String(message || '').trim();
+    const lower = text.toLowerCase();
+    if (lower.includes('auth-token') && lower.includes('lock') && (lower.includes('stole it') || lower.includes('released'))) {
+      return 'Your secure session refreshed while we were booking. Please tap Submit Booking once more.';
+    }
+    if (lower.includes('job_timeline') && lower.includes('actor_profile_id') && lower.includes('foreign key')) {
+      return 'We are finishing your booking setup. Please tap Submit Booking once more in a moment.';
+    }
+    if (lower.includes('customer profile not found')) {
+      return 'Your account setup is finishing. Please tap Submit Booking again in a moment.';
+    }
+    return text || 'Something went wrong.';
   }
 
   function showNotice(message) {

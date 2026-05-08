@@ -196,6 +196,7 @@ CREATE TABLE "public"."electricians" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "profile_id" "uuid" NOT NULL,
     "status" "public"."electrician_status" DEFAULT 'pending'::"public"."electrician_status" NOT NULL,
+    "onboarding_completed" boolean DEFAULT false NOT NULL,
     "years_experience" integer DEFAULT 0 NOT NULL,
     "service_areas" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
     "location_label" "text",
@@ -393,14 +394,18 @@ CREATE FUNCTION "public"."create_customer_job"("p_service_area" "text", "p_locat
 declare
   customer_row public.customers;
   created_job public.jobs;
+  actor_profile_id uuid;
 begin
   select * into customer_row from public.customers where profile_id = auth.uid();
   if not found then
     raise exception 'Customer profile not found';
   end if;
 
+  actor_profile_id := customer_row.profile_id;
+
   update public.customers
   set primary_service_area = coalesce(p_location_label, p_service_area, primary_service_area),
+      location_label = coalesce(p_location_label, location_label),
       latitude = coalesce(p_latitude, latitude),
       longitude = coalesce(p_longitude, longitude)
   where id = customer_row.id
@@ -440,9 +445,9 @@ begin
   select created_job.id, photo_path
   from unnest(coalesce(p_photo_paths, '{}'::text[])) as photo_path;
 
-  perform public.append_job_timeline(created_job.id, 'requested', 'Customer created a new booking request.', auth.uid());
-  perform public.append_job_timeline(created_job.id, 'matching', 'Automatic dispatch started.', auth.uid());
-  perform public.create_notification(auth.uid(), created_job.id, 'new_job_created', 'Booking created', 'We are finding the nearest verified VoltFriq for you.', '{}'::jsonb);
+  perform public.append_job_timeline(created_job.id, 'requested', 'Customer created a new booking request.', actor_profile_id);
+  perform public.append_job_timeline(created_job.id, 'matching', 'Automatic dispatch started.', actor_profile_id);
+  perform public.create_notification(actor_profile_id, created_job.id, 'new_job_created', 'Booking created', 'We are finding the nearest verified VoltFriq for you.', '{}'::jsonb);
 
   select * into created_job from public.dispatch_job_internal(created_job.id, null);
   return created_job;
@@ -667,6 +672,7 @@ declare
   customer_profile uuid;
   assigned_profile uuid;
   admin_profile uuid;
+  actor_profile_id uuid;
   job_row public.jobs;
 begin
   if not ("public"."is_admin"() or "auth"."role"() = 'service_role') then
@@ -677,6 +683,9 @@ begin
   if not found then
     raise exception 'Job not found';
   end if;
+
+  select c.profile_id into customer_profile from public.customers c where c.id = job_row.customer_id;
+  actor_profile_id := coalesce(auth.uid(), customer_profile);
 
   if p_manual_electrician_id is not null then
     select id into target_electrician
@@ -717,7 +726,7 @@ begin
     returning * into job_row;
 
     select id into admin_profile from public.profiles where role = 'admin' order by created_at asc limit 1;
-    perform public.append_job_timeline(p_job_id, 'matching', 'No electrician available yet. Manual assignment required.', auth.uid());
+    perform public.append_job_timeline(p_job_id, 'matching', 'No electrician available yet. Manual assignment required.', actor_profile_id);
     if admin_profile is not null then
       perform public.create_notification(admin_profile, p_job_id, 'job_stuck', 'Manual assignment required', 'No approved available VoltFriq accepted this job. Admin follow-up is needed.', '{}'::jsonb);
     end if;
@@ -739,7 +748,6 @@ begin
   set last_offered_at = now()
   where id = target_electrician;
 
-  select c.profile_id into customer_profile from public.customers c where c.id = job_row.customer_id;
   select e.profile_id into assigned_profile from public.electricians e where e.id = target_electrician;
 
   perform public.append_job_timeline(
@@ -749,7 +757,7 @@ begin
       when p_manual_electrician_id is not null then 'Admin manually assigned a VoltFriq to this job.'
       else 'Nearest available VoltFriq dispatched to the job.'
     end,
-    auth.uid()
+    actor_profile_id
   );
   perform public.create_notification(customer_profile, p_job_id, 'electrician_assigned', 'VoltFriq assigned', 'A verified VoltFriq has been dispatched to your job.', jsonb_build_object('electrician_id', target_electrician));
   perform public.create_notification(assigned_profile, p_job_id, 'electrician_assigned', 'New booking request', 'A nearby customer needs help in your service area.', jsonb_build_object('job_id', p_job_id));
@@ -775,12 +783,16 @@ declare
   customer_profile uuid;
   assigned_profile uuid;
   admin_profile uuid;
+  actor_profile_id uuid;
   job_row public.jobs;
 begin
   select * into job_row from public.jobs where id = p_job_id for update;
   if not found then
     raise exception 'Job not found';
   end if;
+
+  select c.profile_id into customer_profile from public.customers c where c.id = job_row.customer_id;
+  actor_profile_id := coalesce(auth.uid(), customer_profile);
 
   if p_manual_electrician_id is not null then
     select id into target_electrician
@@ -821,7 +833,7 @@ begin
     returning * into job_row;
 
     select id into admin_profile from public.profiles where role = 'admin' order by created_at asc limit 1;
-    perform public.append_job_timeline(p_job_id, 'matching', 'No electrician available yet. Manual assignment required.', auth.uid());
+    perform public.append_job_timeline(p_job_id, 'matching', 'No electrician available yet. Manual assignment required.', actor_profile_id);
     if admin_profile is not null then
       perform public.create_notification(admin_profile, p_job_id, 'job_stuck', 'Manual assignment required', 'No approved available VoltFriq accepted this job. Admin follow-up is needed.', '{}'::jsonb);
     end if;
@@ -843,7 +855,6 @@ begin
   set last_offered_at = now()
   where id = target_electrician;
 
-  select c.profile_id into customer_profile from public.customers c where c.id = job_row.customer_id;
   select e.profile_id into assigned_profile from public.electricians e where e.id = target_electrician;
 
   perform public.append_job_timeline(
@@ -853,7 +864,7 @@ begin
       when p_manual_electrician_id is not null then 'Admin manually assigned a VoltFriq to this job.'
       else 'Nearest available VoltFriq dispatched to the job.'
     end,
-    auth.uid()
+    actor_profile_id
   );
   perform public.create_notification(customer_profile, p_job_id, 'electrician_assigned', 'VoltFriq assigned', 'A verified VoltFriq has been dispatched to your job.', jsonb_build_object('electrician_id', target_electrician));
   perform public.create_notification(assigned_profile, p_job_id, 'electrician_assigned', 'New booking request', 'A nearby customer needs help in your service area.', jsonb_build_object('job_id', p_job_id));
@@ -977,6 +988,7 @@ ALTER FUNCTION "public"."electrician_reject_job"("p_job_id" "uuid") OWNER TO "po
 
 CREATE TABLE "public"."profiles" (
     "id" "uuid" NOT NULL,
+    "email" "text",
     "role" "public"."user_role" DEFAULT 'customer'::"public"."user_role" NOT NULL,
     "full_name" "text" DEFAULT ''::"text" NOT NULL,
     "phone" "text",
@@ -1000,10 +1012,12 @@ CREATE FUNCTION "public"."sync_app_account_for_auth_user"("p_user_id" "uuid") RE
 declare
   user_row auth.users;
   existing_role public.user_role;
-  metadata_role text;
-  account_role public.user_role;
+  user_metadata_role text;
+  app_metadata_role text;
   profile_role public.user_role;
   profile_row public.profiles;
+  customer_phone text;
+  location_label text;
   lat_raw text;
   lng_raw text;
   years_raw text;
@@ -1024,21 +1038,31 @@ begin
   from public.profiles
   where id = user_row.id;
 
-  metadata_role := lower(nullif(user_row.raw_user_meta_data ->> 'requested_role', ''));
-
-  if metadata_role = 'electrician' then
-    account_role := 'electrician';
-  elsif existing_role = 'electrician' then
-    account_role := 'electrician';
-  else
-    account_role := 'customer';
-  end if;
+  user_metadata_role := lower(nullif(coalesce(
+    user_row.raw_user_meta_data ->> 'requested_role',
+    user_row.raw_user_meta_data ->> 'role'
+  ), ''));
+  app_metadata_role := lower(nullif(coalesce(
+    user_row.raw_app_meta_data ->> 'role',
+    user_row.raw_app_meta_data ->> 'app_role'
+  ), ''));
 
   profile_role := case
-    when existing_role = 'admin' then 'admin'::public.user_role
-    else account_role
+    when existing_role = 'admin' or app_metadata_role = 'admin' then 'admin'::public.user_role
+    when existing_role = 'electrician'
+      or user_metadata_role in ('electrician', 'voltfriq', 'volt_friq', 'volt-friq')
+      or app_metadata_role in ('electrician', 'voltfriq', 'volt_friq', 'volt-friq')
+      then 'electrician'::public.user_role
+    else 'customer'::public.user_role
   end;
 
+  customer_phone := nullif(user_row.raw_user_meta_data ->> 'phone', '');
+  location_label := coalesce(
+    nullif(user_row.raw_user_meta_data ->> 'location_label', ''),
+    nullif(user_row.raw_user_meta_data ->> 'base_location_label', ''),
+    nullif(user_row.raw_user_meta_data ->> 'primary_service_area', ''),
+    nullif(user_row.raw_user_meta_data ->> 'service_area', '')
+  );
   lat_raw := nullif(coalesce(user_row.raw_user_meta_data ->> 'latitude', user_row.raw_user_meta_data ->> 'lat'), '');
   lng_raw := nullif(coalesce(user_row.raw_user_meta_data ->> 'longitude', user_row.raw_user_meta_data ->> 'lng'), '');
   years_raw := nullif(user_row.raw_user_meta_data ->> 'years_experience', '');
@@ -1063,7 +1087,8 @@ begin
   if jsonb_typeof(user_row.raw_user_meta_data -> 'service_areas') = 'array' then
     select coalesce(array_agg(value), '{}'::text[])
     into service_areas
-    from jsonb_array_elements_text(user_row.raw_user_meta_data -> 'service_areas') as area(value);
+    from jsonb_array_elements_text(user_row.raw_user_meta_data -> 'service_areas') as area(value)
+    where nullif(value, '') is not null;
   elsif nullif(user_row.raw_user_meta_data ->> 'primary_service_area', '') is not null then
     service_areas := array[user_row.raw_user_meta_data ->> 'primary_service_area'];
   elsif nullif(user_row.raw_user_meta_data ->> 'service_area', '') is not null then
@@ -1074,15 +1099,17 @@ begin
     onboarding_answers := user_row.raw_user_meta_data -> 'onboarding_answers';
   end if;
 
-  insert into public.profiles (id, role, full_name, phone)
+  insert into public.profiles (id, email, role, full_name, phone)
   values (
     user_row.id,
+    coalesce(user_row.email, ''),
     profile_role,
     coalesce(nullif(user_row.raw_user_meta_data ->> 'full_name', ''), user_row.email, ''),
-    nullif(user_row.raw_user_meta_data ->> 'phone', '')
+    customer_phone
   )
   on conflict (id) do update
-    set role = case
+    set email = coalesce(nullif(excluded.email, ''), public.profiles.email),
+        role = case
           when public.profiles.role = 'admin' then 'admin'::public.user_role
           else excluded.role
         end,
@@ -1091,21 +1118,26 @@ begin
   returning * into profile_row;
 
   if profile_role = 'customer' then
-    insert into public.customers (profile_id, primary_service_area, latitude, longitude)
+    insert into public.customers (profile_id, phone, location_label, primary_service_area, latitude, longitude)
     values (
       user_row.id,
-      nullif(user_row.raw_user_meta_data ->> 'primary_service_area', ''),
+      coalesce(customer_phone, profile_row.phone),
+      location_label,
+      coalesce(location_label, nullif(user_row.raw_user_meta_data ->> 'primary_service_area', '')),
       parsed_latitude,
       parsed_longitude
     )
     on conflict (profile_id) do update
-      set primary_service_area = coalesce(excluded.primary_service_area, public.customers.primary_service_area),
+      set phone = coalesce(excluded.phone, public.customers.phone),
+          location_label = coalesce(excluded.location_label, public.customers.location_label),
+          primary_service_area = coalesce(excluded.primary_service_area, public.customers.primary_service_area),
           latitude = coalesce(excluded.latitude, public.customers.latitude),
           longitude = coalesce(excluded.longitude, public.customers.longitude);
   elsif profile_role = 'electrician' then
     insert into public.electricians (
       profile_id,
       status,
+      onboarding_completed,
       years_experience,
       service_areas,
       location_label,
@@ -1123,9 +1155,10 @@ begin
     values (
       user_row.id,
       'pending',
+      false,
       coalesce(parsed_years, 0),
       service_areas,
-      nullif(user_row.raw_user_meta_data ->> 'location_label', ''),
+      location_label,
       parsed_latitude,
       parsed_longitude,
       coalesce(nullif(user_row.raw_user_meta_data ->> 'bank_name', ''), ''),
@@ -1393,6 +1426,42 @@ $$;
 ALTER FUNCTION "public"."get_guest_job"("p_job_id" "uuid", "p_access_token" "text") OWNER TO "postgres";
 
 --
+-- Name: guest_public_timeline_note(job_status); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."guest_public_timeline_note"("p_status" "public"."job_status") RETURNS "text"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public'
+    AS $$
+  select case p_status::text
+    when 'requested' then 'Booking confirmed.'
+    when 'matching' then 'Finding the best VoltFriq near you.'
+    when 'assigned' then 'A verified VoltFriq has been assigned.'
+    when 'accepted' then 'Your VoltFriq has accepted the booking.'
+    when 'assessment_fee_pending' then 'Assessment payment is ready.'
+    when 'assessment_payment_pending_verification' then 'Payment proof received for review.'
+    when 'assessment_confirmed' then 'Assessment payment confirmed.'
+    when 'en_route' then 'Your VoltFriq is on the way.'
+    when 'on_site' then 'Your VoltFriq is on site.'
+    when 'quoted' then 'Your quote is ready.'
+    when 'quote_accepted' then 'Quote accepted.'
+    when 'work_payment_pending_verification' then 'Work payment proof received for review.'
+    when 'payment_confirmed' then 'Payment confirmed.'
+    when 'work_in_progress' then 'Work is in progress.'
+    when 'electrician_completed' then 'Work marked complete.'
+    when 'customer_confirmed' then 'Completion confirmed.'
+    when 'payout_pending' then 'Final processing is underway.'
+    when 'payout_complete' then 'Job complete.'
+    when 'rated' then 'Job complete.'
+    when 'cancelled' then 'Booking cancelled.'
+    else 'Status updated.'
+  end;
+$$;
+
+
+ALTER FUNCTION "public"."guest_public_timeline_note"("p_status" "public"."job_status") OWNER TO "postgres";
+
+--
 -- Name: guest_job_payload("uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -1403,87 +1472,61 @@ CREATE FUNCTION "public"."guest_job_payload"("p_job_id" "uuid", "p_access_token"
 declare
   payload jsonb;
 begin
-  select jsonb_build_object(
-    'id', j.id,
+  select jsonb_strip_nulls(jsonb_build_object(
     'ticket', j.ticket,
-    'customer_id', j.customer_id,
-    'guest_customer_id', j.guest_customer_id,
-    'assigned_electrician_id', j.assigned_electrician_id,
+    'is_guest', true,
     'service_area', j.service_area,
     'location_label', j.location_label,
-    'latitude', j.latitude,
-    'longitude', j.longitude,
     'issue_category', j.issue_category,
     'urgency', j.urgency,
-    'customer_note', j.customer_note,
-    'requires_assessment', j.requires_assessment,
-    'material_handling', j.material_handling,
     'status', j.status,
-    'current_quote_id', j.current_quote_id,
-    'candidate_queue', j.candidate_queue,
-    'attempted_electrician_ids', j.attempted_electrician_ids,
-    'dispatch_attempts', j.dispatch_attempts,
-    'last_dispatch_at', j.last_dispatch_at,
-    'assignment_expires_at', j.assignment_expires_at,
-    'accepted_at', j.accepted_at,
-    'customer_confirmed_at', j.customer_confirmed_at,
-    'electrician_completed_at', j.electrician_completed_at,
-    'payout_released_at', j.payout_released_at,
     'created_at', j.created_at,
     'updated_at', j.updated_at,
-    'customer', null,
-    'guest_customer', to_jsonb(g),
-    'assigned_electrician', case when e.id is null then null else (
-      to_jsonb(e) ||
-      jsonb_build_object(
-        'profile', to_jsonb(p),
-        'electrician_skills', coalesce((
-          select jsonb_agg(to_jsonb(s))
-          from public.electrician_skills s
-          where s.electrician_id = e.id
-        ), '[]'::jsonb),
-        'electrician_documents', coalesce((
-          select jsonb_agg(to_jsonb(d))
-          from public.electrician_documents d
-          where d.electrician_id = e.id
-        ), '[]'::jsonb)
-      )
+    'assigned_electrician', case when e.id is null then null else jsonb_build_object(
+      'profile', jsonb_build_object(
+        'full_name', coalesce(nullif(p.full_name, ''), 'VoltFriq'),
+        'avatar_url', p.avatar_url
+      ),
+      'average_rating', e.average_rating,
+      'total_ratings', e.total_ratings,
+      'completed_jobs', e.completed_jobs,
+      'level_badge', e.level_badge,
+      'service_areas', e.service_areas
     ) end,
-    'job_photos', coalesce((
-      select jsonb_agg(to_jsonb(photo) order by photo.created_at)
-      from public.job_photos photo
-      where photo.job_id = j.id
+    'job_timeline', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'status', timeline.status,
+        'note', public.guest_public_timeline_note(timeline.status),
+        'created_at', timeline.created_at
+      ) order by timeline.created_at)
+      from public.job_timeline timeline
+      where timeline.job_id = j.id
     ), '[]'::jsonb),
     'job_quotes', coalesce((
-      select jsonb_agg(
-        to_jsonb(q) ||
-        jsonb_build_object(
-          'quote_items', coalesce((
-            select jsonb_agg(to_jsonb(item) order by item.created_at)
-            from public.quote_items item
-            where item.quote_id = q.id
-          ), '[]'::jsonb)
-        )
-        order by q.created_at
-      )
+      select jsonb_agg(jsonb_build_object(
+        'id', q.id,
+        'findings', q.findings,
+        'labor_total', q.labor_total,
+        'material_total', q.material_total,
+        'grand_total', q.grand_total,
+        'created_at', q.created_at
+      ) order by q.created_at)
       from public.job_quotes q
       where q.job_id = j.id
     ), '[]'::jsonb),
     'job_payments', coalesce((
-      select jsonb_agg(to_jsonb(payment) order by payment.created_at)
+      select jsonb_agg(jsonb_build_object(
+        'payment_type', payment.payment_type,
+        'amount', payment.amount,
+        'status', payment.status,
+        'created_at', payment.created_at
+      ) order by payment.created_at)
       from public.job_payments payment
       where payment.job_id = j.id
-    ), '[]'::jsonb),
-    'job_timeline', coalesce((
-      select jsonb_agg(to_jsonb(timeline) order by timeline.created_at)
-      from public.job_timeline timeline
-      where timeline.job_id = j.id
-    ), '[]'::jsonb),
-    'ratings', '[]'::jsonb
-  )
+    ), '[]'::jsonb)
+  ))
   into payload
   from public.jobs j
-  join public.guest_customers g on g.id = j.guest_customer_id
   left join public.electricians e on e.id = j.assigned_electrician_id
   left join public.profiles p on p.id = e.profile_id
   where j.id = p_job_id
@@ -1756,6 +1799,8 @@ ALTER FUNCTION "public"."process_dispatch_queue"() OWNER TO "postgres";
 CREATE TABLE "public"."customers" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "profile_id" "uuid" NOT NULL,
+    "phone" "text",
+    "location_label" "text",
     "primary_service_area" "text",
     "latitude" double precision,
     "longitude" double precision,
@@ -6030,7 +6075,6 @@ GRANT ALL ON FUNCTION "public"."ensure_app_account_for_current_user"() TO "servi
 -- Name: FUNCTION "ensure_profile_for_current_user"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."ensure_profile_for_current_user"() TO "anon";
 GRANT ALL ON FUNCTION "public"."ensure_profile_for_current_user"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."ensure_profile_for_current_user"() TO "service_role";
 
@@ -6165,9 +6209,7 @@ GRANT ALL ON FUNCTION "public"."link_referral_code"("p_referral_code" "text") TO
 -- Name: FUNCTION "process_dispatch_queue"(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."process_dispatch_queue"() TO "anon";
-GRANT ALL ON FUNCTION "public"."process_dispatch_queue"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."process_dispatch_queue"() TO "service_role";
+GRANT EXECUTE ON FUNCTION "public"."process_dispatch_queue"() TO "service_role";
 
 
 --

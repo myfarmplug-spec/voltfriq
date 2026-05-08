@@ -530,6 +530,65 @@
   line-height: 1.45;
 }
 
+.booking-confirmation-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 18px));
+  z-index: 999;
+  width: min(560px, calc(100vw - 28px));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(31, 242, 189, 0.32);
+  background: rgba(4, 19, 25, 0.94);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  transform: translate(-50%, 24px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.booking-confirmation-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.booking-confirmation-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #1ff2bd;
+  background: rgba(31, 242, 189, 0.12);
+}
+
+.booking-confirmation-icon svg {
+  width: 23px;
+  height: 23px;
+}
+
+.booking-confirmation-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.booking-confirmation-copy strong {
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.booking-confirmation-copy small {
+  color: rgba(230, 237, 248, 0.72);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
 .booking-legal-note {
   color: var(--text-tertiary);
   font-size: 12px;

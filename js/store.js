@@ -104,6 +104,9 @@ const Store = (() => {
     authListenersBound: false
   };
 
+  let hydrationPromise = null;
+  let authHydrationTimer = null;
+
   const GUEST_ACCESS_KEY = 'voltfriq_guest_job_access';
   const GUEST_ADDRESSES_KEY = 'voltfriq_guest_saved_addresses';
 
@@ -298,11 +301,56 @@ const Store = (() => {
   }
 
   function normalizeError(error, fallbackMessage) {
+    if (isAuthLockError(error)) {
+      return new Error('Your secure session refreshed. Please try again.');
+    }
+    if (isBookingTimelineProfileError(error)) {
+      return new Error('We are finishing your booking setup. Please try again in a moment.');
+    }
     if (!error) return new Error(fallbackMessage || 'Something went wrong.');
     if (error instanceof Error && error.message) return error;
     if (typeof error === 'string') return new Error(error);
     if (error.message) return new Error(error.message);
     return new Error(fallbackMessage || 'Something went wrong.');
+  }
+
+  function isAuthLockError(error) {
+    const message = String((error && error.message) || error || '').toLowerCase();
+    return message.includes('auth-token') && message.includes('lock') && (
+      message.includes('stole it') || message.includes('navigator lock') || message.includes('released')
+    );
+  }
+
+  function isBookingTimelineProfileError(error) {
+    const message = String((error && error.message) || error || '').toLowerCase();
+    return message.includes('job_timeline')
+      && message.includes('actor_profile_id')
+      && message.includes('foreign key');
+  }
+
+  function wait(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  async function withAuthLockRetry(work) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const result = await work();
+        if (result && result.error && isAuthLockError(result.error)) {
+          lastError = result.error;
+          if (attempt === 2) break;
+          await wait(220 + (attempt * 280));
+          continue;
+        }
+        return result;
+      } catch (error) {
+        lastError = error;
+        if (!isAuthLockError(error) || attempt === 2) break;
+        await wait(220 + (attempt * 280));
+      }
+    }
+    throw lastError;
   }
 
   function isMissingSchemaError(error) {
@@ -386,8 +434,12 @@ const Store = (() => {
 
     if (!state.authListenersBound) {
       state.authListenersBound = true;
-      client.auth.onAuthStateChange(async () => {
-        await hydrateSession();
+      client.auth.onAuthStateChange((_event, session) => {
+        if (authHydrationTimer) window.clearTimeout(authHydrationTimer);
+        authHydrationTimer = window.setTimeout(() => {
+          authHydrationTimer = null;
+          hydrateSession(session).catch(() => {});
+        }, 0);
       });
     }
 
@@ -404,6 +456,26 @@ const Store = (() => {
   }
 
   async function hydrateSession(seed) {
+    if (hydrationPromise) {
+      try {
+        await hydrationPromise;
+      } catch (error) {
+        // A fresh hydration attempt below can recover from transient auth lock races.
+      }
+    }
+
+    const nextHydration = doHydrateSession(seed);
+    hydrationPromise = nextHydration;
+    try {
+      return await nextHydration;
+    } finally {
+      if (hydrationPromise === nextHydration) {
+        hydrationPromise = null;
+      }
+    }
+  }
+
+  async function doHydrateSession(seed) {
     const client = ensureClient();
     if (!client) return null;
 
@@ -421,57 +493,73 @@ const Store = (() => {
     if (seedSession) {
       state.session = seedSession;
     } else {
-      const sessionResult = await client.auth.getSession();
+      const sessionResult = await withAuthLockRetry(() => client.auth.getSession());
       state.session = sessionResult.data.session || null;
     }
-    state.profile = null;
-    state.customer = null;
-    state.electrician = null;
-    state.wallet = null;
+    if (!state.session) {
+      state.profile = null;
+      state.customer = null;
+      state.electrician = null;
+      state.wallet = null;
+      return null;
+    }
 
-    if (!state.session) return null;
-
-    const user = seedUser || (await client.auth.getUser()).data.user;
-    if (!user) return null;
+    const userResult = seedUser ? null : await withAuthLockRetry(() => client.auth.getUser());
+    const user = seedUser || (userResult && userResult.data.user);
+    if (!user) {
+      state.profile = null;
+      state.customer = null;
+      state.electrician = null;
+      state.wallet = null;
+      return null;
+    }
 
     await ensureProfile(user);
 
-    const profileResult = await client
+    const profileResult = await withAuthLockRetry(() => client
       .from('profiles')
       .select('*')
       .eq('id', user.id)
-      .maybeSingle();
+      .maybeSingle());
 
-    state.profile = profileResult.data || null;
+    const nextProfile = profileResult.data || null;
+    let nextCustomer = null;
+    let nextElectrician = null;
+    let nextWallet = null;
 
-    if (state.profile && state.profile.role === 'customer') {
-      await ensureCustomerRecord(state.profile.id);
-      const customerResult = await client
+    if (nextProfile && nextProfile.role === 'customer') {
+      await ensureCustomerRecord(nextProfile.id);
+      const customerResult = await withAuthLockRetry(() => client
         .from('customers')
         .select('*')
-        .eq('profile_id', state.profile.id)
-        .maybeSingle();
-      state.customer = customerResult.data || null;
+        .eq('profile_id', nextProfile.id)
+        .maybeSingle());
+      nextCustomer = customerResult.data || null;
     }
 
-    if (state.profile) {
-      await ensureWalletRecord(state.profile.id);
-      const walletResult = await client
+    if (nextProfile) {
+      await ensureWalletRecord(nextProfile.id);
+      const walletResult = await withAuthLockRetry(() => client
         .from('wallets')
         .select('*')
-        .eq('profile_id', state.profile.id)
-        .maybeSingle();
-      state.wallet = walletResult.data || null;
+        .eq('profile_id', nextProfile.id)
+        .maybeSingle());
+      nextWallet = walletResult.data || null;
     }
 
-    if (state.profile && state.profile.role === 'electrician') {
-      const electricianResult = await client
+    if (nextProfile && nextProfile.role === 'electrician') {
+      const electricianResult = await withAuthLockRetry(() => client
         .from('electricians')
         .select('*, electrician_skills(category), electrician_documents(*), electrician_certifications(*)')
-        .eq('profile_id', state.profile.id)
-        .maybeSingle();
-      state.electrician = electricianResult.data || null;
+        .eq('profile_id', nextProfile.id)
+        .maybeSingle());
+      nextElectrician = electricianResult.data || null;
     }
+
+    state.profile = nextProfile;
+    state.customer = nextCustomer;
+    state.electrician = nextElectrician;
+    state.wallet = nextWallet;
 
     return state.profile;
   }
@@ -643,17 +731,17 @@ const Store = (() => {
     return PAYMENT_STATUS_LABELS[status] || status || 'Unknown';
   }
 
+  function normalizeSignupRole(role) {
+    const value = String(role || '').trim().toLowerCase();
+    if (['electrician', 'voltfriq', 'volt_friq', 'volt-friq'].includes(value)) return 'electrician';
+    return 'customer';
+  }
+
   function getRoleHome(role) {
-    if (role === 'admin') return '/admin.html';
-    if (role === 'electrician') {
-      const electrician = getCurrentElectrician();
-      if (electrician && electrician.status === 'approved') {
-        return '/electrician.html';
-      } else {
-        return '/electrician.html';
-      }
-    }
-    return '/index.html#dashboard';
+    const value = String(role || '').trim().toLowerCase();
+    if (value === 'admin') return '/admin/dashboard';
+    if (['electrician', 'voltfriq', 'volt_friq', 'volt-friq'].includes(value)) return '/electricians/dashboard';
+    return '/dashboard';
   }
 
   function customerSignupRedirectUrl() {
@@ -710,6 +798,7 @@ const Store = (() => {
         emailRedirectTo: customerSignupRedirectUrl(),
         data: {
           requested_role: 'customer',
+          role: 'customer',
           full_name: payload.fullName,
           phone: payload.phone || '',
           primary_service_area: payload.primaryServiceArea || '',
@@ -759,6 +848,7 @@ const Store = (() => {
     const electricianPayload = {
       profile_id: profileId,
       status: 'pending',
+      onboarding_completed: false,
       years_experience: payload.yearsExperience || 0,
       service_areas: payload.serviceAreas || [],
       location_label: payload.locationLabel || payload.baseLocationLabel || payload.base_location_label || null,
@@ -871,6 +961,7 @@ const Store = (() => {
         emailRedirectTo: electricianSignupRedirectUrl(),
         data: {
           requested_role: 'electrician',
+          role: 'electrician',
           full_name: payload.fullName,
           phone: payload.phone || '',
           country: payload.country || 'Nigeria',
@@ -969,12 +1060,12 @@ const Store = (() => {
   async function updateProfile(fields) {
     const client = ensureClient();
     if (!state.profile) throw new Error('No active profile');
-    const result = await client
+    const result = await withAuthLockRetry(() => client
       .from('profiles')
       .update(fields)
       .eq('id', state.profile.id)
       .select('*')
-      .single();
+      .single());
     if (result.error) throw normalizeError(result.error, 'Profile update failed.');
     state.profile = result.data;
     return state.profile;
@@ -984,14 +1075,15 @@ const Store = (() => {
     const client = ensureClient();
     const profilePayload = {
       id: user.id,
-      role: (user.user_metadata && user.user_metadata.requested_role) || 'customer',
+      email: user.email || '',
+      role: normalizeSignupRole(user.user_metadata && (user.user_metadata.requested_role || user.user_metadata.role)),
       full_name: (user.user_metadata && user.user_metadata.full_name) || user.email || '',
       phone: (user.user_metadata && user.user_metadata.phone) || null
     };
 
-    let result = await client.rpc('ensure_app_account_for_current_user');
+    let result = await withAuthLockRetry(() => client.rpc('ensure_app_account_for_current_user'));
     if (result.error && isMissingSchemaError(result.error)) {
-      result = await client.rpc('ensure_profile_for_current_user');
+      result = await withAuthLockRetry(() => client.rpc('ensure_profile_for_current_user'));
     }
     if (result.error) throw normalizeError(result.error, 'Could not load your profile.');
     return result.data || profilePayload;
@@ -999,18 +1091,18 @@ const Store = (() => {
 
   async function ensureCustomerRecord(profileId) {
     const client = ensureClient();
-    const check = await client
+    const check = await withAuthLockRetry(() => client
       .from('customers')
       .select('id')
       .eq('profile_id', profileId)
-      .maybeSingle();
+      .maybeSingle());
     if (check.error) throw normalizeError(check.error, 'Could not load your customer account.');
     if (check.data) return check.data;
-    const created = await client
+    const created = await withAuthLockRetry(() => client
       .from('customers')
       .insert({ profile_id: profileId })
       .select('id')
-      .single();
+      .single());
     if (created.error) throw normalizeError(created.error, 'Could not create your customer account.');
     return created.data;
   }
@@ -1056,10 +1148,10 @@ const Store = (() => {
     const bucket = (config().storageBuckets && config().storageBuckets[bucketKey]) || STORAGE_PATHS[bucketKey] || bucketKey;
     const ext = file.name && file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
     const filePath = prefix + '-' + Date.now() + ext;
-    const uploadResult = await client.storage.from(bucket).upload(filePath, file, {
+    const uploadResult = await withAuthLockRetry(() => client.storage.from(bucket).upload(filePath, file, {
       cacheControl: '3600',
       upsert: false
-    });
+    }));
     if (uploadResult.error) throw normalizeError(uploadResult.error, 'File upload failed.');
     return uploadResult.data.path;
   }
@@ -1221,7 +1313,7 @@ const Store = (() => {
     for (let index = 0; index < (input.photos || []).length; index += 1) {
       photoPaths.push(await uploadFile('jobPhotos', input.photos[index], 'job-photos/' + state.profile.id + '/' + index));
     }
-    const result = await client.rpc('create_customer_job', {
+    const result = await withAuthLockRetry(() => client.rpc('create_customer_job', {
       p_service_area: input.serviceArea,
       p_location_label: input.locationLabel || input.serviceArea,
       p_latitude: input.latitude || null,
@@ -1232,7 +1324,7 @@ const Store = (() => {
       p_requires_assessment: !!input.requiresAssessment,
       p_material_handling: input.materialHandling || 'voltfriq_supplied',
       p_photo_paths: photoPaths
-    });
+    }));
     if (result.error) throw normalizeError(result.error, 'Could not create the booking.');
     if (!result.data || !result.data.id) {
       throw new Error('Booking was created, but tracking details were not returned.');
@@ -1249,7 +1341,7 @@ const Store = (() => {
     for (let index = 0; index < (input.photos || []).length; index += 1) {
       photoPaths.push(await uploadFile('jobPhotos', input.photos[index], 'guest/' + uploadId + '/' + index));
     }
-    const result = await client.rpc('create_guest_customer_job', {
+    const result = await withAuthLockRetry(() => client.rpc('create_guest_customer_job', {
       p_phone: phone,
       p_service_area: input.serviceArea,
       p_location_label: input.locationLabel || input.serviceArea,
@@ -1261,7 +1353,7 @@ const Store = (() => {
       p_requires_assessment: !!input.requiresAssessment,
       p_material_handling: input.materialHandling || 'voltfriq_supplied',
       p_photo_paths: photoPaths
-    });
+    }));
     if (result.error) throw normalizeError(result.error, 'Could not create the guest booking.');
     const payload = result.data || {};
     const jobRow = payload.job || payload;
