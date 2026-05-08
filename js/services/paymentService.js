@@ -31,6 +31,7 @@
       proofPath = await uploadFile('paymentProofs', payload.file, prefix);
     }
     if (!state.profile && guest && guest.jobId === jobId) {
+      const actionToken = await issueGuestActionToken(jobId, 'payment_proof', payload.phoneConfirmation || '');
       const guestResult = await client.rpc('submit_guest_payment_proof', {
         p_job_id: jobId,
         p_access_token: guest.accessToken,
@@ -38,7 +39,8 @@
         p_amount: payload.amount || 0,
         p_reference: payload.reference || '',
         p_proof_path: proofPath,
-        p_phone_confirmation: payload.phoneConfirmation || ''
+        p_phone_confirmation: null,
+        p_action_token: actionToken
       });
       if (guestResult.error) throw normalizeError(guestResult.error, 'Could not submit payment proof.');
       return guestResult.data;

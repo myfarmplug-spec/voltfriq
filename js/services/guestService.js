@@ -49,6 +49,59 @@
     return hydrateProtectedAssets(normalizeJob(row));
   }
 
+  async function issueGuestActionToken(jobId, actionType, phoneConfirmation) {
+    const client = ensureClient();
+    const guest = getGuestAccess();
+    if (!guest || guest.jobId !== jobId || !guest.accessToken) {
+      throw new Error('Open this booking from its tracking link before continuing.');
+    }
+    const result = await client.rpc('issue_guest_action_token', {
+      p_job_id: jobId,
+      p_access_token: guest.accessToken,
+      p_action_type: actionType,
+      p_phone_confirmation: phoneConfirmation || ''
+    });
+    if (result.error) throw normalizeError(result.error, 'Could not confirm this guest action.');
+    const payload = result.data || {};
+    const token = payload.action_token || payload.actionToken;
+    if (!token) throw new Error('Could not confirm this guest action.');
+    return token;
+  }
+
+  async function requestGuestOtp(jobId, actionType, phoneConfirmation, clientFingerprint) {
+    const client = ensureClient();
+    const guest = getGuestAccess();
+    if (!guest || guest.jobId !== jobId || !guest.accessToken) {
+      throw new Error('Open this booking from its tracking link before continuing.');
+    }
+    const result = await client.rpc('request_guest_otp', {
+      p_job_id: jobId,
+      p_access_token: guest.accessToken,
+      p_action_type: actionType,
+      p_phone_confirmation: phoneConfirmation || '',
+      p_client_fingerprint: clientFingerprint || getGuestDeviceId()
+    });
+    if (result.error) throw normalizeError(result.error, 'Could not request a guest OTP.');
+    return result.data || {};
+  }
+
+  async function verifyGuestOtp(jobId, actionType, challengeId, otpCode) {
+    const client = ensureClient();
+    const guest = getGuestAccess();
+    if (!guest || guest.jobId !== jobId || !guest.accessToken) {
+      throw new Error('Open this booking from its tracking link before continuing.');
+    }
+    const result = await client.rpc('verify_guest_otp', {
+      p_job_id: jobId,
+      p_access_token: guest.accessToken,
+      p_action_type: actionType,
+      p_challenge_id: challengeId,
+      p_otp_code: otpCode || ''
+    });
+    if (result.error) throw normalizeError(result.error, 'Could not verify the guest OTP.');
+    return result.data || {};
+  }
+
   async function uploadGuestJobPhotos(jobId, files) {
     const guest = getGuestAccess();
     const selectedFiles = Array.from(files || []);
@@ -116,12 +169,24 @@
     const client = ensureClient();
     const guest = getGuestAccess();
     if (!state.profile && guest && guest.jobId === jobId) {
+      const safeMetadata = Object.assign({}, metadata || {});
+      const actionType = nextStatus === 'cancelled'
+        ? 'cancel_job'
+        : nextStatus === 'customer_confirmed'
+          ? 'customer_confirmed'
+          : '';
+      const actionToken = actionType
+        ? await issueGuestActionToken(jobId, actionType, safeMetadata.phone_confirmation || safeMetadata.phoneConfirmation || '')
+        : null;
+      delete safeMetadata.phone_confirmation;
+      delete safeMetadata.phoneConfirmation;
       const guestResult = await client.rpc('update_guest_job_status', {
         p_job_id: jobId,
         p_access_token: guest.accessToken,
         p_next_status: nextStatus,
         p_note: note || null,
-        p_metadata: metadata || {}
+        p_metadata: safeMetadata,
+        p_action_token: actionToken
       });
       if (guestResult.error) throw normalizeError(guestResult.error, 'Could not update the job status.');
       return getGuestJob(jobId, guest.accessToken);

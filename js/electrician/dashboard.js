@@ -36,7 +36,7 @@
 	    document.getElementById('stat-rating').textContent = electrician.average_rating
 	      ? Number(electrician.average_rating).toFixed(1) + '/5'
 	      : '--';
-	    document.getElementById('stat-payouts').textContent = responseScore ? responseScore + '%' : '--';
+	    document.getElementById('stat-payouts').textContent = pendingPayout ? 'Ready' : 'Clear';
 	    renderTrustPanel(electrician, {
 	      nearbyRequests,
 	      acceptedJobs,

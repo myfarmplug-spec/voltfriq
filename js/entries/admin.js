@@ -1,6 +1,6 @@
 import { bootstrapRuntime } from './runtime.js';
 
 await bootstrapRuntime();
-window.Store = (await import('virtual:voltfriq-store')).default;
-await import('virtual:voltfriq-admin');
+window.Store = (await import('../services/index.js')).default;
+await import('../admin/index.js');
 await import('../sw-register.js');

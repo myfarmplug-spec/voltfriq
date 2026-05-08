@@ -5,7 +5,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict wmDyYGtbM8qzmAWk8INZXcPRAqVPFnpPpJ6CHS2Sm9iH7f1gQc1OUgbyAGFma89
+\restrict qjhzAxmfFTzHkYQG3ubwu3Xll8N5WulqSnLwNzaVuwOdXduzct41s7ZBqJndl7J
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.3
@@ -202,6 +202,112 @@ $$;
 ALTER FUNCTION "public"."actor_role_for_profile"("p_profile_id" "uuid") OWNER TO "postgres";
 
 --
+-- Name: admin_operational_queues(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."admin_operational_queues"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  payload jsonb;
+begin
+  if not (public.is_admin() or auth.role() = 'service_role') then
+    raise exception 'Admin access required';
+  end if;
+
+  perform public.refresh_operational_alerts();
+
+  select jsonb_build_object(
+    'pending_payments', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', p.id,
+        'job_id', p.job_id,
+        'ticket', j.ticket,
+        'payment_type', p.payment_type,
+        'amount', p.amount,
+        'created_at', p.created_at,
+        'age_seconds', extract(epoch from (now() - p.created_at))
+      ) order by p.created_at asc)
+      from public.job_payments p
+      join public.jobs j on j.id = p.job_id
+      where p.status = 'submitted'
+    ), '[]'::jsonb),
+    'pending_electricians', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', e.id,
+        'profile_id', e.profile_id,
+        'display_name', coalesce(nullif(p.full_name, ''), p.email, 'VoltFriq applicant'),
+        'created_at', e.created_at,
+        'service_areas', e.service_areas,
+        'onboarding_completed', e.onboarding_completed
+      ) order by e.created_at asc)
+      from public.electricians e
+      join public.profiles p on p.id = e.profile_id
+      where e.status = 'pending'
+    ), '[]'::jsonb),
+    'stuck_jobs', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'job_id', s.job_id,
+        'ticket', j.ticket,
+        'status', j.status,
+        'stuck_type', s.stuck_type,
+        'severity', s.severity,
+        'reason', s.reason,
+        'stuck_since', s.stuck_since
+      ) order by s.stuck_since asc)
+      from public.detect_stuck_jobs() s
+      join public.jobs j on j.id = s.job_id
+    ), '[]'::jsonb),
+    'open_disputes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', d.id,
+        'job_id', d.job_id,
+        'ticket', j.ticket,
+        'issue_type', d.issue_type,
+        'created_at', d.created_at
+      ) order by d.created_at asc)
+      from public.disputes d
+      left join public.jobs j on j.id = d.job_id
+      where d.status = 'open'
+    ), '[]'::jsonb),
+    'expired_assignments', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'job_id', j.id,
+        'ticket', j.ticket,
+        'assigned_electrician_id', j.assigned_electrician_id,
+        'assignment_expires_at', j.assignment_expires_at
+      ) order by j.assignment_expires_at asc)
+      from public.jobs j
+      where j.status = 'assigned'
+        and j.assignment_expires_at is not null
+        and j.assignment_expires_at <= now()
+    ), '[]'::jsonb),
+    'alerts', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', a.id,
+        'alert_type', a.alert_type,
+        'severity', a.severity,
+        'job_id', a.job_id,
+        'electrician_id', a.electrician_id,
+        'payment_id', a.payment_id,
+        'dispute_id', a.dispute_id,
+        'message', a.message,
+        'last_seen_at', a.last_seen_at
+      ) order by case a.severity when 'critical' then 0 when 'warning' then 1 else 2 end, a.last_seen_at asc)
+      from public.operational_alerts a
+      where a.status = 'open'
+    ), '[]'::jsonb)
+  ) into payload;
+
+  return payload;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."admin_operational_queues"() OWNER TO "postgres";
+
+--
 -- Name: admin_operational_summary(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -216,6 +322,8 @@ begin
     raise exception 'Admin access required';
   end if;
 
+  perform public.refresh_operational_alerts();
+
   with queue_counts as (
     select
       (select count(*) from public.job_payments where status = 'submitted') as pending_payments,
@@ -228,23 +336,13 @@ begin
           and assignment_expires_at is not null
           and assignment_expires_at <= now()
       ) as expired_assignments,
+      (select count(*) from public.detect_stuck_jobs()) as stuck_jobs,
       (
         select count(*)
-        from public.jobs
-        where (
-          status = 'matching'
-          and coalesce(last_dispatch_at, updated_at, created_at) < now() - interval '5 minutes'
-        ) or (
-          status = 'assigned'
-          and coalesce(assignment_expires_at, last_dispatch_at + interval '5 minutes', updated_at + interval '5 minutes') <= now()
-        ) or (
-          status in ('assessment_payment_pending_verification', 'work_payment_pending_verification')
-          and updated_at < now() - interval '30 minutes'
-        ) or (
-          status = 'electrician_completed'
-          and coalesce(electrician_completed_at, updated_at) < now() - interval '24 hours'
-        )
-      ) as stuck_jobs
+        from public.operational_alerts
+        where status = 'open'
+          and severity = 'critical'
+      ) as critical_alerts
   ),
   created_events as (
     select job_id, min(created_at) as created_at
@@ -312,7 +410,8 @@ begin
       'pending_electricians', coalesce(q.pending_electricians, 0),
       'stuck_pairing_jobs', coalesce(q.stuck_jobs, 0),
       'open_disputes', coalesce(q.open_disputes, 0),
-      'expired_assignments', coalesce(q.expired_assignments, 0)
+      'expired_assignments', coalesce(q.expired_assignments, 0),
+      'critical_alerts', coalesce(q.critical_alerts, 0)
     ),
     'metrics', jsonb_build_object(
       'average_time_to_assign_seconds', coalesce(round(m.avg_time_to_assign_seconds::numeric, 1), 0),
@@ -579,6 +678,39 @@ $$;
 
 
 ALTER FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) OWNER TO "postgres";
+
+--
+-- Name: consume_guest_action_token("uuid", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."consume_guest_action_token"("p_job_id" "uuid", "p_action_type" "text", "p_action_token" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  affected_count integer;
+begin
+  if nullif(btrim(coalesce(p_action_token, '')), '') is null then
+    raise exception 'Confirm this action before continuing.';
+  end if;
+
+  update public.guest_action_tokens
+  set consumed_at = now()
+  where job_id = p_job_id
+    and action_type = p_action_type
+    and token_hash = md5('voltfriq-action:' || p_action_token)
+    and consumed_at is null
+    and expires_at > now();
+
+  get diagnostics affected_count = row_count;
+  if affected_count <> 1 then
+    raise exception 'Confirm this action before continuing.';
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."consume_guest_action_token"("p_job_id" "uuid", "p_action_type" "text", "p_action_token" "text") OWNER TO "postgres";
 
 --
 -- Name: jobs; Type: TABLE; Schema: public; Owner: postgres
@@ -904,16 +1036,15 @@ $$;
 ALTER FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[], "p_client_fingerprint" "text") OWNER TO "postgres";
 
 --
--- Name: create_guest_dispute("uuid", "text", "text", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: create_guest_dispute("uuid", "text", "text", "text", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text" DEFAULT NULL::"text", "p_phone_confirmation" "text" DEFAULT NULL::"text") RETURNS "public"."disputes"
+CREATE FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text" DEFAULT NULL::"text", "p_phone_confirmation" "text" DEFAULT NULL::"text", "p_action_token" "text" DEFAULT NULL::"text") RETURNS "public"."disputes"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 declare
   job_row public.jobs;
-  guest_phone text;
   dispute_row public.disputes;
   admin_profile uuid;
 begin
@@ -932,13 +1063,7 @@ begin
     raise exception 'This guest action link has expired. Contact VoltFriq support to continue.';
   end if;
 
-  select phone into guest_phone
-  from public.guest_customers
-  where id = job_row.guest_customer_id;
-
-  if right(regexp_replace(coalesce(guest_phone, ''), '\D', '', 'g'), 4) <> right(regexp_replace(coalesce(p_phone_confirmation, ''), '\D', '', 'g'), 4) then
-    raise exception 'Confirm the phone number used for this booking.';
-  end if;
+  perform public.consume_guest_action_token(p_job_id, 'dispute', p_action_token);
 
   insert into public.disputes (job_id, customer_id, guest_customer_id, electrician_id, issue_type, details)
   values (p_job_id, null, job_row.guest_customer_id, job_row.assigned_electrician_id, p_issue_type, p_details)
@@ -964,7 +1089,7 @@ end;
 $$;
 
 
-ALTER FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") OWNER TO "postgres";
 
 --
 -- Name: create_notification("uuid", "uuid", "public"."notification_event", "text", "text", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -1016,6 +1141,55 @@ $$;
 ALTER FUNCTION "public"."current_electrician_id"() OWNER TO "postgres";
 
 --
+-- Name: detect_stuck_jobs(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."detect_stuck_jobs"() RETURNS TABLE("job_id" "uuid", "stuck_type" "text", "severity" "text", "reason" "text", "stuck_since" timestamp with time zone)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select
+    j.id,
+    case
+      when j.status = 'assigned' and j.assignment_expires_at is not null and j.assignment_expires_at <= now() then 'expired_assignment'
+      when j.status = 'matching' and coalesce(j.last_dispatch_at, j.updated_at, j.created_at) < now() - interval '5 minutes' then 'stuck_pairing'
+      when j.status in ('assessment_payment_pending_verification', 'work_payment_pending_verification') and j.updated_at < now() - interval '30 minutes' then 'payment_delay'
+      when j.status = 'electrician_completed' and coalesce(j.electrician_completed_at, j.updated_at) < now() - interval '24 hours' then 'customer_confirmation_delay'
+      else null
+    end as stuck_type,
+    case
+      when j.status = 'assigned' and j.assignment_expires_at is not null and j.assignment_expires_at <= now() then 'critical'
+      when j.status in ('assessment_payment_pending_verification', 'work_payment_pending_verification') and j.updated_at < now() - interval '2 hours' then 'critical'
+      else 'warning'
+    end as severity,
+    case
+      when j.status = 'assigned' and j.assignment_expires_at is not null and j.assignment_expires_at <= now() then 'Assignment expired before VoltFriq acceptance.'
+      when j.status = 'matching' and coalesce(j.last_dispatch_at, j.updated_at, j.created_at) < now() - interval '5 minutes' then 'Pairing has exceeded the operational target.'
+      when j.status in ('assessment_payment_pending_verification', 'work_payment_pending_verification') and j.updated_at < now() - interval '30 minutes' then 'Payment proof is waiting for verification beyond target.'
+      when j.status = 'electrician_completed' and coalesce(j.electrician_completed_at, j.updated_at) < now() - interval '24 hours' then 'Customer completion confirmation is overdue.'
+      else null
+    end as reason,
+    case
+      when j.status = 'assigned' then j.assignment_expires_at
+      when j.status = 'matching' then coalesce(j.last_dispatch_at, j.updated_at, j.created_at)
+      when j.status in ('assessment_payment_pending_verification', 'work_payment_pending_verification') then j.updated_at
+      when j.status = 'electrician_completed' then coalesce(j.electrician_completed_at, j.updated_at)
+      else j.updated_at
+    end as stuck_since
+  from public.jobs j
+  where j.status <> 'cancelled'
+    and (
+      (j.status = 'assigned' and j.assignment_expires_at is not null and j.assignment_expires_at <= now())
+      or (j.status = 'matching' and coalesce(j.last_dispatch_at, j.updated_at, j.created_at) < now() - interval '5 minutes')
+      or (j.status in ('assessment_payment_pending_verification', 'work_payment_pending_verification') and j.updated_at < now() - interval '30 minutes')
+      or (j.status = 'electrician_completed' and coalesce(j.electrician_completed_at, j.updated_at) < now() - interval '24 hours')
+    )
+$$;
+
+
+ALTER FUNCTION "public"."detect_stuck_jobs"() OWNER TO "postgres";
+
+--
 -- Name: dispatch_job("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -1052,7 +1226,28 @@ declare
   admin_profile uuid;
   actor_profile_id uuid;
   job_row public.jobs;
+  lock_acquired boolean;
 begin
+  lock_acquired := pg_try_advisory_xact_lock(hashtext(p_job_id::text));
+  if not lock_acquired then
+    select * into job_row from public.jobs where id = p_job_id;
+    if found then
+      perform public.upsert_operational_alert(
+        'dispatch_conflict',
+        'warning',
+        'Dispatch already running for this job.',
+        p_job_id,
+        null,
+        null,
+        null,
+        null,
+        jsonb_build_object('manual_electrician_id', p_manual_electrician_id)
+      );
+      return job_row;
+    end if;
+    raise exception 'Job not found';
+  end if;
+
   select * into job_row from public.jobs where id = p_job_id for update;
   if not found then
     raise exception 'Job not found';
@@ -1068,6 +1263,17 @@ begin
     if p_manual_electrician_id is null or p_manual_electrician_id = job_row.assigned_electrician_id then
       return job_row;
     end if;
+    perform public.upsert_operational_alert(
+      'dispatch_conflict',
+      'critical',
+      'Admin reassignment conflicted with an active assignment.',
+      p_job_id,
+      p_manual_electrician_id,
+      null,
+      null,
+      null,
+      jsonb_build_object('active_electrician_id', job_row.assigned_electrician_id, 'assignment_expires_at', job_row.assignment_expires_at)
+    );
     raise exception 'This job already has an active assignment. Wait for expiry, rejection, or cancel before overriding.';
   end if;
 
@@ -1122,6 +1328,17 @@ begin
 
     select id into admin_profile from public.profiles where role = 'admin' order by created_at asc limit 1;
     perform public.append_job_timeline(p_job_id, 'matching', 'No electrician available yet. Manual assignment required.', actor_profile_id);
+    perform public.upsert_operational_alert(
+      'stuck_pairing',
+      'critical',
+      'No approved available VoltFriq accepted this job. Admin follow-up is needed.',
+      p_job_id,
+      null,
+      null,
+      null,
+      null,
+      jsonb_build_object('dispatch_attempts', job_row.dispatch_attempts)
+    );
     if admin_profile is not null then
       perform public.create_notification(admin_profile, p_job_id, 'job_stuck', 'Manual assignment required', 'No approved available VoltFriq accepted this job. Admin follow-up is needed.', '{}'::jsonb);
     end if;
@@ -1894,6 +2111,77 @@ $$;
 ALTER FUNCTION "public"."is_admin"() OWNER TO "postgres";
 
 --
+-- Name: issue_guest_action_token("uuid", "text", "text", "text", "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid" DEFAULT NULL::"uuid", "p_otp_code" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  job_row public.jobs;
+  guest_phone text;
+  expected_last4 text;
+  provided_last4 text;
+  raw_token text;
+  token_expires_at timestamptz;
+begin
+  if p_action_type not in ('cancel_job', 'payment_proof', 'dispute', 'customer_confirmed') then
+    raise exception 'Unsupported guest action';
+  end if;
+
+  select * into job_row
+  from public.jobs
+  where id = p_job_id
+    and customer_access_token = p_access_token
+    and guest_customer_id is not null
+  for update;
+
+  if not found then
+    raise exception 'Guest job not found';
+  end if;
+
+  if job_row.created_at < now() - interval '30 days' then
+    raise exception 'This guest action link has expired. Contact VoltFriq support to continue.';
+  end if;
+
+  if p_otp_challenge_id is not null or nullif(btrim(coalesce(p_otp_code, '')), '') is not null then
+    perform public.verify_guest_otp(p_job_id, p_access_token, p_action_type, p_otp_challenge_id, p_otp_code);
+    update public.guest_otps
+    set consumed_at = now()
+    where id = p_otp_challenge_id
+      and job_id = p_job_id
+      and action_type = p_action_type;
+  else
+    select phone into guest_phone
+    from public.guest_customers
+    where id = job_row.guest_customer_id;
+
+    expected_last4 := right(regexp_replace(coalesce(guest_phone, ''), '\D', '', 'g'), 4);
+    provided_last4 := right(regexp_replace(coalesce(p_phone_confirmation, ''), '\D', '', 'g'), 4);
+
+    if expected_last4 = '' or expected_last4 <> provided_last4 then
+      raise exception 'Confirm the phone number used for this booking.';
+    end if;
+  end if;
+
+  raw_token := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+  token_expires_at := now() + interval '10 minutes';
+
+  insert into public.guest_action_tokens (job_id, action_type, token_hash, expires_at)
+  values (p_job_id, p_action_type, md5('voltfriq-action:' || raw_token), token_expires_at);
+
+  return jsonb_build_object(
+    'action_token', raw_token,
+    'expires_at', token_expires_at
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") OWNER TO "postgres";
+
+--
 -- Name: job_event_type_for_status("public"."job_status"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -2037,6 +2325,11 @@ declare
   event_id uuid;
   job_status_value public.job_status;
   event_public_message text;
+  metadata_value jsonb := coalesce(p_metadata, '{}'::jsonb);
+  idempotency text := nullif(btrim(coalesce(p_metadata->>'idempotency_key', '')), '');
+  severity_value text := coalesce(nullif(btrim(coalesce(p_metadata->>'severity', '')), ''), 'info');
+  visibility_value text := coalesce(nullif(btrim(coalesce(p_metadata->>'visibility', '')), ''), 'public');
+  source_value text := coalesce(nullif(btrim(coalesce(p_metadata->>'source', '')), ''), 'app');
 begin
   select status into job_status_value
   from public.jobs
@@ -2046,10 +2339,20 @@ begin
     raise exception 'Job not found';
   end if;
 
+  if idempotency is not null then
+    select id into event_id from public.job_events where idempotency_key = idempotency;
+    if event_id is not null then
+      return event_id;
+    end if;
+  end if;
+
   event_public_message := coalesce(
     nullif(btrim(p_public_message), ''),
     public.public_message_for_job_event(p_event_type, job_status_value, p_internal_note)
   );
+  event_public_message := public.public_message_for_job_event(p_event_type, job_status_value, event_public_message);
+
+  metadata_value := metadata_value - 'idempotency_key' - 'severity' - 'visibility' - 'source';
 
   insert into public.job_events (
     job_id,
@@ -2058,7 +2361,11 @@ begin
     actor_id,
     public_message,
     internal_note,
-    metadata
+    metadata,
+    idempotency_key,
+    severity,
+    visibility,
+    source
   )
   values (
     p_job_id,
@@ -2067,16 +2374,41 @@ begin
     p_actor_id,
     event_public_message,
     nullif(btrim(p_internal_note), ''),
-    coalesce(p_metadata, '{}'::jsonb)
+    metadata_value,
+    idempotency,
+    case when severity_value in ('info', 'warning', 'critical') then severity_value else 'info' end,
+    case when visibility_value in ('public', 'internal') then visibility_value else 'public' end,
+    source_value
   )
   returning id into event_id;
 
   return event_id;
+exception
+  when unique_violation then
+    if idempotency is not null then
+      select id into event_id from public.job_events where idempotency_key = idempotency;
+      return event_id;
+    end if;
+    raise;
 end;
 $$;
 
 
 ALTER FUNCTION "public"."log_job_event"("p_job_id" "uuid", "p_event_type" "text", "p_actor_role" "text", "p_actor_id" "uuid", "p_public_message" "text", "p_internal_note" "text", "p_metadata" "jsonb") OWNER TO "postgres";
+
+--
+-- Name: operational_alert_dedupe_key("text", "uuid", "uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."operational_alert_dedupe_key"("p_alert_type" "text", "p_job_id" "uuid" DEFAULT NULL::"uuid", "p_electrician_id" "uuid" DEFAULT NULL::"uuid", "p_payment_id" "uuid" DEFAULT NULL::"uuid", "p_dispute_id" "uuid" DEFAULT NULL::"uuid") RETURNS "text"
+    LANGUAGE "sql" STABLE
+    AS $$
+  select p_alert_type || ':' ||
+    coalesce(p_job_id::text, p_electrician_id::text, p_payment_id::text, p_dispute_id::text, 'global')
+$$;
+
+
+ALTER FUNCTION "public"."operational_alert_dedupe_key"("p_alert_type" "text", "p_job_id" "uuid", "p_electrician_id" "uuid", "p_payment_id" "uuid", "p_dispute_id" "uuid") OWNER TO "postgres";
 
 --
 -- Name: process_dispatch_queue(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -2091,6 +2423,8 @@ declare
   matching_job record;
   processed_count integer := 0;
 begin
+  perform public.refresh_operational_alerts();
+
   for expired_job in
     select id, assigned_electrician_id
     from public.jobs
@@ -2115,7 +2449,12 @@ begin
       auth.uid(),
       'Still finding a verified VoltFriq near you.',
       'Assigned VoltFriq did not respond within 5 minutes. Re-dispatch started.',
-      jsonb_build_object('electrician_id', expired_job.assigned_electrician_id)
+      jsonb_build_object(
+        'electrician_id', expired_job.assigned_electrician_id,
+        'idempotency_key', 'assignment-expired:' || expired_job.id::text || ':' || coalesce(expired_job.assigned_electrician_id::text, 'none'),
+        'severity', 'warning',
+        'source', 'dispatch_queue'
+      )
     );
     perform public.append_job_timeline(expired_job.id, 'matching', 'Assigned VoltFriq did not respond within 5 minutes. Re-dispatch started.', auth.uid());
     perform public.dispatch_job_internal(expired_job.id, null);
@@ -2127,13 +2466,17 @@ begin
     from public.jobs
     where status = 'matching'
       and assigned_electrician_id is null
-      and coalesce(array_length(candidate_queue, 1), 0) > 0
+      and (
+        coalesce(array_length(candidate_queue, 1), 0) > 0
+        or coalesce(last_dispatch_at, updated_at, created_at) < now() - interval '5 minutes'
+      )
     for update skip locked
   loop
     perform public.dispatch_job_internal(matching_job.id, null);
     processed_count := processed_count + 1;
   end loop;
 
+  perform public.refresh_operational_alerts();
   return processed_count;
 end;
 $$;
@@ -2297,6 +2640,101 @@ $$;
 ALTER FUNCTION "public"."refresh_customer_trust_metrics"("p_customer_id" "uuid") OWNER TO "postgres";
 
 --
+-- Name: electrician_performance_snapshots; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE "public"."electrician_performance_snapshots" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "electrician_id" "uuid" NOT NULL,
+    "response_rate" numeric(5,2) DEFAULT 0 NOT NULL,
+    "acceptance_rate" numeric(5,2) DEFAULT 0 NOT NULL,
+    "rejection_rate" numeric(5,2) DEFAULT 0 NOT NULL,
+    "average_accept_seconds" numeric(12,2) DEFAULT 0 NOT NULL,
+    "completed_jobs" integer DEFAULT 0 NOT NULL,
+    "average_rating" numeric(3,2) DEFAULT 0 NOT NULL,
+    "negative_rating_count" integer DEFAULT 0 NOT NULL,
+    "score" numeric(6,2) DEFAULT 0 NOT NULL,
+    "snapshot_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL
+);
+
+
+ALTER TABLE "public"."electrician_performance_snapshots" OWNER TO "postgres";
+
+--
+-- Name: refresh_electrician_performance_snapshot("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."refresh_electrician_performance_snapshot"("p_electrician_id" "uuid") RETURNS "public"."electrician_performance_snapshots"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  snapshot_row public.electrician_performance_snapshots;
+begin
+  if not (public.is_admin() or auth.role() = 'service_role') then
+    raise exception 'Admin access required';
+  end if;
+
+  insert into public.electrician_performance_snapshots (
+    electrician_id,
+    response_rate,
+    acceptance_rate,
+    rejection_rate,
+    average_accept_seconds,
+    completed_jobs,
+    average_rating,
+    negative_rating_count,
+    score,
+    metadata
+  )
+  select
+    e.id,
+    coalesce(e.response_rate, 0),
+    case when count(ev_assign.id) = 0 then 0 else round((count(ev_accept.id)::numeric / count(ev_assign.id)::numeric) * 100, 2) end,
+    case when count(ev_assign.id) = 0 then 0 else round((count(ev_reject.id)::numeric / count(ev_assign.id)::numeric) * 100, 2) end,
+    coalesce(round(avg(extract(epoch from (ev_accept.created_at - ev_assign.created_at)))::numeric, 2), 0),
+    coalesce(e.completed_jobs, 0),
+    coalesce(e.average_rating, 0),
+    coalesce(e.negative_rating_count, 0),
+    round((
+      coalesce(e.response_rate, 0) * 0.35
+      + coalesce(e.average_rating, 0) * 20 * 0.35
+      + least(coalesce(e.completed_jobs, 0), 100) * 0.2
+      - coalesce(e.negative_rating_count, 0) * 5
+    )::numeric, 2),
+    jsonb_build_object('level_badge', e.level_badge, 'watchlist', e.watchlist)
+  from public.electricians e
+  left join public.jobs j on j.assigned_electrician_id = e.id
+  left join public.job_events ev_assign on ev_assign.job_id = j.id and ev_assign.event_type = 'ELECTRICIAN_ASSIGNED'
+  left join public.job_events ev_accept on ev_accept.job_id = j.id and ev_accept.event_type = 'ASSIGNMENT_ACCEPTED'
+  left join public.job_events ev_reject on ev_reject.job_id = j.id and ev_reject.event_type = 'ASSIGNMENT_REJECTED'
+  where e.id = p_electrician_id
+  group by e.id
+  returning * into snapshot_row;
+
+  if snapshot_row.score < 45 then
+    perform public.upsert_operational_alert(
+      'electrician_performance',
+      'warning',
+      'VoltFriq performance score needs review.',
+      null,
+      p_electrician_id,
+      null,
+      null,
+      null,
+      jsonb_build_object('score', snapshot_row.score)
+    );
+  end if;
+
+  return snapshot_row;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."refresh_electrician_performance_snapshot"("p_electrician_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: refresh_electrician_trust_metrics("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -2433,6 +2871,193 @@ $$;
 
 
 ALTER FUNCTION "public"."refresh_electrician_trust_metrics"("p_electrician_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: refresh_operational_alerts(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."refresh_operational_alerts"() RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  item record;
+  count_alerts integer := 0;
+begin
+  for item in select * from public.detect_stuck_jobs() loop
+    perform public.upsert_operational_alert(
+      item.stuck_type,
+      item.severity,
+      item.reason,
+      item.job_id,
+      null,
+      null,
+      null,
+      null,
+      jsonb_build_object('stuck_since', item.stuck_since)
+    );
+    count_alerts := count_alerts + 1;
+  end loop;
+
+  for item in
+    select p.id as payment_id, p.job_id, p.created_at
+    from public.job_payments p
+    where p.status = 'submitted'
+      and p.created_at < now() - interval '30 minutes'
+  loop
+    perform public.upsert_operational_alert(
+      'pending_payment',
+      case when item.created_at < now() - interval '2 hours' then 'critical' else 'warning' end,
+      'Payment proof is waiting for admin verification.',
+      item.job_id,
+      null,
+      item.payment_id,
+      null,
+      null,
+      jsonb_build_object('submitted_at', item.created_at)
+    );
+    count_alerts := count_alerts + 1;
+  end loop;
+
+  for item in
+    select id, created_at
+    from public.disputes
+    where status = 'open'
+  loop
+    perform public.upsert_operational_alert(
+      'open_dispute',
+      'critical',
+      'Open dispute needs admin review.',
+      null,
+      null,
+      null,
+      item.id,
+      null,
+      jsonb_build_object('opened_at', item.created_at)
+    );
+    count_alerts := count_alerts + 1;
+  end loop;
+
+  update public.operational_alerts a
+  set status = 'resolved',
+      resolved_at = now()
+  where status = 'open'
+    and (
+      (alert_type in ('stuck_pairing', 'expired_assignment', 'payment_delay', 'customer_confirmation_delay') and not exists (
+        select 1 from public.detect_stuck_jobs() stuck
+        where stuck.job_id = a.job_id
+          and stuck.stuck_type = a.alert_type
+      ))
+      or (alert_type = 'pending_payment' and not exists (
+        select 1 from public.job_payments p
+        where p.id = a.payment_id
+          and p.status = 'submitted'
+      ))
+      or (alert_type = 'open_dispute' and not exists (
+        select 1 from public.disputes d
+        where d.id = a.dispute_id
+          and d.status = 'open'
+      ))
+    );
+
+  return count_alerts;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."refresh_operational_alerts"() OWNER TO "postgres";
+
+--
+-- Name: request_guest_otp("uuid", "text", "text", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  job_row public.jobs;
+  guest_phone text;
+  expected_last4 text;
+  provided_last4 text;
+  raw_code text;
+  challenge_id uuid;
+  expires timestamptz;
+begin
+  if p_action_type not in ('cancel_job', 'payment_proof', 'dispute', 'customer_confirmed') then
+    raise exception 'Unsupported guest action';
+  end if;
+
+  select * into job_row
+  from public.jobs
+  where id = p_job_id
+    and customer_access_token = p_access_token
+    and guest_customer_id is not null
+  for update;
+
+  if not found then
+    raise exception 'Guest job not found';
+  end if;
+
+  if job_row.created_at < now() - interval '30 days' then
+    raise exception 'This guest action link has expired. Contact VoltFriq support to continue.';
+  end if;
+
+  select phone into guest_phone from public.guest_customers where id = job_row.guest_customer_id;
+  expected_last4 := right(regexp_replace(coalesce(guest_phone, ''), '\D', '', 'g'), 4);
+  provided_last4 := right(regexp_replace(coalesce(p_phone_confirmation, ''), '\D', '', 'g'), 4);
+
+  if expected_last4 = '' or expected_last4 <> provided_last4 then
+    raise exception 'Confirm the phone number used for this booking.';
+  end if;
+
+  if (
+    select count(*)
+    from public.guest_otps
+    where job_id = p_job_id
+      and action_type = p_action_type
+      and created_at > now() - interval '10 minutes'
+  ) >= 3 then
+    raise exception 'Too many OTP requests. Please wait a few minutes before trying again.';
+  end if;
+
+  raw_code := lpad((floor(random() * 1000000))::integer::text, 6, '0');
+  expires := now() + interval '10 minutes';
+
+  insert into public.guest_otps (
+    job_id,
+    action_type,
+    phone_last4,
+    code_hash,
+    request_fingerprint,
+    delivery_status,
+    expires_at,
+    metadata
+  )
+  values (
+    p_job_id,
+    p_action_type,
+    expected_last4,
+    md5('voltfriq-otp:' || raw_code || ':' || p_job_id::text || ':' || p_action_type),
+    nullif(btrim(coalesce(p_client_fingerprint, '')), ''),
+    'pending',
+    expires,
+    jsonb_build_object('masked_phone', '***' || expected_last4)
+  )
+  returning id into challenge_id;
+
+  return jsonb_strip_nulls(jsonb_build_object(
+    'challenge_id', challenge_id,
+    'expires_at', expires,
+    'masked_phone', '***' || expected_last4,
+    'delivery_status', 'pending',
+    'otp_code', case when auth.role() = 'service_role' then raw_code else null end
+  ));
+end;
+$$;
+
+
+ALTER FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") OWNER TO "postgres";
 
 --
 -- Name: resolve_dispute("uuid", "text", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -2859,10 +3484,10 @@ CREATE TABLE "public"."job_payments" (
 ALTER TABLE "public"."job_payments" OWNER TO "postgres";
 
 --
--- Name: submit_guest_payment_proof("uuid", "text", "public"."payment_type", numeric, "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: submit_guest_payment_proof("uuid", "text", "public"."payment_type", numeric, "text", "text", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") RETURNS "public"."job_payments"
+CREATE FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text" DEFAULT NULL::"text", "p_action_token" "text" DEFAULT NULL::"text") RETURNS "public"."job_payments"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -2871,106 +3496,6 @@ declare
   payment_row public.job_payments;
   next_status public.job_status;
   expected_prefix text;
-begin
-  select * into job_row
-  from public.jobs
-  where id = p_job_id
-    and customer_access_token = p_access_token
-    and guest_customer_id is not null
-  for update;
-
-  if not found then
-    raise exception 'Guest job not found';
-  end if;
-
-  expected_prefix := 'guest/' || p_job_id::text || '/' || left(p_access_token, 16) || '/';
-  if nullif(btrim(p_proof_path), '') is not null and p_proof_path not like expected_prefix || '%' then
-    raise exception 'Upload the payment proof again before submitting.';
-  end if;
-
-  if job_row.status in ('electrician_completed', 'customer_confirmed', 'payout_pending', 'payout_complete', 'rated', 'cancelled') then
-    raise exception 'Payment proof cannot be submitted after the job has moved past payment stages';
-  end if;
-
-  if exists (
-    select 1 from public.job_payments
-    where job_id = p_job_id
-      and status = 'submitted'
-  ) then
-    raise exception 'A payment proof is already waiting for manual verification for this job';
-  end if;
-
-  if p_payment_type = 'assessment_fee' then
-    if job_row.status <> 'assessment_fee_pending' then
-      raise exception 'Assessment fee proof can only be submitted when the job is awaiting the assessment fee';
-    end if;
-    next_status := 'assessment_payment_pending_verification';
-  elsif p_payment_type in ('quote_payment', 'material_payment') then
-    if job_row.status <> 'quote_accepted' then
-      raise exception 'Work payment proof can only be submitted after the quote is accepted';
-    end if;
-    next_status := 'work_payment_pending_verification';
-  else
-    raise exception 'Unsupported payment type for guest submission';
-  end if;
-
-  if exists (
-    select 1
-    from public.job_payments
-    where job_id = p_job_id
-      and payment_type = p_payment_type
-      and status in ('submitted', 'verified')
-  ) then
-    raise exception 'Payment proof for this step has already been submitted';
-  end if;
-
-  insert into public.job_payments (job_id, guest_customer_id, submitted_by, payment_type, amount, proof_path, reference)
-  values (p_job_id, job_row.guest_customer_id, null, p_payment_type, coalesce(p_amount, 0), p_proof_path, p_reference)
-  returning * into payment_row;
-
-  update public.jobs
-  set status = next_status
-  where id = p_job_id;
-
-  insert into public.job_timeline (job_id, status, note, actor_profile_id, metadata)
-  values (
-    p_job_id,
-    next_status,
-    'Guest payment proof submitted for manual verification.',
-    null,
-    jsonb_build_object('payment_id', payment_row.id, 'payment_type', p_payment_type)
-  );
-
-  perform public.create_notification(
-    (select id from public.profiles where role = 'admin' order by created_at asc limit 1),
-    p_job_id,
-    'payment_proof_submitted',
-    'Payment proof submitted',
-    'A guest customer submitted payment proof for manual verification.',
-    jsonb_build_object('payment_id', payment_row.id, 'payment_type', p_payment_type)
-  );
-
-  return payment_row;
-end;
-$$;
-
-
-ALTER FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") OWNER TO "postgres";
-
---
--- Name: submit_guest_payment_proof("uuid", "text", "public"."payment_type", numeric, "text", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text" DEFAULT NULL::"text") RETURNS "public"."job_payments"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-declare
-  job_row public.jobs;
-  payment_row public.job_payments;
-  next_status public.job_status;
-  expected_prefix text;
-  guest_phone text;
 begin
   select * into job_row
   from public.jobs
@@ -2987,14 +3512,6 @@ begin
     raise exception 'This guest payment link has expired. Contact VoltFriq support to continue.';
   end if;
 
-  select phone into guest_phone
-  from public.guest_customers
-  where id = job_row.guest_customer_id;
-
-  if right(regexp_replace(coalesce(guest_phone, ''), '\D', '', 'g'), 4) <> right(regexp_replace(coalesce(p_phone_confirmation, ''), '\D', '', 'g'), 4) then
-    raise exception 'Confirm the phone number used for this booking.';
-  end if;
-
   expected_prefix := 'guest/' || p_job_id::text || '/' || left(p_access_token, 16) || '/';
   if nullif(btrim(p_proof_path), '') is not null and p_proof_path not like expected_prefix || '%' then
     raise exception 'Upload the payment proof again before submitting.';
@@ -3036,6 +3553,8 @@ begin
     raise exception 'Payment proof for this step has already been submitted';
   end if;
 
+  perform public.consume_guest_action_token(p_job_id, 'payment_proof', p_action_token);
+
   insert into public.job_payments (job_id, guest_customer_id, submitted_by, payment_type, amount, proof_path, reference)
   values (p_job_id, job_row.guest_customer_id, null, p_payment_type, coalesce(p_amount, 0), p_proof_path, p_reference)
   returning * into payment_row;
@@ -3067,7 +3586,7 @@ end;
 $$;
 
 
-ALTER FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") OWNER TO "postgres";
 
 --
 -- Name: job_quotes; Type: TABLE; Schema: public; Owner: postgres
@@ -3590,16 +4109,16 @@ $$;
 ALTER FUNCTION "public"."touch_updated_at"() OWNER TO "postgres";
 
 --
--- Name: update_guest_job_status("uuid", "text", "public"."job_status", "text", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: update_guest_job_status("uuid", "text", "public"."job_status", "text", "jsonb", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text" DEFAULT NULL::"text", "p_metadata" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+CREATE FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text" DEFAULT NULL::"text", "p_metadata" "jsonb" DEFAULT '{}'::"jsonb", "p_action_token" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 declare
   job_row public.jobs;
-  guest_phone text;
+  safe_metadata jsonb;
 begin
   select * into job_row
   from public.jobs
@@ -3614,16 +4133,6 @@ begin
 
   if job_row.created_at < now() - interval '30 days' then
     raise exception 'This guest action link has expired. Contact VoltFriq support to continue.';
-  end if;
-
-  if p_next_status in ('cancelled', 'customer_confirmed') then
-    select phone into guest_phone
-    from public.guest_customers
-    where id = job_row.guest_customer_id;
-
-    if right(regexp_replace(coalesce(guest_phone, ''), '\D', '', 'g'), 4) <> right(regexp_replace(coalesce(p_metadata->>'phone_confirmation', ''), '\D', '', 'g'), 4) then
-      raise exception 'Confirm the phone number used for this booking.';
-    end if;
   end if;
 
   if not (
@@ -3644,20 +4153,179 @@ begin
     raise exception 'Guest customers cannot move a job from % to %', job_row.status, p_next_status;
   end if;
 
+  if p_next_status = 'cancelled' then
+    perform public.consume_guest_action_token(p_job_id, 'cancel_job', p_action_token);
+  elsif p_next_status = 'customer_confirmed' then
+    perform public.consume_guest_action_token(p_job_id, 'customer_confirmed', p_action_token);
+  end if;
+
+  safe_metadata := coalesce(p_metadata, '{}'::jsonb) - 'phone_confirmation';
+
   update public.jobs
   set status = p_next_status,
       customer_confirmed_at = case when p_next_status = 'customer_confirmed' then coalesce(customer_confirmed_at, now()) else customer_confirmed_at end
   where id = p_job_id;
 
   insert into public.job_timeline (job_id, status, note, actor_profile_id, metadata)
-  values (p_job_id, p_next_status, p_note, null, coalesce(p_metadata, '{}'::jsonb));
+  values (p_job_id, p_next_status, p_note, null, safe_metadata);
 
   return public.guest_job_payload(p_job_id, p_access_token);
 end;
 $$;
 
 
-ALTER FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") OWNER TO "postgres";
+
+--
+-- Name: operational_alerts; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE "public"."operational_alerts" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "alert_type" "text" NOT NULL,
+    "severity" "text" DEFAULT 'warning'::"text" NOT NULL,
+    "status" "text" DEFAULT 'open'::"text" NOT NULL,
+    "dedupe_key" "text" NOT NULL,
+    "job_id" "uuid",
+    "electrician_id" "uuid",
+    "payment_id" "uuid",
+    "dispute_id" "uuid",
+    "event_id" "uuid",
+    "message" "text" NOT NULL,
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "first_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "last_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "resolved_at" timestamp with time zone,
+    CONSTRAINT "operational_alerts_alert_type_check" CHECK (("alert_type" = ANY (ARRAY['pending_payment'::"text", 'pending_electrician'::"text", 'stuck_pairing'::"text", 'expired_assignment'::"text", 'open_dispute'::"text", 'payment_delay'::"text", 'customer_confirmation_delay'::"text", 'dispatch_conflict'::"text", 'electrician_performance'::"text"]))),
+    CONSTRAINT "operational_alerts_severity_check" CHECK (("severity" = ANY (ARRAY['info'::"text", 'warning'::"text", 'critical'::"text"]))),
+    CONSTRAINT "operational_alerts_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'resolved'::"text"])))
+);
+
+
+ALTER TABLE "public"."operational_alerts" OWNER TO "postgres";
+
+--
+-- Name: upsert_operational_alert("text", "text", "text", "uuid", "uuid", "uuid", "uuid", "uuid", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."upsert_operational_alert"("p_alert_type" "text", "p_severity" "text", "p_message" "text", "p_job_id" "uuid" DEFAULT NULL::"uuid", "p_electrician_id" "uuid" DEFAULT NULL::"uuid", "p_payment_id" "uuid" DEFAULT NULL::"uuid", "p_dispute_id" "uuid" DEFAULT NULL::"uuid", "p_event_id" "uuid" DEFAULT NULL::"uuid", "p_metadata" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "public"."operational_alerts"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  alert_row public.operational_alerts;
+  dedupe text;
+begin
+  dedupe := public.operational_alert_dedupe_key(p_alert_type, p_job_id, p_electrician_id, p_payment_id, p_dispute_id);
+
+  insert into public.operational_alerts (
+    alert_type,
+    severity,
+    status,
+    dedupe_key,
+    job_id,
+    electrician_id,
+    payment_id,
+    dispute_id,
+    event_id,
+    message,
+    metadata,
+    first_seen_at,
+    last_seen_at,
+    resolved_at
+  )
+  values (
+    p_alert_type,
+    coalesce(nullif(p_severity, ''), 'warning'),
+    'open',
+    dedupe,
+    p_job_id,
+    p_electrician_id,
+    p_payment_id,
+    p_dispute_id,
+    p_event_id,
+    p_message,
+    coalesce(p_metadata, '{}'::jsonb),
+    now(),
+    now(),
+    null
+  )
+  on conflict (dedupe_key) do update
+  set severity = excluded.severity,
+      status = 'open',
+      message = excluded.message,
+      metadata = public.operational_alerts.metadata || excluded.metadata,
+      event_id = coalesce(excluded.event_id, public.operational_alerts.event_id),
+      last_seen_at = now(),
+      resolved_at = null
+  returning * into alert_row;
+
+  return alert_row;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."upsert_operational_alert"("p_alert_type" "text", "p_severity" "text", "p_message" "text", "p_job_id" "uuid", "p_electrician_id" "uuid", "p_payment_id" "uuid", "p_dispute_id" "uuid", "p_event_id" "uuid", "p_metadata" "jsonb") OWNER TO "postgres";
+
+--
+-- Name: verify_guest_otp("uuid", "text", "text", "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  job_row public.jobs;
+  otp_row public.guest_otps;
+begin
+  select * into job_row
+  from public.jobs
+  where id = p_job_id
+    and customer_access_token = p_access_token
+    and guest_customer_id is not null;
+
+  if not found then
+    raise exception 'Guest job not found';
+  end if;
+
+  select * into otp_row
+  from public.guest_otps
+  where id = p_challenge_id
+    and job_id = p_job_id
+    and action_type = p_action_type
+  for update;
+
+  if not found then
+    raise exception 'OTP challenge not found';
+  end if;
+
+  if otp_row.consumed_at is not null or otp_row.expires_at <= now() then
+    raise exception 'OTP has expired. Request a new code.';
+  end if;
+
+  if otp_row.attempts >= 5 then
+    raise exception 'Too many OTP attempts. Request a new code.';
+  end if;
+
+  if otp_row.code_hash <> md5('voltfriq-otp:' || regexp_replace(coalesce(p_otp_code, ''), '\D', '', 'g') || ':' || p_job_id::text || ':' || p_action_type) then
+    update public.guest_otps
+    set attempts = attempts + 1
+    where id = p_challenge_id;
+    raise exception 'Invalid OTP code.';
+  end if;
+
+  update public.guest_otps
+  set verified_at = coalesce(verified_at, now()),
+      delivery_status = 'verified'
+  where id = p_challenge_id;
+
+  return jsonb_build_object('verified', true, 'challenge_id', p_challenge_id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") OWNER TO "postgres";
 
 --
 -- Name: verify_job_payment("uuid", boolean, "text"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -4785,6 +5453,24 @@ CREATE TABLE "public"."expertise_categories" (
 ALTER TABLE "public"."expertise_categories" OWNER TO "postgres";
 
 --
+-- Name: guest_action_tokens; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE "public"."guest_action_tokens" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "job_id" "uuid" NOT NULL,
+    "action_type" "text" NOT NULL,
+    "token_hash" "text" NOT NULL,
+    "expires_at" timestamp with time zone DEFAULT ("now"() + '00:10:00'::interval) NOT NULL,
+    "consumed_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "guest_action_tokens_action_type_check" CHECK (("action_type" = ANY (ARRAY['cancel_job'::"text", 'payment_proof'::"text", 'dispute'::"text", 'customer_confirmed'::"text"])))
+);
+
+
+ALTER TABLE "public"."guest_action_tokens" OWNER TO "postgres";
+
+--
 -- Name: guest_booking_attempts; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -4817,6 +5503,31 @@ CREATE TABLE "public"."guest_customers" (
 ALTER TABLE "public"."guest_customers" OWNER TO "postgres";
 
 --
+-- Name: guest_otps; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE "public"."guest_otps" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "job_id" "uuid" NOT NULL,
+    "action_type" "text" NOT NULL,
+    "phone_last4" "text" NOT NULL,
+    "code_hash" "text" NOT NULL,
+    "request_fingerprint" "text",
+    "delivery_status" "text" DEFAULT 'pending'::"text" NOT NULL,
+    "attempts" integer DEFAULT 0 NOT NULL,
+    "expires_at" timestamp with time zone DEFAULT ("now"() + '00:10:00'::interval) NOT NULL,
+    "verified_at" timestamp with time zone,
+    "consumed_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    CONSTRAINT "guest_otps_action_type_check" CHECK (("action_type" = ANY (ARRAY['cancel_job'::"text", 'payment_proof'::"text", 'dispute'::"text", 'customer_confirmed'::"text"]))),
+    CONSTRAINT "guest_otps_delivery_status_check" CHECK (("delivery_status" = ANY (ARRAY['pending'::"text", 'sent'::"text", 'failed'::"text", 'verified'::"text"])))
+);
+
+
+ALTER TABLE "public"."guest_otps" OWNER TO "postgres";
+
+--
 -- Name: job_events; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -4830,7 +5541,13 @@ CREATE TABLE "public"."job_events" (
     "internal_note" "text",
     "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "job_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['JOB_CREATED'::"text", 'PAIRING_STARTED'::"text", 'ELECTRICIAN_ASSIGNED'::"text", 'ASSIGNMENT_ACCEPTED'::"text", 'ASSIGNMENT_REJECTED'::"text", 'ASSIGNMENT_EXPIRED'::"text", 'PAYMENT_SUBMITTED'::"text", 'PAYMENT_VERIFIED'::"text", 'WORK_STARTED'::"text", 'WORK_COMPLETED'::"text", 'CUSTOMER_CONFIRMED'::"text", 'DISPUTE_OPENED'::"text", 'JOB_CANCELLED'::"text", 'QUOTE_SUBMITTED'::"text", 'PAYOUT_RELEASED'::"text", 'RATING_SUBMITTED'::"text", 'JOB_UPDATED'::"text"])))
+    "idempotency_key" "text",
+    "severity" "text" DEFAULT 'info'::"text" NOT NULL,
+    "visibility" "text" DEFAULT 'public'::"text" NOT NULL,
+    "source" "text" DEFAULT 'app'::"text" NOT NULL,
+    CONSTRAINT "job_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['JOB_CREATED'::"text", 'PAIRING_STARTED'::"text", 'ELECTRICIAN_ASSIGNED'::"text", 'ASSIGNMENT_ACCEPTED'::"text", 'ASSIGNMENT_REJECTED'::"text", 'ASSIGNMENT_EXPIRED'::"text", 'PAYMENT_SUBMITTED'::"text", 'PAYMENT_VERIFIED'::"text", 'WORK_STARTED'::"text", 'WORK_COMPLETED'::"text", 'CUSTOMER_CONFIRMED'::"text", 'DISPUTE_OPENED'::"text", 'JOB_CANCELLED'::"text", 'QUOTE_SUBMITTED'::"text", 'PAYOUT_RELEASED'::"text", 'RATING_SUBMITTED'::"text", 'JOB_UPDATED'::"text"]))),
+    CONSTRAINT "job_events_severity_check" CHECK (("severity" = ANY (ARRAY['info'::"text", 'warning'::"text", 'critical'::"text"]))),
+    CONSTRAINT "job_events_visibility_check" CHECK (("visibility" = ANY (ARRAY['public'::"text", 'internal'::"text"])))
 );
 
 
@@ -5165,6 +5882,14 @@ ALTER TABLE ONLY "public"."electrician_documents"
 
 
 --
+-- Name: electrician_performance_snapshots electrician_performance_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."electrician_performance_snapshots"
+    ADD CONSTRAINT "electrician_performance_snapshots_pkey" PRIMARY KEY ("id");
+
+
+--
 -- Name: electrician_skills electrician_skills_electrician_id_category_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5213,6 +5938,22 @@ ALTER TABLE ONLY "public"."expertise_categories"
 
 
 --
+-- Name: guest_action_tokens guest_action_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."guest_action_tokens"
+    ADD CONSTRAINT "guest_action_tokens_pkey" PRIMARY KEY ("id");
+
+
+--
+-- Name: guest_action_tokens guest_action_tokens_token_hash_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."guest_action_tokens"
+    ADD CONSTRAINT "guest_action_tokens_token_hash_key" UNIQUE ("token_hash");
+
+
+--
 -- Name: guest_booking_attempts guest_booking_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5234,6 +5975,14 @@ ALTER TABLE ONLY "public"."guest_customers"
 
 ALTER TABLE ONLY "public"."guest_customers"
     ADD CONSTRAINT "guest_customers_pkey" PRIMARY KEY ("id");
+
+
+--
+-- Name: guest_otps guest_otps_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."guest_otps"
+    ADD CONSTRAINT "guest_otps_pkey" PRIMARY KEY ("id");
 
 
 --
@@ -5322,6 +6071,22 @@ ALTER TABLE ONLY "public"."jobs"
 
 ALTER TABLE ONLY "public"."notifications"
     ADD CONSTRAINT "notifications_pkey" PRIMARY KEY ("id");
+
+
+--
+-- Name: operational_alerts operational_alerts_dedupe_key_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."operational_alerts"
+    ADD CONSTRAINT "operational_alerts_dedupe_key_key" UNIQUE ("dedupe_key");
+
+
+--
+-- Name: operational_alerts operational_alerts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."operational_alerts"
+    ADD CONSTRAINT "operational_alerts_pkey" PRIMARY KEY ("id");
 
 
 --
@@ -5490,6 +6255,20 @@ CREATE INDEX "electrician_appeals_electrician_id_idx" ON "public"."electrician_a
 
 
 --
+-- Name: electrician_performance_snapshots_electrician_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "electrician_performance_snapshots_electrician_idx" ON "public"."electrician_performance_snapshots" USING "btree" ("electrician_id", "snapshot_at" DESC);
+
+
+--
+-- Name: guest_action_tokens_job_action_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "guest_action_tokens_job_action_idx" ON "public"."guest_action_tokens" USING "btree" ("job_id", "action_type", "expires_at" DESC);
+
+
+--
 -- Name: guest_booking_attempts_device_created_idx; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -5504,10 +6283,38 @@ CREATE INDEX "guest_booking_attempts_phone_created_idx" ON "public"."guest_booki
 
 
 --
+-- Name: guest_otps_expiry_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "guest_otps_expiry_idx" ON "public"."guest_otps" USING "btree" ("expires_at") WHERE (("verified_at" IS NULL) AND ("consumed_at" IS NULL));
+
+
+--
+-- Name: guest_otps_job_action_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "guest_otps_job_action_idx" ON "public"."guest_otps" USING "btree" ("job_id", "action_type", "created_at" DESC);
+
+
+--
+-- Name: job_events_idempotency_key_uidx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "job_events_idempotency_key_uidx" ON "public"."job_events" USING "btree" ("idempotency_key") WHERE ("idempotency_key" IS NOT NULL);
+
+
+--
 -- Name: job_events_job_created_idx; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX "job_events_job_created_idx" ON "public"."job_events" USING "btree" ("job_id", "created_at");
+
+
+--
+-- Name: job_events_job_type_created_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "job_events_job_type_created_idx" ON "public"."job_events" USING "btree" ("job_id", "event_type", "created_at" DESC);
 
 
 --
@@ -5529,6 +6336,20 @@ CREATE UNIQUE INDEX "job_payments_one_submitted_per_job_idx" ON "public"."job_pa
 --
 
 CREATE UNIQUE INDEX "jobs_customer_access_token_key" ON "public"."jobs" USING "btree" ("customer_access_token") WHERE ("customer_access_token" IS NOT NULL);
+
+
+--
+-- Name: operational_alerts_job_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "operational_alerts_job_idx" ON "public"."operational_alerts" USING "btree" ("job_id") WHERE ("job_id" IS NOT NULL);
+
+
+--
+-- Name: operational_alerts_status_type_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "operational_alerts_status_type_idx" ON "public"."operational_alerts" USING "btree" ("status", "alert_type", "last_seen_at" DESC);
 
 
 --
@@ -5802,6 +6623,14 @@ ALTER TABLE ONLY "public"."electrician_documents"
 
 
 --
+-- Name: electrician_performance_snapshots electrician_performance_snapshots_electrician_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."electrician_performance_snapshots"
+    ADD CONSTRAINT "electrician_performance_snapshots_electrician_id_fkey" FOREIGN KEY ("electrician_id") REFERENCES "public"."electricians"("id") ON DELETE CASCADE;
+
+
+--
 -- Name: electrician_skills electrician_skills_electrician_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5818,11 +6647,27 @@ ALTER TABLE ONLY "public"."electricians"
 
 
 --
+-- Name: guest_action_tokens guest_action_tokens_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."guest_action_tokens"
+    ADD CONSTRAINT "guest_action_tokens_job_id_fkey" FOREIGN KEY ("job_id") REFERENCES "public"."jobs"("id") ON DELETE CASCADE;
+
+
+--
 -- Name: guest_booking_attempts guest_booking_attempts_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY "public"."guest_booking_attempts"
     ADD CONSTRAINT "guest_booking_attempts_job_id_fkey" FOREIGN KEY ("job_id") REFERENCES "public"."jobs"("id") ON DELETE SET NULL;
+
+
+--
+-- Name: guest_otps guest_otps_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."guest_otps"
+    ADD CONSTRAINT "guest_otps_job_id_fkey" FOREIGN KEY ("job_id") REFERENCES "public"."jobs"("id") ON DELETE CASCADE;
 
 
 --
@@ -5967,6 +6812,46 @@ ALTER TABLE ONLY "public"."notifications"
 
 ALTER TABLE ONLY "public"."notifications"
     ADD CONSTRAINT "notifications_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+
+--
+-- Name: operational_alerts operational_alerts_dispute_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."operational_alerts"
+    ADD CONSTRAINT "operational_alerts_dispute_id_fkey" FOREIGN KEY ("dispute_id") REFERENCES "public"."disputes"("id") ON DELETE CASCADE;
+
+
+--
+-- Name: operational_alerts operational_alerts_electrician_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."operational_alerts"
+    ADD CONSTRAINT "operational_alerts_electrician_id_fkey" FOREIGN KEY ("electrician_id") REFERENCES "public"."electricians"("id") ON DELETE CASCADE;
+
+
+--
+-- Name: operational_alerts operational_alerts_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."operational_alerts"
+    ADD CONSTRAINT "operational_alerts_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."job_events"("id") ON DELETE SET NULL;
+
+
+--
+-- Name: operational_alerts operational_alerts_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."operational_alerts"
+    ADD CONSTRAINT "operational_alerts_job_id_fkey" FOREIGN KEY ("job_id") REFERENCES "public"."jobs"("id") ON DELETE CASCADE;
+
+
+--
+-- Name: operational_alerts operational_alerts_payment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."operational_alerts"
+    ADD CONSTRAINT "operational_alerts_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "public"."job_payments"("id") ON DELETE CASCADE;
 
 
 --
@@ -6237,6 +7122,20 @@ CREATE POLICY "electrician documents visible to owner or admin" ON "public"."ele
 
 
 --
+-- Name: electrician_performance_snapshots electrician performance admin read; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "electrician performance admin read" ON "public"."electrician_performance_snapshots" FOR SELECT USING ("public"."is_admin"());
+
+
+--
+-- Name: electrician_performance_snapshots electrician performance service write; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "electrician performance service write" ON "public"."electrician_performance_snapshots" USING (("auth"."role"() = 'service_role'::"text")) WITH CHECK (("auth"."role"() = 'service_role'::"text"));
+
+
+--
 -- Name: electrician_skills electrician skills owner or admin write; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -6271,6 +7170,12 @@ ALTER TABLE "public"."electrician_certifications" ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE "public"."electrician_documents" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: electrician_performance_snapshots; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."electrician_performance_snapshots" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: electrician_skills; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -6326,6 +7231,13 @@ CREATE POLICY "expertise categories readable by all" ON "public"."expertise_cate
 ALTER TABLE "public"."expertise_categories" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: guest_action_tokens guest action tokens service role only; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "guest action tokens service role only" ON "public"."guest_action_tokens" USING (("auth"."role"() = 'service_role'::"text")) WITH CHECK (("auth"."role"() = 'service_role'::"text"));
+
+
+--
 -- Name: guest_customers guest customers admin or assigned electrician read; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -6333,6 +7245,19 @@ CREATE POLICY "guest customers admin or assigned electrician read" ON "public"."
    FROM "public"."jobs" "j"
   WHERE (("j"."guest_customer_id" = "guest_customers"."id") AND ("j"."assigned_electrician_id" = "public"."current_electrician_id"()))))));
 
+
+--
+-- Name: guest_otps guest otps service role only; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "guest otps service role only" ON "public"."guest_otps" USING (("auth"."role"() = 'service_role'::"text")) WITH CHECK (("auth"."role"() = 'service_role'::"text"));
+
+
+--
+-- Name: guest_action_tokens; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."guest_action_tokens" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: guest_booking_attempts; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -6345,6 +7270,12 @@ ALTER TABLE "public"."guest_booking_attempts" ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE "public"."guest_customers" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: guest_otps; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."guest_otps" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: job_events job events admin read; Type: POLICY; Schema: public; Owner: postgres
@@ -6480,6 +7411,26 @@ CREATE POLICY "notifications own or admin" ON "public"."notifications" FOR SELEC
 
 CREATE POLICY "notifications own update" ON "public"."notifications" FOR UPDATE USING ((("profile_id" = "auth"."uid"()) OR "public"."is_admin"())) WITH CHECK ((("profile_id" = "auth"."uid"()) OR "public"."is_admin"()));
 
+
+--
+-- Name: operational_alerts operational alerts admin read; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "operational alerts admin read" ON "public"."operational_alerts" FOR SELECT USING ("public"."is_admin"());
+
+
+--
+-- Name: operational_alerts operational alerts service write; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "operational alerts service write" ON "public"."operational_alerts" USING (("auth"."role"() = 'service_role'::"text")) WITH CHECK (("auth"."role"() = 'service_role'::"text"));
+
+
+--
+-- Name: operational_alerts; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."operational_alerts" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -6784,6 +7735,15 @@ GRANT ALL ON FUNCTION "public"."actor_role_for_profile"("p_profile_id" "uuid") T
 
 
 --
+-- Name: FUNCTION "admin_operational_queues"(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."admin_operational_queues"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."admin_operational_queues"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."admin_operational_queues"() TO "authenticated";
+
+
+--
 -- Name: FUNCTION "admin_operational_summary"(); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -6844,6 +7804,14 @@ GRANT ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" 
 
 
 --
+-- Name: FUNCTION "consume_guest_action_token"("p_job_id" "uuid", "p_action_type" "text", "p_action_token" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."consume_guest_action_token"("p_job_id" "uuid", "p_action_type" "text", "p_action_token" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."consume_guest_action_token"("p_job_id" "uuid", "p_action_type" "text", "p_action_token" "text") TO "service_role";
+
+
+--
 -- Name: TABLE "jobs"; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -6890,12 +7858,13 @@ GRANT ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_
 
 
 --
--- Name: FUNCTION "create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text"); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION "create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text") TO "service_role";
-GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "service_role";
 
 
 --
@@ -6922,6 +7891,14 @@ GRANT ALL ON FUNCTION "public"."current_customer_id"() TO "authenticated";
 REVOKE ALL ON FUNCTION "public"."current_electrician_id"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."current_electrician_id"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."current_electrician_id"() TO "authenticated";
+
+
+--
+-- Name: FUNCTION "detect_stuck_jobs"(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."detect_stuck_jobs"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."detect_stuck_jobs"() TO "service_role";
 
 
 --
@@ -7123,6 +8100,16 @@ GRANT ALL ON FUNCTION "public"."is_admin"() TO "authenticated";
 
 
 --
+-- Name: FUNCTION "issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") TO "service_role";
+
+
+--
 -- Name: FUNCTION "job_event_type_for_status"("p_status" "public"."job_status"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -7162,6 +8149,14 @@ GRANT ALL ON FUNCTION "public"."log_job_event"("p_job_id" "uuid", "p_event_type"
 
 
 --
+-- Name: FUNCTION "operational_alert_dedupe_key"("p_alert_type" "text", "p_job_id" "uuid", "p_electrician_id" "uuid", "p_payment_id" "uuid", "p_dispute_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."operational_alert_dedupe_key"("p_alert_type" "text", "p_job_id" "uuid", "p_electrician_id" "uuid", "p_payment_id" "uuid", "p_dispute_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."operational_alert_dedupe_key"("p_alert_type" "text", "p_job_id" "uuid", "p_electrician_id" "uuid", "p_payment_id" "uuid", "p_dispute_id" "uuid") TO "service_role";
+
+
+--
 -- Name: FUNCTION "process_dispatch_queue"(); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -7194,11 +8189,46 @@ GRANT ALL ON FUNCTION "public"."refresh_customer_trust_metrics"("p_customer_id" 
 
 
 --
+-- Name: TABLE "electrician_performance_snapshots"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE "public"."electrician_performance_snapshots" TO "service_role";
+GRANT SELECT ON TABLE "public"."electrician_performance_snapshots" TO "authenticated";
+
+
+--
+-- Name: FUNCTION "refresh_electrician_performance_snapshot"("p_electrician_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."refresh_electrician_performance_snapshot"("p_electrician_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."refresh_electrician_performance_snapshot"("p_electrician_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."refresh_electrician_performance_snapshot"("p_electrician_id" "uuid") TO "authenticated";
+
+
+--
 -- Name: FUNCTION "refresh_electrician_trust_metrics"("p_electrician_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."refresh_electrician_trust_metrics"("p_electrician_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."refresh_electrician_trust_metrics"("p_electrician_id" "uuid") TO "service_role";
+
+
+--
+-- Name: FUNCTION "refresh_operational_alerts"(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."refresh_operational_alerts"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."refresh_operational_alerts"() TO "service_role";
+
+
+--
+-- Name: FUNCTION "request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") TO "service_role";
 
 
 --
@@ -7282,19 +8312,13 @@ GRANT ALL ON TABLE "public"."job_payments" TO "service_role";
 
 
 --
--- Name: FUNCTION "submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text"); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION "submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text") FROM PUBLIC;
-
-
---
--- Name: FUNCTION "submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text"); Type: ACL; Schema: public; Owner: postgres
---
-
-GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text") TO "service_role";
-GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "service_role";
 
 
 --
@@ -7350,13 +8374,39 @@ GRANT ALL ON FUNCTION "public"."touch_updated_at"() TO "service_role";
 
 
 --
--- Name: FUNCTION "update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb"); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION "update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "service_role";
-GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") TO "service_role";
+
+
+--
+-- Name: TABLE "operational_alerts"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE "public"."operational_alerts" TO "service_role";
+GRANT SELECT ON TABLE "public"."operational_alerts" TO "authenticated";
+
+
+--
+-- Name: FUNCTION "upsert_operational_alert"("p_alert_type" "text", "p_severity" "text", "p_message" "text", "p_job_id" "uuid", "p_electrician_id" "uuid", "p_payment_id" "uuid", "p_dispute_id" "uuid", "p_event_id" "uuid", "p_metadata" "jsonb"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."upsert_operational_alert"("p_alert_type" "text", "p_severity" "text", "p_message" "text", "p_job_id" "uuid", "p_electrician_id" "uuid", "p_payment_id" "uuid", "p_dispute_id" "uuid", "p_event_id" "uuid", "p_metadata" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."upsert_operational_alert"("p_alert_type" "text", "p_severity" "text", "p_message" "text", "p_job_id" "uuid", "p_electrician_id" "uuid", "p_payment_id" "uuid", "p_dispute_id" "uuid", "p_event_id" "uuid", "p_metadata" "jsonb") TO "service_role";
+
+
+--
+-- Name: FUNCTION "verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") TO "service_role";
 
 
 --
@@ -7423,6 +8473,13 @@ GRANT ALL ON TABLE "public"."expertise_categories" TO "service_role";
 
 
 --
+-- Name: TABLE "guest_action_tokens"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE "public"."guest_action_tokens" TO "service_role";
+
+
+--
 -- Name: TABLE "guest_booking_attempts"; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -7436,6 +8493,13 @@ GRANT ALL ON TABLE "public"."guest_booking_attempts" TO "service_role";
 GRANT ALL ON TABLE "public"."guest_customers" TO "anon";
 GRANT ALL ON TABLE "public"."guest_customers" TO "authenticated";
 GRANT ALL ON TABLE "public"."guest_customers" TO "service_role";
+
+
+--
+-- Name: TABLE "guest_otps"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE "public"."guest_otps" TO "service_role";
 
 
 --
@@ -7657,4 +8721,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TA
 -- PostgreSQL database dump complete
 --
 
-\unrestrict wmDyYGtbM8qzmAWk8INZXcPRAqVPFnpPpJ6CHS2Sm9iH7f1gQc1OUgbyAGFma89
+\unrestrict qjhzAxmfFTzHkYQG3ubwu3Xll8N5WulqSnLwNzaVuwOdXduzct41s7ZBqJndl7J

@@ -2,12 +2,14 @@
 	    const client = ensureClient();
 	    const guest = getGuestAccess();
 	    if (!state.profile && guest && guest.jobId === jobId && guest.accessToken) {
+	      const actionToken = await issueGuestActionToken(jobId, 'dispute', phoneConfirmation || '');
 	      const guestResult = await client.rpc('create_guest_dispute', {
 	        p_job_id: jobId,
 	        p_access_token: guest.accessToken,
 	        p_issue_type: issueType,
 	        p_details: details || null,
-	        p_phone_confirmation: phoneConfirmation || null
+	        p_phone_confirmation: null,
+	        p_action_token: actionToken
 	      });
 	      if (guestResult.error) throw normalizeError(guestResult.error, 'Could not report the issue.');
 	      return guestResult.data;
@@ -72,6 +74,16 @@
 	    const result = await client.rpc('admin_operational_summary');
 	    if (result.error) throw normalizeError(result.error, 'Could not load operational metrics.');
 	    return normalizeOperationalSummary(result.data || {});
+	  }
+
+	  async function getOperationalQueues() {
+	    const client = ensureClient();
+	    if (!state.profile || state.profile.role !== 'admin') {
+	      return defaultOperationalQueues();
+	    }
+	    const result = await client.rpc('admin_operational_queues');
+	    if (result.error) throw normalizeError(result.error, 'Could not load operational queues.');
+	    return normalizeOperationalQueues(result.data || {});
 	  }
 
   async function resolveDispute(disputeId, status, resolutionAction, resolutionNote) {
@@ -695,6 +707,17 @@
 	    };
 	  }
 
+	  function defaultOperationalQueues() {
+	    return {
+	      pendingPayments: [],
+	      pendingElectricians: [],
+	      stuckJobs: [],
+	      openDisputes: [],
+	      expiredAssignments: [],
+	      alerts: []
+	    };
+	  }
+
 	  function normalizeOperationalSummary(payload) {
 	    const rawQueues = payload.queues || {};
 	    const rawMetrics = payload.metrics || {};
@@ -713,6 +736,17 @@
 	        paymentVerificationDelaySeconds: Number(rawMetrics.payment_verification_delay_seconds || rawMetrics.paymentVerificationDelaySeconds || 0),
 	        stuckJobsCount: Number(rawMetrics.stuck_jobs_count || rawMetrics.stuckJobsCount || 0)
 	      }
+	    };
+	  }
+
+	  function normalizeOperationalQueues(payload) {
+	    return {
+	      pendingPayments: Array.isArray(payload.pending_payments) ? payload.pending_payments : [],
+	      pendingElectricians: Array.isArray(payload.pending_electricians) ? payload.pending_electricians : [],
+	      stuckJobs: Array.isArray(payload.stuck_jobs) ? payload.stuck_jobs : [],
+	      openDisputes: Array.isArray(payload.open_disputes) ? payload.open_disputes : [],
+	      expiredAssignments: Array.isArray(payload.expired_assignments) ? payload.expired_assignments : [],
+	      alerts: Array.isArray(payload.alerts) ? payload.alerts : []
 	    };
 	  }
 
@@ -765,6 +799,9 @@
     listAdminJobs,
     getJob,
     getGuestJob,
+    issueGuestActionToken,
+    requestGuestOtp,
+    verifyGuestOtp,
     uploadGuestJobPhotos,
     previewMatches,
     createBooking,
@@ -792,6 +829,7 @@
 	    getPublicJobEvents,
 	    getAdminJobEvents,
 	    getOperationalSummary,
+	    getOperationalQueues,
 	    resolveDispute,
     listAppeals,
     submitElectricianAppeal,

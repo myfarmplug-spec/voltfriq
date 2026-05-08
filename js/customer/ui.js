@@ -91,7 +91,11 @@
     chat: 'VoltFriq | Job Chat'
   };
 
-  document.addEventListener('DOMContentLoaded', init);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
 
   async function init() {
     configureCustomerRoutes();

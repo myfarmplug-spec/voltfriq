@@ -435,7 +435,11 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
 
   function showNotice(message) {
     const loginError = document.getElementById('login-error');

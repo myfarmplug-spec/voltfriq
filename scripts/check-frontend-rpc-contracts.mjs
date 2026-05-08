@@ -8,8 +8,10 @@ const schemaPath = path.join(root, 'supabase/schema.sql');
 const serviceRoleOnly = new Set([
   'append_job_timeline',
   'attach_guest_job_photos',
+  'consume_guest_action_token',
   'create_notification',
   'guest_job_payload',
+  'operational_alert_dedupe_key',
   'process_dispatch_queue'
 ]);
 
@@ -18,8 +20,11 @@ const anonAllowed = new Set([
   'create_guest_dispute',
   'get_public_job_events',
   'get_guest_job',
+  'issue_guest_action_token',
+  'request_guest_otp',
   'submit_guest_payment_proof',
-  'update_guest_job_status'
+  'update_guest_job_status',
+  'verify_guest_otp'
 ]);
 
 const internalOrAuthenticatedOnly = new Set([
@@ -30,6 +35,7 @@ const internalOrAuthenticatedOnly = new Set([
   'create_dispute',
   'create_notification',
   'admin_operational_summary',
+  'admin_operational_queues',
   'dispatch_job',
   'electrician_accept_job',
   'electrician_reject_job',
@@ -40,6 +46,7 @@ const internalOrAuthenticatedOnly = new Set([
   'resolve_electrician_appeal',
   'get_admin_job_events',
   'reward_completed_referral',
+  'refresh_electrician_performance_snapshot',
   'set_job_status',
   'submit_customer_review',
   'submit_electrician_appeal',

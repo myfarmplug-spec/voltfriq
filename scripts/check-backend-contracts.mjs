@@ -35,7 +35,11 @@ const requiredTables = [
   'disputes',
   'job_events',
   'electrician_appeals',
-  'guest_customers'
+  'guest_customers',
+  'guest_action_tokens',
+  'guest_otps',
+  'operational_alerts',
+  'electrician_performance_snapshots'
 ];
 
 const missingRpcs = uniqueRpcNames.filter((name) => {
@@ -59,7 +63,9 @@ const duplicateTargets = [
 const duplicateFunctions = [
   'verify_job_payment',
   'create_guest_customer_job',
-  'update_guest_job_status'
+  'update_guest_job_status',
+  'submit_guest_payment_proof',
+  'create_guest_dispute'
 ];
 
 const duplicateTableHits = duplicateTargets.filter((name) => {
