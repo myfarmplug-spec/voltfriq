@@ -94,7 +94,10 @@
       formField('Platform Bank Name', '<input type="text" class="form-input" id="set-bank-name" value="' + escapeAttribute(settings.platform_bank_name || '') + '" />') +
       formField('Platform Account Number', '<input type="text" class="form-input" id="set-account-number" value="' + escapeAttribute(settings.platform_account_number || '') + '" />') +
       formField('Platform Account Name', '<input type="text" class="form-input" id="set-account-name" value="' + escapeAttribute(settings.platform_account_name || '') + '" />') +
-      formField('Service Areas', '<textarea class="form-input" rows="3" id="set-service-areas">' + escapeHtml((settings.service_areas || []).join(', ')) + '</textarea>') +
+      formField('Supported States', '<textarea class="form-input" rows="4" id="set-supported-states">' + escapeHtml((settings.supported_states || settings.service_areas || []).join(', ')) + '</textarea>') +
+      formField('Cities / LGAs', '<textarea class="form-input" rows="4" id="set-supported-cities">' + escapeHtml((settings.supported_cities || []).join(', ')) + '</textarea>') +
+      formField('Enabled Launch Cities', '<textarea class="form-input" rows="3" id="set-launch-cities">' + escapeHtml((settings.launch_cities || []).join(', ')) + '</textarea>') +
+      formField('Service Areas', '<textarea class="form-input" rows="4" id="set-service-areas">' + escapeHtml((settings.service_areas || []).join(', ')) + '</textarea>') +
       formField('Issue Categories', '<textarea class="form-input" rows="4" id="set-issue-categories">' + escapeHtml((settings.issue_categories || []).join(', ')) + '</textarea>') +
       formField('Negative Rating Limit', '<input type="number" class="form-input" id="set-negative-limit" value="' + Number(trustSettings.negative_rating_limit || 3) + '" />') +
       formField('Negative Rating Max Score', '<input type="number" class="form-input" id="set-negative-score" value="' + Number(trustSettings.negative_rating_max_score || 2) + '" />') +
@@ -137,6 +140,9 @@
         platform_bank_name: $('#set-bank-name').value.trim(),
         platform_account_number: $('#set-account-number').value.trim(),
         platform_account_name: $('#set-account-name').value.trim(),
+        supported_states: $('#set-supported-states').value.split(',').map((item) => item.trim()).filter(Boolean),
+        supported_cities: $('#set-supported-cities').value.split(',').map((item) => item.trim()).filter(Boolean),
+        launch_cities: $('#set-launch-cities').value.split(',').map((item) => item.trim()).filter(Boolean),
         service_areas: $('#set-service-areas').value.split(',').map((item) => item.trim()).filter(Boolean),
         issue_categories: $('#set-issue-categories').value.split(',').map((item) => item.trim()).filter(Boolean),
         trust_settings: trustSettings
@@ -879,12 +885,18 @@
 
   async function withButtonLoading(buttonId, loadingText, work) {
     const button = $('#' + buttonId);
-    const originalText = button ? button.textContent : '';
-    const originalHtml = button ? button.innerHTML : '';
-    const wasDisabled = button ? button.disabled : false;
-    if (button) {
+    let restoreButton = () => {};
+    if (button && window.VoltFriqMotion) {
+      restoreButton = window.VoltFriqMotion.setButtonLoading(button, loadingText);
+    } else if (button) {
+      const originalHtml = button.innerHTML;
+      const wasDisabled = button.disabled;
       button.disabled = true;
       button.textContent = loadingText;
+      restoreButton = () => {
+        button.innerHTML = originalHtml;
+        button.disabled = wasDisabled;
+      };
     }
     clearLoginError();
     try {
@@ -893,10 +905,7 @@
       showLoginError(error.message || 'Action failed.');
       return null;
     } finally {
-      if (button) {
-        button.innerHTML = originalHtml || originalText;
-        button.disabled = wasDisabled;
-      }
+      restoreButton();
     }
   }
 
@@ -1073,7 +1082,7 @@
   }
 
   function nextAction(job) {
-    if (job.needsManualAssignment) return 'No electrician available yet. Manual assignment required.';
+    if (job.needsManualAssignment) return 'Dispatch intervention is needed for this booking.';
     if (hasTimeoutTimeline(job) && job.status === 'matching') return 'An assignment expired. Reassign or let rematching continue.';
     if (hasRejectedTimeline(job) && job.status === 'matching') return 'Previous electrician rejected the job. Override if needed.';
     if (job.status === 'matching') return 'Automatic matching is trying approved nearby electricians.';

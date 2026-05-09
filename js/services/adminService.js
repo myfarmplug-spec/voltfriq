@@ -182,7 +182,7 @@
     const client = ensureClient();
     const result = await client
       .from('job_payments')
-      .select('*, jobs(*)')
+      .select('*')
       .eq('status', 'submitted')
       .order('created_at', { ascending: false });
     if (result.error) throw normalizeError(result.error, 'Could not load the payment verification queue.');

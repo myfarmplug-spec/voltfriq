@@ -4,17 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VoltFriq - Customer Portal</title>
-  <meta name="description" content="Book verified electricians in Port Harcourt with fast dispatch, manual payment verification, and live job tracking from request to completion." />
+  <meta name="description" content="Book verified electricians across Nigeria with guided dispatch, manual payment verification, and live job tracking from request to completion." />
   <meta name="theme-color" content="#07111d" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="VoltFriq | Port Harcourt Electricians" />
-  <meta property="og:description" content="Trusted electricians, fast response, and nearby support in Port Harcourt." />
+  <meta property="og:title" content="VoltFriq | Nigerian Electricians" />
+  <meta property="og:description" content="Trusted electricians, guided response, and support across Nigeria." />
   <meta property="og:url" content="https://www.voltfriq.com/" />
   <meta property="og:image" content="https://www.voltfriq.com/assets/voltfriq-home-hero.png?v=20260429-stability" />
-  <meta property="og:image:alt" content="VoltFriq electrician ready to help in Port Harcourt" />
+  <meta property="og:image:alt" content="VoltFriq electrician ready to help in Nigeria" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="VoltFriq | Port Harcourt Electricians" />
-  <meta name="twitter:description" content="Trusted electricians, fast response, and nearby support in Port Harcourt." />
+  <meta name="twitter:title" content="VoltFriq | Nigerian Electricians" />
+  <meta name="twitter:description" content="Trusted electricians, guided response, and support across Nigeria." />
   <meta name="twitter:image" content="https://www.voltfriq.com/assets/voltfriq-home-hero.png?v=20260429-stability" />
   <link rel="canonical" href="https://www.voltfriq.com/" />
   <link rel="manifest" href="/manifest.json" />
@@ -52,7 +52,7 @@
                 <span class="location-badge-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s7-4.5 7-10a7 7 0 10-14 0c0 5.5 7 10 7 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
                 </span>
-                <span>Live in Port Harcourt</span>
+                <span>Live across Nigeria</span>
               </div>
               <h1 class="welcome-title">
                 <span class="title-line">Book an</span>
@@ -80,9 +80,13 @@
             <div class="hero-visual-panel">
               <figure class="hero-figure">
                 <picture>
+                  <source type="image/avif" media="(min-width: 768px)" srcset="/assets/voltfriq-home-desktop-hero.avif" />
+                  <source type="image/webp" media="(min-width: 768px)" srcset="/assets/voltfriq-home-desktop-hero.webp" />
+                  <source type="image/avif" media="(max-width: 767px)" srcset="/assets/voltfriq-home-mobile-hero.avif" />
+                  <source type="image/webp" media="(max-width: 767px)" srcset="/assets/voltfriq-home-mobile-hero.webp" />
                   <source media="(min-width: 768px)" srcset="/assets/voltfriq-home-desktop-hero.png" />
                   <source media="(max-width: 767px)" srcset="/assets/voltfriq-home-mobile-hero.png" />
-                  <img src="/assets/voltfriq-home-desktop-hero.png" alt="VoltFriq electrician ready to help in Port-Harcourt" />
+                  <img src="/assets/voltfriq-home-desktop-hero.webp" alt="VoltFriq electrician ready to help in Port-Harcourt" />
                 </picture>
               </figure>
             </div>
@@ -146,8 +150,18 @@
 
       <div class="address-entry-panel" id="address-entry-panel" hidden>
         <div class="form-group">
+          <label class="form-label">State</label>
+          <select class="form-select" id="manual-state">
+            <option value="">Select state</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">City / LGA</label>
+          <input type="text" class="form-input" id="manual-city" list="nigeria-city-lga-options" placeholder="Example: Ikeja, Wuse, Enugu North" />
+        </div>
+        <div class="form-group">
           <label class="form-label">Address</label>
-          <input type="text" class="form-input" id="manual-street-address" list="service-area-options" placeholder="Example: 13 Rumadolu Market Road, Port Harcourt" />
+          <input type="text" class="form-input" id="manual-street-address" list="service-area-options" placeholder="Example: 13 Admiralty Way, Lekki, Lagos" />
         </div>
       </div>
 
@@ -494,6 +508,7 @@
           <span class="tracking-node tracking-node-c"></span>
           <span class="tracking-node tracking-node-d"></span>
           <div class="tracking-pulse-core">
+            <span class="tracking-current-particles" aria-hidden="true"><i></i><i></i><i></i></span>
             <span class="tracking-ring tracking-ring-one"></span>
             <span class="tracking-ring tracking-ring-two"></span>
             <span class="tracking-ring tracking-ring-three"></span>

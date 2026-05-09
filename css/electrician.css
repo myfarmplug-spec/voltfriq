@@ -53,6 +53,12 @@
   background: #07111f;
 }
 
+.elec-login-visual picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .elec-login-visual img {
   width: 100%;
   height: 100%;

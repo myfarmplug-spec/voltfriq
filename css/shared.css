@@ -100,7 +100,21 @@ a { color: inherit; }
   border-radius: 0;
   box-shadow: none;
 }
+.screen::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 8;
+  background:
+    linear-gradient(110deg, transparent 0%, rgba(255, 184, 0, 0.08) 42%, rgba(255, 247, 214, 0.16) 50%, rgba(255, 184, 0, 0.08) 58%, transparent 100%);
+  transform: translateX(-110%);
+}
 .screen.active { transform: translateX(0); z-index: 2; }
+.screen.active.is-energy-entering::after {
+  animation: vfScreenCurrentSweep 360ms cubic-bezier(0.4, 0, 0.2, 1);
+}
 .screen.prev { transform: translateX(-30%); z-index: 1; }
 
 .screen-body {
@@ -170,6 +184,8 @@ a { color: inherit; }
   transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
   box-shadow: 0 18px 36px rgba(255, 184, 0, 0.18);
   -webkit-tap-highlight-color: transparent;
+  position: relative;
+  overflow: hidden;
 }
 .btn-primary:hover { background: var(--yellow-dark); }
 .btn-primary:active { transform: scale(0.98); box-shadow: 0 0 18px rgba(255, 184, 0, 0.32); }
@@ -205,7 +221,9 @@ a { color: inherit; }
   font-weight: 600;
   cursor: pointer;
   padding: 14px 20px;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s;
+  position: relative;
+  overflow: hidden;
 }
 .btn-secondary:hover {
   border-color: rgba(255, 184, 0, 0.45);
@@ -224,6 +242,9 @@ a { color: inherit; }
   text-align: center;
   padding: 8px;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s, color 0.15s, background 0.15s;
+  position: relative;
+  overflow: hidden;
 }
 
 .btn-icon {
@@ -239,13 +260,127 @@ a { color: inherit; }
   color: rgba(255, 255, 255, 0.78);
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  position: relative;
+  overflow: hidden;
 }
 .btn-icon:hover {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 184, 0, 0.32);
 }
 .btn-icon:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.btn-primary::after,
+.btn-secondary::after,
+.btn-ghost::after,
+.btn-icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(110deg, transparent 0%, rgba(255, 247, 214, 0.42) 48%, rgba(255, 184, 0, 0.24) 56%, transparent 100%);
+  transform: translateX(-120%);
+}
+
+.btn-primary:active::after,
+.btn-secondary:active::after,
+.btn-ghost:active::after,
+.btn-icon:active::after,
+.btn-primary.is-loading::after,
+.btn-secondary.is-loading::after,
+.btn-ghost.is-loading::after,
+.btn-icon.is-loading::after {
+  animation: vfButtonEnergyFlash 320ms ease-out;
+}
+
+.btn-secondary:active,
+.btn-ghost:active,
+.btn-icon:active {
+  transform: scale(0.98);
+}
+
+.btn-primary.is-loading,
+.btn-secondary.is-loading,
+.btn-ghost.is-loading,
+.btn-icon.is-loading {
+  cursor: wait;
+}
+
+.btn-primary.is-loading:disabled {
+  background: linear-gradient(180deg, #FFC328, #FFB800);
+  color: #06101D;
+  box-shadow: 0 0 0 1px rgba(255, 184, 0, 0.24), 0 18px 36px rgba(255, 184, 0, 0.16);
+}
+
+.btn-secondary.is-loading:disabled,
+.btn-ghost.is-loading:disabled,
+.btn-icon.is-loading:disabled {
+  color: var(--text-primary);
+  background: rgba(255, 184, 0, 0.08);
+  border-color: rgba(255, 184, 0, 0.32);
+}
+
+.vf-energy-loader {
+  --vf-loader-size: 22px;
+  width: var(--vf-loader-size);
+  height: var(--vf-loader-size);
+  border-radius: 999px;
+  flex: 0 0 auto;
+  position: relative;
+  display: inline-block;
+  color: currentColor;
+  background:
+    radial-gradient(circle, rgba(255, 247, 214, 0.9) 0 10%, rgba(255, 184, 0, 0.26) 14%, transparent 36%),
+    conic-gradient(from 0deg, transparent 0 28%, rgba(255, 184, 0, 0.98) 34% 52%, rgba(255, 247, 214, 0.95) 57%, transparent 64% 100%);
+  box-shadow: 0 0 16px rgba(255, 184, 0, 0.28);
+  animation: vfElectricArc 780ms linear infinite;
+}
+
+.vf-energy-loader::before,
+.vf-energy-loader::after {
+  content: '';
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.vf-energy-loader::before {
+  inset: 4px;
+  background: rgba(7, 11, 20, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(255, 184, 0, 0.26);
+}
+
+.vf-energy-loader::after {
+  inset: -4px;
+  border: 1px solid rgba(255, 184, 0, 0.32);
+  opacity: 0.55;
+  animation: vfEnergyPulse 920ms ease-in-out infinite;
+}
+
+.vf-energy-loader--sm { --vf-loader-size: 20px; }
+.vf-energy-loader--md { --vf-loader-size: 28px; }
+.vf-energy-loader--lg { --vf-loader-size: 72px; }
+
+.vf-loading-label {
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+.vf-status-message.is-operating {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 184, 0, 0.34) !important;
+  background:
+    linear-gradient(90deg, rgba(255, 184, 0, 0.10), rgba(255, 184, 0, 0.04)),
+    rgba(10, 20, 35, 0.86) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 0 24px rgba(255, 184, 0, 0.12);
+}
 
 .btn-icon svg {
   width: 22px;
@@ -322,7 +457,9 @@ a { color: inherit; }
 .skeleton-line {
   position: relative;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.05);
+  background:
+    linear-gradient(90deg, rgba(255, 184, 0, 0.06), rgba(255, 255, 255, 0.035)),
+    rgba(255, 255, 255, 0.045);
 }
 
 .skeleton-card::after,
@@ -331,8 +468,9 @@ a { color: inherit; }
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
-  animation: voltfriqShimmer 1.35s infinite;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(255, 184, 0, 0.08) 42%, rgba(255, 247, 214, 0.14) 50%, rgba(255, 184, 0, 0.08) 58%, transparent 100%);
+  animation: vfVoltageSweep 1.18s infinite;
 }
 
 .skeleton-card {
@@ -351,6 +489,9 @@ a { color: inherit; }
 .skeleton-line.long { width: 82%; }
 
 @keyframes voltfriqShimmer {
+  100% { transform: translateX(100%); }
+}
+@keyframes vfVoltageSweep {
   100% { transform: translateX(100%); }
 }
 textarea.form-input { resize: none; line-height: 1.55; }
@@ -629,10 +770,41 @@ textarea.form-input { padding: 16px; min-height: 120px; }
   0%, 100% { transform: scale(1); }
   50% { transform: scale(0.9); }
 }
+@keyframes vfElectricArc {
+  to { transform: rotate(360deg); }
+}
+@keyframes vfEnergyPulse {
+  0%, 100% { transform: scale(0.92); opacity: 0.38; }
+  50% { transform: scale(1.08); opacity: 0.72; }
+}
+@keyframes vfButtonEnergyFlash {
+  0% { opacity: 0; transform: translateX(-120%); }
+  35% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(120%); }
+}
+@keyframes vfScreenCurrentSweep {
+  0% { opacity: 0; transform: translateX(-110%); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(110%); }
+}
+@keyframes vfCurrentLine {
+  to { stroke-dashoffset: -56; }
+}
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
 
 @media (min-width: 640px) {
   body { background:

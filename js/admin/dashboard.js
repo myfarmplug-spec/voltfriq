@@ -337,6 +337,7 @@
 		    const snapshotDriftCount = queueCount('snapshotDriftJobs') || Number(summaryQueues.snapshotDriftJobs || 0);
 		    const predictiveAlertCount = queueCount('predictiveAlerts') || Number(summaryQueues.predictiveAlerts || 0);
 		    const operationalDisputeCount = queueCount('openDisputes') || openDisputeCount || Number(summaryQueues.openDisputes || 0);
+		    const operationalLogCount = Array.isArray(operationalQueues.alerts) ? operationalQueues.alerts.length : Number(summaryQueues.openAlerts || summaryQueues.criticalAlerts || 0);
 		    const criticalAlertCount = (Array.isArray(operationalQueues.alerts) ? operationalQueues.alerts.filter((alert) => alert.severity === 'critical').length : 0) || Number(summaryQueues.criticalAlerts || 0);
 		    const actionSummary = [
 		      criticalAlertCount ? criticalAlertCount + ' critical alert' + (criticalAlertCount === 1 ? '' : 's') : null,
@@ -391,7 +392,8 @@
 	      queueCard('Payment Queue', operationalPaymentCount, 'Finance queue', 'Verify proofs before jobs move forward.', 'admin-finance'),
 	      queueCard('Approval Queue', operationalElectricianCount, 'Onboarding queue', 'Review pending VoltFriq applications and approve or reject.', 'admin-electricians', 'electricians', 'pending'),
 	      queueCard('Dispute Queue', operationalDisputeCount, 'Trust queue', 'Resolve open disputes and customer interventions.', 'admin-disputes'),
-	      queueCard('Recovery Queue', snapshotDriftCount + predictiveAlertCount, 'Reliability queue', 'Reconcile state drift and predictive operational risks.', 'admin-jobs')
+	      queueCard('Recovery Queue', snapshotDriftCount + predictiveAlertCount, 'Reliability queue', 'Reconcile state drift and predictive operational risks.', 'admin-jobs'),
+	      queueCard('Operational Log', operationalLogCount, 'Event log', 'Review active alerts and recent operational events.', 'admin-jobs')
 	    ].join('');
     $('#admin-control-queue').querySelectorAll('.admin-queue-card').forEach((card) => {
       card.addEventListener('click', () => navigateTo(card.dataset.target, filterRouteData(card)));

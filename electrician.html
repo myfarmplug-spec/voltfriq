@@ -51,7 +51,11 @@
         </div>
       </section>
       <aside class="elec-login-visual" aria-label="VoltFriq electrician welcome">
-        <img src="/assets/voltfriq-home-hero.png?v=20260429-onboardingv2" alt="VoltFriq verified electrician" />
+        <picture>
+          <source type="image/avif" srcset="/assets/voltfriq-home-hero.avif" />
+          <source type="image/webp" srcset="/assets/voltfriq-home-hero.webp" />
+          <img src="/assets/voltfriq-home-hero.png?v=20260429-onboardingv2" alt="VoltFriq verified electrician" />
+        </picture>
       </aside>
     </div>
   </div>
@@ -100,19 +104,15 @@
       </div>
       <div class="form-group">
         <label class="form-label">City / LGA</label>
-        <select class="form-select" id="reg-city">
-          <option value="">Select city or LGA</option>
-        </select>
+        <input type="text" class="form-input" id="reg-city" list="nigeria-city-lga-options" placeholder="Example: Ikeja, Wuse, Owerri Municipal" />
       </div>
       <div class="form-group">
         <label class="form-label">Street Address / House Number</label>
         <input type="text" class="form-input" id="reg-street-address" placeholder="Example: No. 12 Ada George Road" />
       </div>
       <div class="form-group">
-        <label class="form-label">Closest Service Area</label>
-        <select class="form-select" id="reg-location">
-          <option value="">Select closest service area</option>
-        </select>
+        <label class="form-label">Primary Service Area</label>
+        <input type="text" class="form-input" id="reg-location" list="service-area-options" placeholder="Example: Ikeja, Lagos or Kaduna" />
       </div>
       <div class="form-group">
         <label class="form-label">Profile Photo <span class="optional">(optional)</span></label>

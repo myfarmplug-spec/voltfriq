@@ -2,29 +2,32 @@
 
 const Store = (() => {
   const DEFAULT_SERVICE_AREAS = [
-    'GRA, Port Harcourt',
-    'Old GRA, Port Harcourt',
-    'New GRA, Port Harcourt',
-    'D-Line, Port Harcourt',
-    'Trans Amadi, Port Harcourt',
-    'Woji, Port Harcourt',
-    'Rumuola, Port Harcourt',
-    'Rumuodomaya, Port Harcourt',
-    'Rumuokoro, Port Harcourt',
-    'Rumuigbo, Port Harcourt',
-    'Ada George, Port Harcourt',
-    'Eliozu, Port Harcourt',
-    'Elelenwo, Port Harcourt',
-    'Mile 1, Port Harcourt',
-    'Mile 3, Port Harcourt',
-    'Choba, Port Harcourt'
+    'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa',
+    'Benue', 'Borno', 'Cross River', 'Delta', 'Ebonyi', 'Edo',
+    'Ekiti', 'Enugu', 'FCT', 'Gombe', 'Imo', 'Jigawa', 'Kaduna',
+    'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos', 'Nasarawa',
+    'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers',
+    'Sokoto', 'Taraba', 'Yobe', 'Zamfara'
   ];
   const LEGACY_LAGOS_AREAS = ['Lekki Phase 1', 'Victoria Island', 'Ikeja', 'Surulere', 'Yaba', 'Ajah'];
+  const LEGACY_PORT_HARCOURT_AREAS = [
+    'GRA, Port Harcourt', 'Old GRA, Port Harcourt', 'New GRA, Port Harcourt',
+    'D-Line, Port Harcourt', 'Trans Amadi, Port Harcourt', 'Woji, Port Harcourt',
+    'Rumuola, Port Harcourt', 'Rumuodomaya, Port Harcourt', 'Rumuokoro, Port Harcourt',
+    'Rumuigbo, Port Harcourt', 'Ada George, Port Harcourt', 'Eliozu, Port Harcourt',
+    'Elelenwo, Port Harcourt', 'Mile 1, Port Harcourt', 'Mile 3, Port Harcourt',
+    'Choba, Port Harcourt', 'Owerri Municipal', 'Owerri North', 'Owerri West',
+    'Orlu', 'Okigwe'
+  ];
   const REQUEST_TIMEOUT_MS = 45000;
 
   const DEFAULT_SETTINGS = {
     assessment_fee: 0,
     service_areas: DEFAULT_SERVICE_AREAS.slice(),
+    supported_states: DEFAULT_SERVICE_AREAS.slice(),
+    supported_cities: [],
+    launch_cities: [],
+    disabled_service_areas: [],
     issue_categories: [],
     ranking_weights: {},
     platform_bank_name: '',
@@ -536,11 +539,18 @@ const Store = (() => {
     const next = Object.assign({}, settings || {});
     const areas = Array.isArray(next.service_areas) ? next.service_areas.map((area) => String(area || '').trim()).filter(Boolean) : [];
     const normalizedAreas = areas.map((area) => area.toLowerCase());
-    const legacyOnly = areas.length > 0 && areas.every((area) => LEGACY_LAGOS_AREAS.map((legacy) => legacy.toLowerCase()).includes(area.toLowerCase()));
-    const hasPortHarcourtArea = normalizedAreas.some((area) => area.includes('port harcourt') || area.includes('phc'));
-    next.service_areas = (!areas.length || legacyOnly || !hasPortHarcourtArea)
+    const legacyAreas = LEGACY_LAGOS_AREAS.concat(LEGACY_PORT_HARCOURT_AREAS).map((legacy) => legacy.toLowerCase());
+    const legacyOnly = areas.length > 0 && areas.every((area) => legacyAreas.includes(area.toLowerCase()));
+    const hasNigeriaWideCoverage = DEFAULT_SERVICE_AREAS.every((stateName) => normalizedAreas.includes(stateName.toLowerCase()));
+    next.service_areas = (!areas.length || legacyOnly || !hasNigeriaWideCoverage)
       ? DEFAULT_SERVICE_AREAS.slice()
       : areas;
+    next.supported_states = Array.isArray(next.supported_states) && next.supported_states.length
+      ? next.supported_states.map((item) => String(item || '').trim()).filter(Boolean)
+      : DEFAULT_SERVICE_AREAS.slice();
+    next.supported_cities = Array.isArray(next.supported_cities) ? next.supported_cities.map((item) => String(item || '').trim()).filter(Boolean) : [];
+    next.launch_cities = Array.isArray(next.launch_cities) ? next.launch_cities.map((item) => String(item || '').trim()).filter(Boolean) : [];
+    next.disabled_service_areas = Array.isArray(next.disabled_service_areas) ? next.disabled_service_areas.map((item) => String(item || '').trim()).filter(Boolean) : [];
     return next;
   }
 
@@ -584,25 +594,7 @@ const Store = (() => {
       if (explicitMatch) return explicitMatch;
     }
 
-    const keywords = [
-      'ada george',
-      'old gra',
-      'new gra',
-      'gra',
-      'd line',
-      'd-line',
-      'trans amadi',
-      'woji',
-      'rumuola',
-      'rumuodomaya',
-      'rumuokoro',
-      'rumuigbo',
-      'eliozu',
-      'elelenwo',
-      'mile 1',
-      'mile 3',
-      'choba'
-    ];
+    const keywords = DEFAULT_SERVICE_AREAS.concat(state.settings && Array.isArray(state.settings.supported_cities) ? state.settings.supported_cities : []);
     let best = { area: '', score: 0 };
     areas.forEach((area) => {
       const normalizedArea = normalizeLocationText(area);

@@ -59,7 +59,7 @@
 
   function handleDetailsContinue() {
     if (!hasDraftLocation()) {
-      showError('Choose a location before continuing.');
+      showError('Choose a Nigerian location before continuing.');
       goTo('service-area');
       return;
     }
@@ -283,4 +283,3 @@
     }
     closeSpecialistSheet();
   }
-

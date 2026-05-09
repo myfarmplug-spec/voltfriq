@@ -73,7 +73,7 @@
   }
 
   const CUSTOMER_ROUTE_TITLES = {
-    welcome: 'VoltFriq | Port Harcourt Electricians',
+    welcome: 'VoltFriq | Nigerian Electricians',
     'service-area': 'VoltFriq | Book | Location',
     problem: 'VoltFriq | Book | Issue',
     details: 'VoltFriq | Book | Details',
@@ -185,6 +185,14 @@
     });
 
     on('manual-street-address', 'input', () => {
+      syncManualAddressDraft();
+      updateAvailabilityCard();
+    });
+    on('manual-state', 'change', () => {
+      syncManualAddressDraft();
+      updateAvailabilityCard();
+    });
+    on('manual-city', 'input', () => {
       syncManualAddressDraft();
       updateAvailabilityCard();
     });

@@ -143,7 +143,23 @@ const duplicateFunctionHits = duplicateFunctions.filter((name) => {
   return (hits || []).length > 1;
 });
 
-if (missingRpcs.length || missingTables.length || missingColumns.length || duplicateTableHits.length || duplicateFunctionHits.length) {
+// Supabase-owned supabase_admin default ACLs appear in hosted dumps, but the
+// project postgres role is not allowed to alter them. App-owned defaults must
+// remain locked down.
+const unsafePublicDefaultPrivilegePattern = /ALTER\s+DEFAULT\s+PRIVILEGES\s+FOR\s+ROLE\s+"?(?!supabase_admin\b)[^"\s]+"?\s+IN\s+SCHEMA\s+"?public"?\s+GRANT\s+ALL\s+ON\s+(?:TABLES|FUNCTIONS|SEQUENCES)\s+TO\s+"?(?:anon|authenticated)"?/i;
+const unsafePublicDefaultPrivileges = schemaSource
+  .split('\n')
+  .map((line, index) => ({ line, number: index + 1 }))
+  .filter(({ line }) => unsafePublicDefaultPrivilegePattern.test(line));
+
+if (
+  missingRpcs.length ||
+  missingTables.length ||
+  missingColumns.length ||
+  duplicateTableHits.length ||
+  duplicateFunctionHits.length ||
+  unsafePublicDefaultPrivileges.length
+) {
   if (missingRpcs.length) {
     console.error('Missing RPC definitions:\n- ' + missingRpcs.join('\n- '));
   }
@@ -158,6 +174,9 @@ if (missingRpcs.length || missingTables.length || missingColumns.length || dupli
   }
   if (duplicateFunctionHits.length) {
     console.error('Duplicate function definitions in schema.sql:\n- ' + duplicateFunctionHits.join('\n- '));
+  }
+  if (unsafePublicDefaultPrivileges.length) {
+    console.error('Unsafe public default privileges in schema.sql:\n- ' + unsafePublicDefaultPrivileges.map(({ line, number }) => `${number}: ${line.trim()}`).join('\n- '));
   }
   process.exit(1);
 }

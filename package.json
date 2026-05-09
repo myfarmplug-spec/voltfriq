@@ -8,12 +8,13 @@
     "build": "vite build && node scripts/copy-vite-static.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "check": "npm run check:js && npm run check:backend && npm run check:rpc && npm run check:copy && npm run build",
-    "check:js": "node --check vite.config.js && node --check scripts/vite-legacy-module-plugin.mjs && node --check js/entries/runtime.js && node --check js/entries/customer.js && node --check js/entries/electrician.js && node --check js/entries/admin.js && node --check js/services/index.js && node --check js/customer/index.js && node --check js/electrician/index.js && node --check js/admin/index.js && node --check js/navigation.js && node --check js/network.js && node --check js/chat.js && node --check api/guest-photo-upload.js && node --check api/guest-dispatch-otp.js && node --check api/dispatch-heartbeat.js && node --check api/env.js",
+    "check:js": "node --check vite.config.js && node --check scripts/vite-legacy-module-plugin.mjs && node --check scripts/optimize-hero-assets.mjs && node --check scripts/production-reset.mjs && node --check js/entries/runtime.js && node --check js/entries/customer.js && node --check js/entries/electrician.js && node --check js/entries/admin.js && node --check js/services/index.js && node --check js/customer/index.js && node --check js/electrician/index.js && node --check js/admin/index.js && node --check js/motion.js && node --check js/navigation.js && node --check js/network.js && node --check js/chat.js && node --check api/guest-photo-upload.js && node --check api/guest-dispatch-otp.js && node --check api/dispatch-heartbeat.js && node --check api/env.js",
     "check:backend": "node scripts/check-backend-contracts.mjs",
     "check:rpc": "node scripts/check-frontend-rpc-contracts.mjs",
     "check:copy": "node scripts/check-customer-copy.mjs"
   },
   "devDependencies": {
+    "sharp": "^0.34.5",
     "vite": "^8.0.11"
   },
   "dependencies": {

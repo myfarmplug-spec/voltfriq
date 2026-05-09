@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 export async function bootstrapRuntime() {
   window.supabase = window.supabase || { createClient };
   await loadRuntimeEnv();
+  await import('../motion.js');
   await import('../config.js');
   const { installNetworkResilience } = await import('../network.js');
   installNetworkResilience();

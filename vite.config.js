@@ -159,7 +159,19 @@ export default defineConfig({
   plugins: [voltfriqRoutesPlugin(), voltfriqLegacyModulesPlugin()],
   build: {
     rollupOptions: {
-      input: htmlInputs
+      input: htmlInputs,
+      output: {
+        manualChunks(id) {
+          if (id.includes('/node_modules/@supabase/')) return 'supabase';
+          if (id.includes('/js/admin/')) return 'admin';
+          if (id.includes('/js/electrician/')) return 'electrician';
+          if (id.includes('/js/customer/')) return 'customer';
+          if (id.includes('/js/services/')) return 'services';
+          if (id.includes('/js/chat.js')) return 'chat';
+          if (id.includes('/js/navigation.js') || id.includes('/js/network.js') || id.includes('/js/config.js')) return 'runtime';
+          return undefined;
+        }
+      }
     }
   }
 });

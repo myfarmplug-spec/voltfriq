@@ -23,11 +23,14 @@ const ElecApp = (() => {
   let electricianReconnectRefreshTimer = null;
   const PENDING_SIGNUP_KEY = 'voltfriq_pending_electrician_signup';
   const DEFAULT_COUNTRY = 'Nigeria';
-  const SUPPORTED_STATES = ['Rivers', 'Imo'];
-  const CITY_OPTIONS = {
-    Rivers: ['Port Harcourt', 'Obio-Akpor', 'Eleme', 'Oyigbo', 'Ikwerre'],
-    Imo: ['Owerri Municipal', 'Owerri North', 'Owerri West', 'Orlu', 'Okigwe']
-  };
+  const SUPPORTED_STATES = [
+    'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa',
+    'Benue', 'Borno', 'Cross River', 'Delta', 'Ebonyi', 'Edo',
+    'Ekiti', 'Enugu', 'FCT', 'Gombe', 'Imo', 'Jigawa', 'Kaduna',
+    'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos', 'Nasarawa',
+    'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers',
+    'Sokoto', 'Taraba', 'Yobe', 'Zamfara'
+  ];
 
   function wantsPasswordReset() {
     const query = new URLSearchParams(window.location.search || '');

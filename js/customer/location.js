@@ -57,6 +57,8 @@
   function renderSettings() {
     const areas = getConfiguredServiceAreas();
     setInputValue('manual-street-address', draft.streetAddress);
+    renderManualStateOptions();
+    renderManualCityOptions();
     renderLocationDatalist(areas);
     renderIssueSelect();
   }
@@ -78,7 +80,33 @@
   }
 
   function renderManualAddressControls() {
+    renderManualStateOptions();
+    renderManualCityOptions();
+    setInputValue('manual-city', draft.city);
     setInputValue('manual-street-address', draft.streetAddress);
+  }
+
+  function renderManualStateOptions() {
+    const select = document.getElementById('manual-state');
+    if (!select) return;
+    const settings = Store.getSettings ? Store.getSettings() : {};
+    const states = Array.isArray(settings.supported_states) && settings.supported_states.length ? settings.supported_states : getConfiguredServiceAreas();
+    const current = draft.state || select.value || '';
+    select.innerHTML = '<option value="">Select state</option>' + states.map((stateName) => '<option value="' + escapeAttribute(stateName) + '">' + escapeHtml(stateName) + '</option>').join('');
+    if (current && states.some((stateName) => stateName.toLowerCase() === current.toLowerCase())) {
+      select.value = states.find((stateName) => stateName.toLowerCase() === current.toLowerCase());
+    }
+  }
+
+  function renderManualCityOptions() {
+    const settings = Store.getSettings ? Store.getSettings() : {};
+    let datalist = document.getElementById('nigeria-city-lga-options');
+    if (!datalist) {
+      datalist = document.createElement('datalist');
+      datalist.id = 'nigeria-city-lga-options';
+      document.body.appendChild(datalist);
+    }
+    datalist.innerHTML = (settings.supported_cities || []).map((city) => '<option value="' + escapeAttribute(city) + '"></option>').join('');
   }
 
   function setInputValue(id, value) {
@@ -146,11 +174,13 @@
   }
 
   function syncManualAddressDraft() {
+    const state = getElementValue('manual-state');
+    const city = getElementValue('manual-city');
     const streetAddress = getElementValue('manual-street-address');
 
     draft.country = DEFAULT_COUNTRY;
-    draft.state = '';
-    draft.city = '';
+    draft.state = state;
+    draft.city = city;
     draft.streetAddress = streetAddress;
     draft.landmark = '';
 
@@ -178,8 +208,7 @@
   }
 
   function composeManualLocationLabel() {
-    if (!draft.streetAddress) return '';
-    return String(draft.streetAddress || '').trim();
+    return [draft.streetAddress, draft.city, draft.state, DEFAULT_COUNTRY].filter(Boolean).join(', ');
   }
 
   function manualServiceAreaFallback() {
@@ -187,7 +216,7 @@
   }
 
   function hasManualAddress() {
-    return Boolean(draft.streetAddress);
+    return Boolean(draft.streetAddress && draft.state);
   }
 
   function bindChoiceRow(id, callback) {
@@ -316,4 +345,3 @@
   function hasDraftLocation() {
     return Boolean(getFinalBookingLocation().locationLabel);
   }
-

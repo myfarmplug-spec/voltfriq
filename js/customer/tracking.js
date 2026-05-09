@@ -149,7 +149,7 @@
     }
 
     title.textContent = 'Booking confirmed';
-    sub.textContent = 'Pairing you with a VoltFriq';
+    sub.textContent = 'Pairing you with a VoltFriq...';
     note.textContent = 'Finding a verified electrician near you.';
   }
 
@@ -180,7 +180,7 @@
     if (screen) screen.classList.toggle('is-pairing', activeIndex === 1);
     const steps = [
       { title: 'Submitted', sub: submittedTime, icon: 'check' },
-      { title: 'Pairing', sub: activeIndex === 1 ? 'Finding VoltFriq' : 'Done', icon: 'bolt' },
+      { title: 'Pairing', sub: activeIndex === 1 ? 'Pairing you with a VoltFriq...' : 'Done', icon: 'bolt' },
       { title: 'Assigned', sub: activeIndex >= 2 ? 'Done' : 'Pending', icon: 'person' },
       { title: 'On the way', sub: activeIndex >= 3 ? 'In progress' : 'Pending', icon: 'car' },
       { title: 'Completed', sub: activeIndex >= 4 ? 'Done' : 'Pending', icon: 'flag' }
@@ -212,7 +212,7 @@
     const assessment = getTrackingAssessmentValue(job);
     const detailsState = trackingDetailsExpanded ? ' is-expanded' : '';
     const assignedName = job && job.assignedElectrician && job.assignedElectrician.name;
-    const headline = assignedName ? 'VoltFriq assigned' : 'Pairing you with a VoltFriq';
+    const headline = assignedName ? 'VoltFriq assigned' : 'Pairing you with a VoltFriq...';
     const reassurance = assignedName
       ? (String(assignedName).trim() + ' is connected to your booking.')
       : 'Finding a verified electrician near you.';

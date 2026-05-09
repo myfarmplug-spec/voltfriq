@@ -4,7 +4,7 @@
       return;
     }
     try {
-      setScreenBusy(true, 'Loading your jobs...');
+      setScreenBusy(true, 'Routing your job updates...');
       renderHistoryLoading();
       await renderSidecars();
       const jobs = await Store.listCustomerJobs();
@@ -99,7 +99,7 @@
     }
 
     try {
-      setScreenBusy(true, 'Loading your dashboard...');
+      setScreenBusy(true, 'Syncing your dashboard...');
       renderDashboardLoading();
       await renderSidecars();
       await renderDashboard();
@@ -139,7 +139,7 @@
     const latestJob = jobs[0] || null;
     document.getElementById('dashboard-addresses').innerHTML = [
       ['Latest area', latestJob ? latestJob.locationLabel || latestJob.serviceArea || '--' : '--'],
-      ['Service city', latestJob ? latestJob.serviceArea || '--' : 'Port Harcourt'],
+      ['Service area', latestJob ? latestJob.serviceArea || '--' : 'Nigeria'],
       ['Booking mode', latestJob ? 'Guided booking' : 'Ready when you are']
     ].map(renderMiniMetaRow).join('');
 
@@ -673,12 +673,18 @@
 
   async function withButtonLoading(buttonId, loadingText, work) {
     const button = document.getElementById(buttonId);
-    const originalText = button ? button.textContent : '';
-    const originalHtml = button ? button.innerHTML : '';
-    const wasDisabled = button ? button.disabled : false;
-    if (button) {
+    let restoreButton = () => {};
+    if (button && window.VoltFriqMotion) {
+      restoreButton = window.VoltFriqMotion.setButtonLoading(button, loadingText);
+    } else if (button) {
+      const originalHtml = button.innerHTML;
+      const wasDisabled = button.disabled;
       button.disabled = true;
       button.textContent = loadingText;
+      restoreButton = () => {
+        button.innerHTML = originalHtml;
+        button.disabled = wasDisabled;
+      };
     }
     clearError();
     try {
@@ -687,10 +693,7 @@
       showError(error);
       return null;
     } finally {
-      if (button) {
-        button.innerHTML = originalHtml || originalText;
-        button.disabled = wasDisabled;
-      }
+      restoreButton();
     }
   }
 
@@ -700,7 +703,11 @@
     clearError();
     const authError = document.getElementById('auth-error');
     authError.style.display = 'block';
-    authError.textContent = message || 'Loading...';
+    if (window.VoltFriqMotion) {
+      window.VoltFriqMotion.setStatusLoading(authError, message || 'Transmitting...');
+    } else {
+      authError.textContent = message || 'Transmitting...';
+    }
   }
 
   function clearError() {
@@ -708,10 +715,12 @@
     const authError = document.getElementById('auth-error');
     if (authError) {
       authError.classList.remove('is-success');
+      if (window.VoltFriqMotion) window.VoltFriqMotion.clearStatusLoading(authError);
       authError.style.display = 'none';
       authError.textContent = '';
     }
     document.querySelectorAll('.flow-error').forEach((error) => {
+      if (window.VoltFriqMotion) window.VoltFriqMotion.clearStatusLoading(error);
       error.style.display = 'none';
       error.textContent = '';
     });
@@ -766,7 +775,7 @@
   async function uploadGuestTrackingPhotos(input) {
     try {
       if (!currentJob || !input || !input.files || !input.files.length) return;
-      setScreenBusy(true, 'Uploading photos...');
+      setScreenBusy(true, 'Transmitting photos...');
       const job = await Store.uploadGuestJobPhotos(currentJob.id, Array.from(input.files));
       currentJob = job;
       showNotice('Photos added to your booking.');

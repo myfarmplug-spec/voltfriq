@@ -5,7 +5,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict NXlERA7gq9mQGsryfOJh0j11kEhbb3i1x39nrJ0AhtgsKeqCwB8K3CS52Zk8RJf
+\restrict axraMLCcBVkKhyrZKMQWFDUZX45QRDe8xJNLhYQ7sA2hl8jJ5b2g6eNtduj9a0Z
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.3
@@ -200,6 +200,43 @@ $$;
 
 
 ALTER FUNCTION "public"."actor_role_for_profile"("p_profile_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: admin_job_payload("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."admin_job_payload"("p_job_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  job_row public.jobs;
+begin
+  if not public.is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  if p_job_id is not null then
+    select * into job_row
+    from public.jobs
+    where id = p_job_id;
+
+    if not found then
+      raise exception 'Job not found';
+    end if;
+
+    return public.job_payload_for_role(job_row, 'admin');
+  end if;
+
+  return coalesce((
+    select jsonb_agg(public.job_payload_for_role(j, 'admin') order by j.created_at desc)
+    from public.jobs j
+  ), '[]'::jsonb);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."admin_job_payload"("p_job_id" "uuid") OWNER TO "postgres";
 
 --
 -- Name: admin_operational_queues(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -944,7 +981,8 @@ CREATE TABLE "public"."electricians" (
     "quality_penalty_until" timestamp with time zone,
     "quality_penalty_reason" "text",
     "reliability_score" numeric(5,2) DEFAULT 100 NOT NULL,
-    "tier" "text" DEFAULT 'Trusted'::"text" NOT NULL
+    "tier" "text" DEFAULT 'Trusted'::"text" NOT NULL,
+    "service_radius_km" integer DEFAULT 25 NOT NULL
 );
 
 
@@ -2024,6 +2062,50 @@ $$;
 ALTER FUNCTION "public"."current_electrician_id"() OWNER TO "postgres";
 
 --
+-- Name: customer_job_payload("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."customer_job_payload"("p_job_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  customer_row public.customers;
+  job_row public.jobs;
+begin
+  select * into customer_row
+  from public.customers
+  where profile_id = auth.uid();
+
+  if not found then
+    raise exception 'Customer profile not found';
+  end if;
+
+  if p_job_id is not null then
+    select * into job_row
+    from public.jobs
+    where id = p_job_id
+      and customer_id = customer_row.id;
+
+    if not found then
+      raise exception 'Job not found';
+    end if;
+
+    return public.job_payload_for_role(job_row, 'customer');
+  end if;
+
+  return coalesce((
+    select jsonb_agg(public.job_payload_for_role(j, 'customer') order by j.created_at desc)
+    from public.jobs j
+    where j.customer_id = customer_row.id
+  ), '[]'::jsonb);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."customer_job_payload"("p_job_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: detect_predictive_operational_risks(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -2098,7 +2180,15 @@ CREATE FUNCTION "public"."detect_predictive_operational_risks"() RETURNS TABLE("
     from public.operational_automation_runs
     where status = 'completed'
   ) latest
-  where latest.completed_at is null
+  where (
+      latest.completed_at is null
+      and exists (
+        select 1
+        from public.jobs j
+        where j.status not in ('rated', 'cancelled')
+        limit 1
+      )
+    )
      or latest.completed_at < now() - interval '10 minutes'
 
   union all
@@ -2642,6 +2732,50 @@ $$;
 ALTER FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") OWNER TO "postgres";
 
 --
+-- Name: electrician_job_payload("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."electrician_job_payload"("p_job_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  electrician_row public.electricians;
+  job_row public.jobs;
+begin
+  select * into electrician_row
+  from public.electricians
+  where profile_id = auth.uid();
+
+  if not found then
+    raise exception 'Electrician profile not found';
+  end if;
+
+  if p_job_id is not null then
+    select * into job_row
+    from public.jobs
+    where id = p_job_id
+      and assigned_electrician_id = electrician_row.id;
+
+    if not found then
+      raise exception 'Job not found';
+    end if;
+
+    return public.job_payload_for_role(job_row, 'electrician');
+  end if;
+
+  return coalesce((
+    select jsonb_agg(public.job_payload_for_role(j, 'electrician') order by j.created_at desc)
+    from public.jobs j
+    where j.assigned_electrician_id = electrician_row.id
+  ), '[]'::jsonb);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."electrician_job_payload"("p_job_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: electrician_level_rank("text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -3038,6 +3172,8 @@ CREATE FUNCTION "public"."find_matching_electricians"("p_service_area" "text", "
           select 1
           from unnest(e.service_areas) as area
           where lower(regexp_replace(trim(area), '\s+', ' ', 'g')) = lower(regexp_replace(trim(p_service_area), '\s+', ' ', 'g'))
+             or lower(regexp_replace(trim(p_service_area), '\s+', ' ', 'g')) like '%' || lower(regexp_replace(trim(area), '\s+', ' ', 'g')) || '%'
+             or lower(regexp_replace(trim(area), '\s+', ' ', 'g')) like '%' || lower(regexp_replace(trim(p_service_area), '\s+', ' ', 'g')) || '%'
         )
         or (
           p_latitude is not null
@@ -3051,7 +3187,7 @@ CREATE FUNCTION "public"."find_matching_electricians"("p_service_area" "text", "
                 sin(radians(p_latitude)) * sin(radians(e.latitude))
               ))
             )
-          ) <= settings.max_distance_km
+          ) <= coalesce(nullif(e.service_radius_km, 0), settings.max_distance_km)
         )
       )
   )
@@ -3066,7 +3202,7 @@ CREATE FUNCTION "public"."find_matching_electricians"("p_service_area" "text", "
     average_rating,
     completed_jobs,
     availability_status,
-    distance_km,
+    round(distance_km::numeric, 2) as distance_km,
     average_response_seconds,
     last_assigned_at,
     level_badge,
@@ -3075,13 +3211,13 @@ CREATE FUNCTION "public"."find_matching_electricians"("p_service_area" "text", "
     level_rank
   from ranked
   order by
-    (distance_km + case when watchlist then watchlist_rank_penalty_km else 0 end) asc,
-    average_rating desc nulls last,
-    completed_jobs desc,
+    distance_km asc,
+    watchlist asc,
+    negative_rating_count asc,
     level_rank desc,
-    average_response_seconds asc nulls last,
-    coalesce(last_assigned_at, to_timestamp(0)) asc
-  limit greatest(p_limit, 1);
+    average_rating desc,
+    completed_jobs desc
+  limit p_limit;
 $$;
 
 
@@ -3701,6 +3837,252 @@ $$;
 
 
 ALTER FUNCTION "public"."job_event_type_for_status"("p_status" "public"."job_status") OWNER TO "postgres";
+
+--
+-- Name: job_payload_for_role("public"."jobs", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION "public"."job_payload_for_role"("p_job" "public"."jobs", "p_role" "text") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select jsonb_strip_nulls(jsonb_build_object(
+    'id', p_job.id,
+    'ticket', p_job.ticket,
+    'customer_id', p_job.customer_id,
+    'guest_customer_id', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then p_job.guest_customer_id end,
+    'assigned_electrician_id', p_job.assigned_electrician_id,
+    'service_area', p_job.service_area,
+    'location_label', p_job.location_label,
+    'latitude', p_job.latitude,
+    'longitude', p_job.longitude,
+    'issue_category', p_job.issue_category,
+    'urgency', p_job.urgency,
+    'customer_note', p_job.customer_note,
+    'requires_assessment', p_job.requires_assessment,
+    'material_handling', p_job.material_handling,
+    'status', p_job.status,
+    'state_version', p_job.state_version,
+    'candidate_queue', case when lower(coalesce(p_role, '')) = 'admin' then p_job.candidate_queue end,
+    'attempted_electrician_ids', case when lower(coalesce(p_role, '')) = 'admin' then p_job.attempted_electrician_ids end,
+    'dispatch_attempts', case when lower(coalesce(p_role, '')) = 'admin' then p_job.dispatch_attempts end,
+    'last_dispatch_at', case when lower(coalesce(p_role, '')) = 'admin' then p_job.last_dispatch_at end,
+    'dispatch_priority_score', case when lower(coalesce(p_role, '')) = 'admin' then p_job.dispatch_priority_score end,
+    'dispatch_priority_reason', case when lower(coalesce(p_role, '')) = 'admin' then p_job.dispatch_priority_reason end,
+    'assignment_expires_at', p_job.assignment_expires_at,
+    'accepted_at', p_job.accepted_at,
+    'customer_confirmed_at', p_job.customer_confirmed_at,
+    'electrician_completed_at', p_job.electrician_completed_at,
+    'payout_released_at', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then p_job.payout_released_at end,
+    'created_at', p_job.created_at,
+    'updated_at', p_job.updated_at,
+    'guest_dispatch_verified_at', case when lower(coalesce(p_role, '')) = 'admin' then p_job.guest_dispatch_verified_at end,
+    'customer', case when p_job.customer_id is not null then (
+      select jsonb_strip_nulls(jsonb_build_object(
+        'id', c.id,
+        'profile_id', c.profile_id,
+        'primary_service_area', c.primary_service_area,
+        'location_label', c.location_label,
+        'phone', case when lower(coalesce(p_role, '')) in ('admin', 'electrician', 'customer') then coalesce(c.phone, p.phone) end,
+        'average_behavior_rating', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then c.average_behavior_rating end,
+        'total_behavior_ratings', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then c.total_behavior_ratings end,
+        'completed_requests', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then c.completed_requests end,
+        'cancellation_count', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then c.cancellation_count end,
+        'no_show_reports', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then c.no_show_reports end,
+        'dispute_count', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then c.dispute_count end,
+        'payment_issue_count', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then c.payment_issue_count end,
+        'trust_status', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then c.trust_status end,
+        'trust_notes', case when lower(coalesce(p_role, '')) = 'admin' then c.trust_notes end,
+        'profile', jsonb_strip_nulls(jsonb_build_object(
+          'full_name', p.full_name,
+          'phone', case when lower(coalesce(p_role, '')) in ('admin', 'electrician', 'customer') then coalesce(p.phone, c.phone) end
+        ))
+      ))
+      from public.customers c
+      left join public.profiles p on p.id = c.profile_id
+      where c.id = p_job.customer_id
+    ) end,
+    'guest_customer', case when p_job.guest_customer_id is not null and lower(coalesce(p_role, '')) in ('admin', 'electrician') then (
+      select jsonb_build_object(
+        'id', g.id,
+        'phone', g.phone,
+        'location_label', g.location_label,
+        'created_at', g.created_at
+      )
+      from public.guest_customers g
+      where g.id = p_job.guest_customer_id
+    ) end,
+    'assigned_electrician', case when p_job.assigned_electrician_id is not null then (
+      select jsonb_strip_nulls(jsonb_build_object(
+        'id', e.id,
+        'profile_id', e.profile_id,
+        'display_name', coalesce(p.full_name, 'VoltFriq'),
+        'name', coalesce(p.full_name, 'VoltFriq'),
+        'avatar_url', p.avatar_url,
+        'status', case when lower(coalesce(p_role, '')) = 'admin' then e.status end,
+        'years_experience', e.years_experience,
+        'service_areas', e.service_areas,
+        'location_label', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then e.location_label end,
+        'latitude', case when lower(coalesce(p_role, '')) = 'admin' then e.latitude end,
+        'longitude', case when lower(coalesce(p_role, '')) = 'admin' then e.longitude end,
+        'average_rating', e.average_rating,
+        'total_ratings', e.total_ratings,
+        'completed_jobs', e.completed_jobs,
+        'availability_status', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then e.availability_status end,
+        'response_rate', e.response_rate,
+        'level_badge', e.level_badge,
+        'watchlist', case when lower(coalesce(p_role, '')) = 'admin' then e.watchlist end,
+        'watchlist_reason', case when lower(coalesce(p_role, '')) = 'admin' then e.watchlist_reason end,
+        'negative_rating_count', case when lower(coalesce(p_role, '')) = 'admin' then e.negative_rating_count end,
+        'suspended_reason', case when lower(coalesce(p_role, '')) = 'admin' then e.suspended_reason end,
+        'acceptance_score', e.acceptance_score,
+        'response_score', e.response_score,
+        'completion_score', e.completion_score,
+        'dispute_score', e.dispute_score,
+        'reliability_score', e.reliability_score,
+        'tier', e.tier,
+        'profile', jsonb_strip_nulls(jsonb_build_object(
+          'full_name', p.full_name,
+          'phone', case when lower(coalesce(p_role, '')) in ('admin', 'electrician') then p.phone end,
+          'avatar_url', p.avatar_url
+        )),
+        'electrician_skills', coalesce((
+          select jsonb_agg(jsonb_build_object('category', s.category) order by s.category)
+          from public.electrician_skills s
+          where s.electrician_id = e.id
+        ), '[]'::jsonb)
+      ))
+      from public.electricians e
+      left join public.profiles p on p.id = e.profile_id
+      where e.id = p_job.assigned_electrician_id
+    ) end,
+    'job_photos', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', ph.id,
+        'job_id', ph.job_id,
+        'file_path', ph.file_path,
+        'created_at', ph.created_at
+      ) order by ph.created_at)
+      from public.job_photos ph
+      where ph.job_id = p_job.id
+    ), '[]'::jsonb),
+    'job_quotes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', q.id,
+        'job_id', q.job_id,
+        'electrician_id', q.electrician_id,
+        'findings', q.findings,
+        'measurements', q.measurements,
+        'labor_total', q.labor_total,
+        'material_total', q.material_total,
+        'grand_total', q.grand_total,
+        'created_at', q.created_at,
+        'quote_items', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', qi.id,
+            'quote_id', qi.quote_id,
+            'item_type', qi.item_type,
+            'description', qi.description,
+            'quantity', qi.quantity,
+            'unit_price', qi.unit_price,
+            'line_total', qi.line_total,
+            'created_at', qi.created_at
+          ) order by qi.created_at)
+          from public.quote_items qi
+          where qi.quote_id = q.id
+        ), '[]'::jsonb)
+      ) order by q.created_at)
+      from public.job_quotes q
+      where q.job_id = p_job.id
+    ), '[]'::jsonb),
+    'job_payments', coalesce((
+      select jsonb_agg(
+        case when lower(coalesce(p_role, '')) = 'admin' then
+          jsonb_build_object(
+            'id', pay.id,
+            'job_id', pay.job_id,
+            'submitted_by', pay.submitted_by,
+            'payment_type', pay.payment_type,
+            'amount', pay.amount,
+            'proof_path', pay.proof_path,
+            'reference', pay.reference,
+            'status', pay.status,
+            'admin_note', pay.admin_note,
+            'verified_by', pay.verified_by,
+            'verified_at', pay.verified_at,
+            'created_at', pay.created_at,
+            'guest_customer_id', pay.guest_customer_id
+          )
+        else
+          jsonb_strip_nulls(jsonb_build_object(
+            'id', pay.id,
+            'job_id', pay.job_id,
+            'payment_type', pay.payment_type,
+            'amount', pay.amount,
+            'reference', pay.reference,
+            'status', pay.status,
+            'verified_at', pay.verified_at,
+            'created_at', pay.created_at
+          ))
+        end
+        order by pay.created_at desc
+      )
+      from public.job_payments pay
+      where pay.job_id = p_job.id
+    ), '[]'::jsonb),
+    'progress_timeline', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', e.id,
+        'job_id', e.job_id,
+        'event_type', e.event_type,
+        'public_message', public.public_message_for_job_event(e.event_type, coalesce(e.projected_status, p_job.status), e.public_message),
+        'metadata', case when lower(coalesce(p_role, '')) = 'admin' then e.metadata else '{}'::jsonb end,
+        'created_at', e.created_at
+      ) order by e.created_at)
+      from public.job_events e
+      where e.job_id = p_job.id
+        and nullif(btrim(coalesce(e.public_message, '')), '') is not null
+        and (lower(coalesce(p_role, '')) = 'admin' or e.visibility = 'public')
+    ), '[]'::jsonb),
+    'job_events', case when lower(coalesce(p_role, '')) = 'admin' then coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', e.id,
+        'job_id', e.job_id,
+        'event_type', e.event_type,
+        'actor_role', e.actor_role,
+        'actor_id', e.actor_id,
+        'request_id', e.request_id,
+        'event_version', e.event_version,
+        'transition_id', e.transition_id,
+        'public_message', public.public_message_for_job_event(e.event_type, coalesce(e.projected_status, p_job.status), e.public_message),
+        'internal_note', e.internal_note,
+        'metadata', e.metadata,
+        'payload', e.payload,
+        'created_at', e.created_at
+      ) order by e.created_at)
+      from public.job_events e
+      where e.job_id = p_job.id
+    ), '[]'::jsonb) end,
+    'ratings', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id,
+        'job_id', r.job_id,
+        'customer_id', r.customer_id,
+        'electrician_id', r.electrician_id,
+        'score', r.score,
+        'comment', r.comment,
+        'review_direction', r.review_direction,
+        'behavior_tags', r.behavior_tags,
+        'created_at', r.created_at
+      ) order by r.created_at)
+      from public.ratings r
+      where r.job_id = p_job.id
+    ), '[]'::jsonb)
+  ));
+$$;
+
+
+ALTER FUNCTION "public"."job_payload_for_role"("p_job" "public"."jobs", "p_role" "text") OWNER TO "postgres";
 
 --
 -- Name: job_status_for_event("text", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -8884,7 +9266,11 @@ CREATE TABLE "public"."admin_settings" (
     "workmanship_prices" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "trust_settings" "jsonb" DEFAULT '{"elite_jobs": 60, "rising_jobs": 3, "trusted_jobs": 10, "top_rated_jobs": 25, "negative_rating_limit": 3, "negative_rating_max_score": 2, "watchlist_rank_penalty_km": 8}'::"jsonb" NOT NULL
+    "trust_settings" "jsonb" DEFAULT '{"elite_jobs": 60, "rising_jobs": 3, "trusted_jobs": 10, "top_rated_jobs": 25, "negative_rating_limit": 3, "negative_rating_max_score": 2, "watchlist_rank_penalty_km": 8}'::"jsonb" NOT NULL,
+    "supported_states" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "supported_cities" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "launch_cities" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "disabled_service_areas" "text"[] DEFAULT '{}'::"text"[] NOT NULL
 );
 
 
@@ -11916,7 +12302,17 @@ GRANT ALL ON SCHEMA "storage" TO "dashboard_user";
 -- Name: FUNCTION "actor_role_for_profile"("p_profile_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
+REVOKE ALL ON FUNCTION "public"."actor_role_for_profile"("p_profile_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."actor_role_for_profile"("p_profile_id" "uuid") TO "service_role";
+
+
+--
+-- Name: FUNCTION "admin_job_payload"("p_job_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."admin_job_payload"("p_job_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."admin_job_payload"("p_job_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."admin_job_payload"("p_job_id" "uuid") TO "authenticated";
 
 
 --
@@ -11941,9 +12337,8 @@ GRANT ALL ON FUNCTION "public"."admin_operational_summary"() TO "authenticated";
 -- Name: TABLE "jobs"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE "public"."jobs" TO "anon";
-GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE "public"."jobs" TO "authenticated";
 GRANT ALL ON TABLE "public"."jobs" TO "service_role";
+GRANT SELECT ON TABLE "public"."jobs" TO "authenticated";
 
 
 --
@@ -11952,7 +12347,6 @@ GRANT ALL ON TABLE "public"."jobs" TO "service_role";
 
 REVOKE ALL ON FUNCTION "public"."admin_rebuild_job_projection"("p_job_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."admin_rebuild_job_projection"("p_job_id" "uuid") TO "service_role";
-GRANT ALL ON FUNCTION "public"."admin_rebuild_job_projection"("p_job_id" "uuid") TO "authenticated";
 
 
 --
@@ -11970,7 +12364,6 @@ GRANT ALL ON FUNCTION "public"."admin_reconcile_job_state"("p_job_id" "uuid") TO
 
 REVOKE ALL ON FUNCTION "public"."admin_replay_job_events"("p_job_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."admin_replay_job_events"("p_job_id" "uuid") TO "service_role";
-GRANT ALL ON FUNCTION "public"."admin_replay_job_events"("p_job_id" "uuid") TO "authenticated";
 
 
 --
@@ -12072,7 +12465,6 @@ GRANT ALL ON FUNCTION "public"."audit_direct_job_status_write"() TO "service_rol
 
 REVOKE ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) TO "service_role";
-GRANT ALL ON FUNCTION "public"."calculate_electrician_level"("p_completed_jobs" integer, "p_average_rating" numeric, "p_total_ratings" integer, "p_response_rate" numeric, "p_watchlist" boolean) TO "authenticated";
 
 
 --
@@ -12089,7 +12481,6 @@ GRANT SELECT ON TABLE "public"."system_health_snapshots" TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."capture_system_health_snapshot"("p_source" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."capture_system_health_snapshot"("p_source" "text") TO "service_role";
-GRANT ALL ON FUNCTION "public"."capture_system_health_snapshot"("p_source" "text") TO "authenticated";
 
 
 --
@@ -12148,9 +12539,9 @@ GRANT ALL ON FUNCTION "public"."create_dispute"("p_job_id" "uuid", "p_issue_type
 --
 
 REVOKE ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[], "p_client_fingerprint" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[], "p_client_fingerprint" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[], "p_client_fingerprint" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[], "p_client_fingerprint" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_service_area" "text", "p_location_label" "text", "p_latitude" double precision, "p_longitude" double precision, "p_issue_category" "text", "p_urgency" "public"."job_urgency", "p_customer_note" "text", "p_requires_assessment" boolean, "p_material_handling" "text", "p_photo_paths" "text"[], "p_client_fingerprint" "text") TO "service_role";
 
 
 --
@@ -12158,9 +12549,9 @@ GRANT ALL ON FUNCTION "public"."create_guest_customer_job"("p_phone" "text", "p_
 --
 
 REVOKE ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_guest_dispute"("p_job_id" "uuid", "p_access_token" "text", "p_issue_type" "text", "p_details" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "service_role";
 
 
 --
@@ -12195,6 +12586,15 @@ GRANT ALL ON FUNCTION "public"."current_customer_id"() TO "authenticated";
 REVOKE ALL ON FUNCTION "public"."current_electrician_id"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."current_electrician_id"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."current_electrician_id"() TO "authenticated";
+
+
+--
+-- Name: FUNCTION "customer_job_payload"("p_job_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."customer_job_payload"("p_job_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."customer_job_payload"("p_job_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."customer_job_payload"("p_job_id" "uuid") TO "authenticated";
 
 
 --
@@ -12243,8 +12643,17 @@ GRANT ALL ON FUNCTION "public"."dispatch_job_internal"("p_job_id" "uuid", "p_man
 --
 
 REVOKE ALL ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "electrician_job_payload"("p_job_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."electrician_job_payload"("p_job_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."electrician_job_payload"("p_job_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."electrician_job_payload"("p_job_id" "uuid") TO "authenticated";
 
 
 --
@@ -12253,7 +12662,6 @@ GRANT ALL ON FUNCTION "public"."electrician_accept_job"("p_job_id" "uuid") TO "s
 
 REVOKE ALL ON FUNCTION "public"."electrician_level_rank"("p_level" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."electrician_level_rank"("p_level" "text") TO "service_role";
-GRANT ALL ON FUNCTION "public"."electrician_level_rank"("p_level" "text") TO "authenticated";
 
 
 --
@@ -12315,7 +12723,6 @@ GRANT ALL ON TABLE "public"."wallets" TO "service_role";
 
 REVOKE ALL ON FUNCTION "public"."ensure_wallet_for_profile"("p_profile_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."ensure_wallet_for_profile"("p_profile_id" "uuid") TO "service_role";
-GRANT ALL ON FUNCTION "public"."ensure_wallet_for_profile"("p_profile_id" "uuid") TO "authenticated";
 
 
 --
@@ -12339,6 +12746,7 @@ GRANT ALL ON FUNCTION "public"."generate_referral_code"() TO "service_role";
 -- Name: FUNCTION "get_admin_job_events"("p_job_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
+REVOKE ALL ON FUNCTION "public"."get_admin_job_events"("p_job_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_admin_job_events"("p_job_id" "uuid") TO "service_role";
 GRANT ALL ON FUNCTION "public"."get_admin_job_events"("p_job_id" "uuid") TO "authenticated";
 
@@ -12357,6 +12765,7 @@ GRANT ALL ON FUNCTION "public"."get_guest_job"("p_job_id" "uuid", "p_access_toke
 -- Name: FUNCTION "get_public_job_events"("p_job_id" "uuid", "p_access_token" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
+REVOKE ALL ON FUNCTION "public"."get_public_job_events"("p_job_id" "uuid", "p_access_token" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_public_job_events"("p_job_id" "uuid", "p_access_token" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."get_public_job_events"("p_job_id" "uuid", "p_access_token" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_public_job_events"("p_job_id" "uuid", "p_access_token" "text") TO "authenticated";
@@ -12448,9 +12857,9 @@ GRANT ALL ON FUNCTION "public"."is_valid_job_transition"("p_current_status" "pub
 --
 
 REVOKE ALL ON FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."issue_guest_action_token"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_otp_challenge_id" "uuid", "p_otp_code" "text") TO "service_role";
 
 
 --
@@ -12465,7 +12874,16 @@ GRANT ALL ON FUNCTION "public"."job_event_to_timeline"() TO "service_role";
 -- Name: FUNCTION "job_event_type_for_status"("p_status" "public"."job_status"); Type: ACL; Schema: public; Owner: postgres
 --
 
+REVOKE ALL ON FUNCTION "public"."job_event_type_for_status"("p_status" "public"."job_status") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."job_event_type_for_status"("p_status" "public"."job_status") TO "service_role";
+
+
+--
+-- Name: FUNCTION "job_payload_for_role"("p_job" "public"."jobs", "p_role" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."job_payload_for_role"("p_job" "public"."jobs", "p_role" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."job_payload_for_role"("p_job" "public"."jobs", "p_role" "text") TO "service_role";
 
 
 --
@@ -12474,13 +12892,13 @@ GRANT ALL ON FUNCTION "public"."job_event_type_for_status"("p_status" "public"."
 
 REVOKE ALL ON FUNCTION "public"."job_status_for_event"("p_event_type" "text", "p_metadata" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."job_status_for_event"("p_event_type" "text", "p_metadata" "jsonb") TO "service_role";
-GRANT ALL ON FUNCTION "public"."job_status_for_event"("p_event_type" "text", "p_metadata" "jsonb") TO "authenticated";
 
 
 --
 -- Name: FUNCTION "job_timeline_to_event"(); Type: ACL; Schema: public; Owner: postgres
 --
 
+REVOKE ALL ON FUNCTION "public"."job_timeline_to_event"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."job_timeline_to_event"() TO "service_role";
 
 
@@ -12532,7 +12950,6 @@ GRANT ALL ON FUNCTION "public"."operational_alert_dedupe_key"("p_alert_type" "te
 
 REVOKE ALL ON FUNCTION "public"."platform_health_snapshot"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."platform_health_snapshot"() TO "service_role";
-GRANT ALL ON FUNCTION "public"."platform_health_snapshot"() TO "authenticated";
 
 
 --
@@ -12579,6 +12996,7 @@ GRANT ALL ON FUNCTION "public"."project_job_event_state"() TO "service_role";
 -- Name: FUNCTION "public_message_for_job_event"("p_event_type" "text", "p_status" "public"."job_status", "p_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
+REVOKE ALL ON FUNCTION "public"."public_message_for_job_event"("p_event_type" "text", "p_status" "public"."job_status", "p_note" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."public_message_for_job_event"("p_event_type" "text", "p_status" "public"."job_status", "p_note" "text") TO "service_role";
 
 
@@ -12596,7 +13014,6 @@ GRANT ALL ON FUNCTION "public"."rebuild_all_job_projections"("p_limit" integer, 
 
 REVOKE ALL ON FUNCTION "public"."rebuild_all_job_state_projections"("p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."rebuild_all_job_state_projections"("p_limit" integer) TO "service_role";
-GRANT ALL ON FUNCTION "public"."rebuild_all_job_state_projections"("p_limit" integer) TO "authenticated";
 
 
 --
@@ -12613,7 +13030,6 @@ GRANT ALL ON FUNCTION "public"."rebuild_all_projections"("p_limit" integer, "p_r
 
 REVOKE ALL ON FUNCTION "public"."rebuild_job_projection"("p_job_id" "uuid", "p_request_id" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."rebuild_job_projection"("p_job_id" "uuid", "p_request_id" "text") TO "service_role";
-GRANT ALL ON FUNCTION "public"."rebuild_job_projection"("p_job_id" "uuid", "p_request_id" "text") TO "authenticated";
 
 
 --
@@ -12622,7 +13038,6 @@ GRANT ALL ON FUNCTION "public"."rebuild_job_projection"("p_job_id" "uuid", "p_re
 
 REVOKE ALL ON FUNCTION "public"."rebuild_job_state_projection"("p_job_id" "uuid", "p_reason" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."rebuild_job_state_projection"("p_job_id" "uuid", "p_reason" "text") TO "service_role";
-GRANT ALL ON FUNCTION "public"."rebuild_job_state_projection"("p_job_id" "uuid", "p_reason" "text") TO "authenticated";
 
 
 --
@@ -12688,7 +13103,6 @@ GRANT SELECT ON TABLE "public"."electrician_performance_snapshots" TO "authentic
 
 REVOKE ALL ON FUNCTION "public"."refresh_electrician_performance_snapshot"("p_electrician_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."refresh_electrician_performance_snapshot"("p_electrician_id" "uuid") TO "service_role";
-GRANT ALL ON FUNCTION "public"."refresh_electrician_performance_snapshot"("p_electrician_id" "uuid") TO "authenticated";
 
 
 --
@@ -12744,9 +13158,9 @@ GRANT ALL ON FUNCTION "public"."replay_job_events_internal"("p_job_id" "uuid", "
 --
 
 REVOKE ALL ON FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."request_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_phone_confirmation" "text", "p_client_fingerprint" "text") TO "service_role";
 
 
 --
@@ -12813,8 +13227,8 @@ GRANT ALL ON FUNCTION "public"."sanitize_request_id"("p_request_id" "text") TO "
 --
 
 REVOKE ALL ON FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "service_role";
+GRANT ALL ON FUNCTION "public"."set_job_status"("p_job_id" "uuid", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb") TO "authenticated";
 
 
 --
@@ -12858,9 +13272,9 @@ GRANT ALL ON TABLE "public"."job_payments" TO "service_role";
 --
 
 REVOKE ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."submit_guest_payment_proof"("p_job_id" "uuid", "p_access_token" "text", "p_payment_type" "public"."payment_type", "p_amount" numeric, "p_reference" "text", "p_proof_path" "text", "p_phone_confirmation" "text", "p_action_token" "text") TO "service_role";
 
 
 --
@@ -12968,9 +13382,9 @@ GRANT ALL ON FUNCTION "public"."transition_job_state"("p_job_id" "uuid", "p_next
 --
 
 REVOKE ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_guest_job_status"("p_job_id" "uuid", "p_access_token" "text", "p_next_status" "public"."job_status", "p_note" "text", "p_metadata" "jsonb", "p_action_token" "text") TO "service_role";
 
 
 --
@@ -12986,9 +13400,9 @@ GRANT ALL ON FUNCTION "public"."upsert_operational_alert"("p_alert_type" "text",
 --
 
 REVOKE ALL ON FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."verify_guest_otp"("p_job_id" "uuid", "p_access_token" "text", "p_action_type" "text", "p_challenge_id" "uuid", "p_otp_code" "text") TO "service_role";
 
 
 --
@@ -13364,5 +13778,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TA
 -- PostgreSQL database dump complete
 --
 
-\unrestrict NXlERA7gq9mQGsryfOJh0j11kEhbb3i1x39nrJ0AhtgsKeqCwB8K3CS52Zk8RJf
+\unrestrict axraMLCcBVkKhyrZKMQWFDUZX45QRDe8xJNLhYQ7sA2hl8jJ5b2g6eNtduj9a0Z
 

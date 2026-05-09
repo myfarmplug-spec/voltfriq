@@ -3699,6 +3699,11 @@
   stroke-linejoin: round;
 }
 
+#screen-assigned.is-pairing .tracking-route path {
+  stroke-dasharray: 28 28;
+  animation: vfCurrentLine 1.2s linear infinite;
+}
+
 #screen-assigned .tracking-node {
   position: absolute;
   width: 12px;
@@ -3724,6 +3729,67 @@
   place-items: center;
 }
 
+#screen-assigned .tracking-pulse-core::before,
+#screen-assigned .tracking-pulse-core::after {
+  content: '';
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+}
+
+#screen-assigned .tracking-pulse-core::before {
+  inset: -24px;
+  background: conic-gradient(from 0deg, transparent 0 58%, rgba(255, 184, 0, 0.95) 63% 75%, rgba(255, 247, 214, 0.92) 79%, transparent 86% 100%);
+  -webkit-mask-image: radial-gradient(circle, transparent 0 58%, #000 61% 72%, transparent 75%);
+  mask-image: radial-gradient(circle, transparent 0 58%, #000 61% 72%, transparent 75%);
+  filter: drop-shadow(0 0 12px rgba(255, 184, 0, 0.48));
+}
+
+#screen-assigned .tracking-pulse-core::after {
+  inset: -10px;
+  border: 1px solid rgba(255, 184, 0, 0.24);
+  box-shadow: 0 0 34px rgba(255, 184, 0, 0.28);
+}
+
+#screen-assigned.is-pairing .tracking-pulse-core::before {
+  opacity: 1;
+  animation: vfElectricArc 1.1s linear infinite;
+}
+
+#screen-assigned.is-pairing .tracking-pulse-core::after {
+  opacity: 1;
+  animation: vfEnergyPulse 1.5s ease-in-out infinite;
+}
+
+#screen-assigned .tracking-current-particles {
+  position: absolute;
+  inset: -38px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#screen-assigned .tracking-current-particles i {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #fff3bc;
+  box-shadow: 0 0 14px rgba(255, 184, 0, 0.9), 0 0 28px rgba(255, 184, 0, 0.28);
+}
+
+#screen-assigned .tracking-current-particles i:nth-child(1) { left: 8%; top: 50%; animation-delay: 0s; }
+#screen-assigned .tracking-current-particles i:nth-child(2) { left: 48%; top: 7%; animation-delay: 0.26s; }
+#screen-assigned .tracking-current-particles i:nth-child(3) { right: 8%; top: 58%; animation-delay: 0.52s; }
+
+#screen-assigned.is-pairing .tracking-current-particles {
+  opacity: 1;
+}
+
+#screen-assigned.is-pairing .tracking-current-particles i {
+  animation: trackingCurrentParticle 1.35s ease-in-out infinite;
+}
+
 #screen-assigned .tracking-ring,
 #screen-assigned .tracking-core-bolt {
   position: absolute;
@@ -3733,7 +3799,12 @@
 #screen-assigned .tracking-ring {
   border: 1.4px solid rgba(255, 184, 0, 0.78);
   box-shadow: 0 0 25px rgba(255, 184, 0, 0.18);
-  animation: trackingPulse 2.4s ease-in-out infinite;
+  opacity: 0.5;
+}
+
+#screen-assigned.is-pairing .tracking-ring {
+  opacity: 1;
+  animation: trackingPulse 2.1s ease-in-out infinite;
 }
 
 #screen-assigned .tracking-ring-one { inset: -34px; animation-delay: 0s; }
@@ -3747,6 +3818,10 @@
   color: #fff5b8;
   background: radial-gradient(circle, rgba(255, 184, 0, 0.42), rgba(255, 184, 0, 0.10) 68%);
   box-shadow: 0 0 35px rgba(255, 184, 0, 0.52);
+}
+
+#screen-assigned.is-pairing .tracking-core-bolt {
+  animation: trackingCoreGlow 1.55s ease-in-out infinite;
 }
 
 #screen-assigned .tracking-core-bolt svg {
@@ -4086,6 +4161,31 @@
   50% {
     transform: scale(1.04);
     opacity: 1;
+  }
+}
+
+@keyframes trackingCoreGlow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 28px rgba(255, 184, 0, 0.38);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 40px rgba(255, 184, 0, 0.58);
+  }
+}
+
+@keyframes trackingCurrentParticle {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(0.76);
+    opacity: 0.22;
+  }
+  45% {
+    transform: translate3d(10px, -6px, 0) scale(1);
+    opacity: 0.95;
+  }
+  70% {
+    opacity: 0.45;
   }
 }
 

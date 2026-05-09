@@ -165,16 +165,20 @@
   }
 
   function renderElectricianAddressControls() {
+    const settings = Store.getSettings ? Store.getSettings() : {};
+    const states = Array.isArray(settings.supported_states) && settings.supported_states.length ? settings.supported_states : SUPPORTED_STATES;
     renderSelectOptions('reg-country', [DEFAULT_COUNTRY], getElementValue('reg-country') || DEFAULT_COUNTRY, 'Select country');
-    renderSelectOptions('reg-state', SUPPORTED_STATES, getElementValue('reg-state'), 'Select state');
+    renderSelectOptions('reg-state', states, getElementValue('reg-state'), 'Select state');
     renderElectricianCityOptions();
   }
 
   function renderElectricianCityOptions() {
-    const state = getElementValue('reg-state');
+    const settings = Store.getSettings ? Store.getSettings() : {};
     const currentCity = getElementValue('reg-city');
-    const cities = CITY_OPTIONS[state] || [];
-    renderSelectOptions('reg-city', cities, currentCity, 'Select city or LGA');
+    const cities = Array.isArray(settings.supported_cities) ? settings.supported_cities : [];
+    renderDatalist('nigeria-city-lga-options', cities);
+    const cityInput = document.getElementById('reg-city');
+    if (cityInput && document.activeElement !== cityInput) cityInput.value = currentCity;
   }
 
   function renderSelectOptions(id, options, currentValue, placeholder) {
@@ -219,7 +223,7 @@
           country
         })
       : '';
-    const serviceArea = closestServiceArea || inferredServiceArea;
+    const serviceArea = closestServiceArea || inferredServiceArea || state;
     return {
       country,
       state,
@@ -231,7 +235,7 @@
       location_label: locationLabel,
       baseLocationLabel: locationLabel,
       base_location_label: locationLabel,
-      serviceAreas: serviceArea ? [serviceArea] : []
+      serviceAreas: Array.from(new Set([serviceArea, city && state ? city + ', ' + state : '', state].filter(Boolean)))
     };
   }
 
@@ -242,20 +246,29 @@
     const safeAreas = (areas || []).filter(Boolean);
     const address = getElectricianAddressDraft();
     const inferredValue = address.closestServiceArea || '';
-    locationSelect.innerHTML = '<option value="">Select closest service area</option>' +
-      safeAreas.map((area) => '<option value="' + escapeAttribute(area) + '">' + escapeHtml(area) + '</option>').join('');
-    if (currentValue && safeAreas.some((area) => area.toLowerCase() === currentValue.toLowerCase())) {
-      const match = safeAreas.find((area) => area.toLowerCase() === currentValue.toLowerCase());
-      locationSelect.value = match;
-      return match;
+    renderDatalist('service-area-options', safeAreas);
+    if (locationSelect.tagName === 'SELECT') {
+      locationSelect.innerHTML = '<option value="">Select closest service area</option>' +
+        safeAreas.map((area) => '<option value="' + escapeAttribute(area) + '">' + escapeHtml(area) + '</option>').join('');
     }
+    if (currentValue) return currentValue;
     if (inferredValue && safeAreas.some((area) => area.toLowerCase() === inferredValue.toLowerCase())) {
       const match = safeAreas.find((area) => area.toLowerCase() === inferredValue.toLowerCase());
       locationSelect.value = match;
       return match;
     }
-    locationSelect.value = '';
-    return '';
+    locationSelect.value = inferredValue || address.state || '';
+    return locationSelect.value;
+  }
+
+  function renderDatalist(id, options) {
+    let datalist = document.getElementById(id);
+    if (!datalist) {
+      datalist = document.createElement('datalist');
+      datalist.id = id;
+      document.body.appendChild(datalist);
+    }
+    datalist.innerHTML = (options || []).filter(Boolean).map((item) => '<option value="' + escapeAttribute(item) + '"></option>').join('');
   }
 
   function getRegistrationSkillOptions(settings) {
@@ -354,12 +367,18 @@
 
   async function withButtonLoading(buttonId, loadingText, work) {
     const button = document.getElementById(buttonId);
-    const originalText = button ? button.textContent : '';
-    const originalHtml = button ? button.innerHTML : '';
-    const wasDisabled = button ? button.disabled : false;
-    if (button) {
+    let restoreButton = () => {};
+    if (button && window.VoltFriqMotion) {
+      restoreButton = window.VoltFriqMotion.setButtonLoading(button, loadingText);
+    } else if (button) {
+      const originalHtml = button.innerHTML;
+      const wasDisabled = button.disabled;
       button.disabled = true;
       button.textContent = loadingText;
+      restoreButton = () => {
+        button.innerHTML = originalHtml;
+        button.disabled = wasDisabled;
+      };
     }
     clearError();
     try {
@@ -368,10 +387,7 @@
       showError(error.message || 'Action failed.');
       return null;
     } finally {
-      if (button) {
-        button.innerHTML = originalHtml || originalText;
-        button.disabled = wasDisabled;
-      }
+      restoreButton();
     }
   }
 

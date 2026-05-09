@@ -708,7 +708,11 @@ body.mobile-menu-open {
     background-image:
       radial-gradient(circle at 78% 12%, rgba(255, 184, 0, 0.16), transparent 24%),
       linear-gradient(90deg, rgba(4, 10, 19, 0.94) 0%, rgba(4, 10, 19, 0.88) 28%, rgba(4, 10, 19, 0.52) 48%, rgba(4, 10, 19, 0.14) 68%, rgba(4, 10, 19, 0) 100%),
-      url('/assets/voltfriq-home-desktop-hero.png');
+      image-set(
+        url('/assets/voltfriq-home-desktop-hero.avif') type('image/avif'),
+        url('/assets/voltfriq-home-desktop-hero.webp') type('image/webp'),
+        url('/assets/voltfriq-home-desktop-hero.png') type('image/png')
+      );
     background-repeat: no-repeat, no-repeat, no-repeat;
     background-position: center, center, center;
     background-size: cover, cover, cover;

@@ -114,6 +114,13 @@ function activateScreen(id, options) {
   });
 
   next.classList.add('active');
+  next.classList.remove('is-energy-entering');
+  if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    requestAnimationFrame(() => {
+      next.classList.add('is-energy-entering');
+      setTimeout(() => next.classList.remove('is-energy-entering'), 420);
+    });
+  }
   next.scrollTop = 0;
 
   if (restoreStack) {

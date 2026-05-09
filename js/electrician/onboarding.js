@@ -268,7 +268,7 @@
       }
       body.innerHTML =
         (item.previewUrl ? '<img class="doc-preview-image" src="' + item.previewUrl + '" alt="' + type + ' preview" />' : '<div class="doc-preview-file">PDF</div>') +
-        '<div class="doc-file-meta"><strong>' + escapeHtml(item.file.name) + '</strong><span>' + escapeHtml(item.status === 'uploading' ? 'Uploading...' : item.status === 'uploaded' ? 'Uploaded' : 'Ready to upload') + '</span></div>' +
+        '<div class="doc-file-meta"><strong>' + escapeHtml(item.file.name) + '</strong><span>' + escapeHtml(item.status === 'uploading' ? 'Transmitting...' : item.status === 'uploaded' ? 'Uploaded' : 'Ready to upload') + '</span></div>' +
         '<div class="doc-progress"><span style="width:' + Number(item.progress || 0) + '%"></span></div>';
     });
   }
@@ -498,4 +498,3 @@
       ].map(profileRow).join('');
     }
   }
-

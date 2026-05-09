@@ -11,26 +11,9 @@
         return [];
       }
     }
-    const result = await client
-      .from('jobs')
-      .select(`
-        *,
-        assigned_electrician:electricians(
-          *,
-          profile:profiles(full_name, phone, avatar_url),
-          electrician_skills(category)
-        ),
-        guest_customer:guest_customers(*),
-        job_photos(*),
-        job_quotes:job_quotes!job_quotes_job_id_fkey(*, quote_items(*)),
-        job_payments(*),
-        job_timeline(*),
-        ratings(*)
-      `)
-      .eq('customer_id', customerId)
-      .order('created_at', { ascending: false });
+    const result = await client.rpc('customer_job_payload', { p_job_id: null });
     if (result.error) throw normalizeError(result.error, 'Could not load customer jobs.');
-	    const jobs = (result.data || []).map(normalizeJob);
+	    const jobs = payloadRows(result.data).map(normalizeJob);
 	    await Promise.all(jobs.map((job) => hydrateOperationalEvents(job).then(hydrateProtectedAssets)));
 	    return jobs;
 	  }
@@ -39,83 +22,49 @@
     const client = ensureClient();
     const electricianId = state.electrician && state.electrician.id;
     if (!electricianId) return [];
-    const result = await client
-      .from('jobs')
-      .select(`
-        *,
-        customer:customers(*, profile:profiles(full_name, phone)),
-        guest_customer:guest_customers(*),
-        job_photos(*),
-        job_quotes:job_quotes!job_quotes_job_id_fkey(*, quote_items(*)),
-        job_payments(*),
-        job_timeline(*),
-        ratings(*)
-      `)
-      .eq('assigned_electrician_id', electricianId)
-      .order('created_at', { ascending: false });
+    const result = await client.rpc('electrician_job_payload', { p_job_id: null });
     if (result.error) throw normalizeError(result.error, 'Could not load assigned jobs.');
-	    const jobs = (result.data || []).map(normalizeJob);
+	    const jobs = payloadRows(result.data).map(normalizeJob);
 	    await Promise.all(jobs.map((job) => hydrateOperationalEvents(job).then(hydrateProtectedAssets)));
 	    return jobs;
 	  }
 
   async function listAdminJobs(options) {
     const client = ensureClient();
-    const result = await client
-      .from('jobs')
-      .select(`
-        *,
-        customer:customers(*, profile:profiles(full_name, phone)),
-        guest_customer:guest_customers(*),
-        assigned_electrician:electricians(
-          *,
-          profile:profiles(full_name, phone, avatar_url)
-        ),
-        job_quotes:job_quotes!job_quotes_job_id_fkey(*, quote_items(*)),
-        job_payments(*),
-        job_timeline(*),
-        ratings(*)
-      `)
-      .order('created_at', { ascending: false });
+    const result = await client.rpc('admin_job_payload', { p_job_id: null });
     if (result.error) throw normalizeError(result.error, 'Could not load admin jobs.');
-    const jobs = (result.data || []).map(normalizeJob);
+    const jobs = payloadRows(result.data).map(normalizeJob);
     if (!options || options.includeProtectedAssets !== false) {
       await Promise.all(jobs.map(hydrateProtectedAssets));
     }
     return jobs;
   }
 
-  async function getJob(jobId) {
+	  async function getJob(jobId) {
     const client = ensureClient();
     const guest = getGuestAccess();
     if (!state.profile && guest && guest.jobId === jobId && guest.accessToken) {
       return getGuestJob(jobId, guest.accessToken);
     }
-    const result = await client
-      .from('jobs')
-      .select(`
-        *,
-        customer:customers(*, profile:profiles(full_name, phone)),
-        guest_customer:guest_customers(*),
-        assigned_electrician:electricians(
-          *,
-          profile:profiles(full_name, phone, avatar_url),
-          electrician_skills(category),
-          electrician_documents(*)
-        ),
-        job_photos(*),
-        job_quotes:job_quotes!job_quotes_job_id_fkey(*, quote_items(*)),
-        job_payments(*),
-        job_timeline(*),
-        ratings(*)
-      `)
-      .eq('id', jobId)
-      .single();
+    const rpcName = state.profile && state.profile.role === 'admin'
+      ? 'admin_job_payload'
+      : state.profile && state.profile.role === 'electrician'
+        ? 'electrician_job_payload'
+        : 'customer_job_payload';
+    const result = await client.rpc(rpcName, { p_job_id: jobId });
 	    if (result.error) throw normalizeError(result.error, 'Could not load the job details.');
-	    const job = normalizeJob(result.data);
+	    const row = payloadRows(result.data)[0];
+	    if (!row) throw new Error('Job not found.');
+	    const job = normalizeJob(row);
 	    await hydrateOperationalEvents(job);
 	    return hydrateProtectedAssets(job);
 	  }
+
+  function payloadRows(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (!payload) return [];
+    return [payload];
+  }
 
   async function previewMatches(input) {
     const client = ensureClient();
