@@ -174,6 +174,13 @@ const ElecApp = (() => {
     }
   ];
 
+  function showElectricianLoading(message) {
+    if (window.VoltFriqMotion && typeof window.VoltFriqMotion.showGlobalLoading === 'function') {
+      return window.VoltFriqMotion.showGlobalLoading(message || 'Syncing dashboard...');
+    }
+    return () => {};
+  }
+
   async function init() {
     configureElectricianRoutes();
     bindEvents();
@@ -272,59 +279,64 @@ const ElecApp = (() => {
 
   async function handleElectricianRouteActivation(route) {
     if (!route || !route.screen) return;
+    const finishLoading = showElectricianLoading('Syncing dashboard...');
     const electrician = Store.getCurrentElectrician();
     const profile = Store.getCurrentProfile();
 
-    if (!profile) {
-      if (route.screen === 'elec-reg-1') {
-        goTo('elec-reg-1', { replace: route.source !== 'popstate' });
+    try {
+      if (!profile) {
+        if (route.screen === 'elec-reg-1') {
+          goTo('elec-reg-1', { replace: route.source !== 'popstate' });
+          return;
+        }
+        goTo('elec-login', { replace: route.source !== 'popstate' });
         return;
       }
-      goTo('elec-login', { replace: route.source !== 'popstate' });
-      return;
-    }
 
-    if (!electrician) {
-      goTo('elec-login', { replace: route.source !== 'popstate' });
-      return;
-    }
+      if (!electrician) {
+        goTo('elec-login', { replace: route.source !== 'popstate' });
+        return;
+      }
 
-    if (electrician.status === 'pending' || electrician.status === 'rejected') {
-      renderPendingDashboard(electrician);
-      goTo('elec-pending', { replace: route.source !== 'popstate' });
-      return;
-    }
+      if (electrician.status === 'pending' || electrician.status === 'rejected') {
+        renderPendingDashboard(electrician);
+        goTo('elec-pending', { replace: route.source !== 'popstate' });
+        return;
+      }
 
-    if (electrician.status === 'suspended') {
-      await renderAppealScreen(electrician);
-      goTo('elec-appeal', { replace: route.source !== 'popstate' });
-      return;
-    }
+      if (electrician.status === 'suspended') {
+        await renderAppealScreen(electrician);
+        goTo('elec-appeal', { replace: route.source !== 'popstate' });
+        return;
+      }
 
-    if (route.screen === 'elec-job-detail' && route.data && route.data.ticket) {
-      const job = await openJobByTicket(route.data.ticket);
-      if (job) return;
-    }
+      if (route.screen === 'elec-job-detail' && route.data && route.data.ticket) {
+        const job = await openJobByTicket(route.data.ticket);
+        if (job) return;
+      }
 
-    if (route.screen === 'elec-history') {
-      renderHistory();
-      goTo('elec-history', { replace: route.source !== 'popstate' });
-      return;
-    }
+      if (route.screen === 'elec-history') {
+        renderHistory();
+        goTo('elec-history', { replace: route.source !== 'popstate' });
+        return;
+      }
 
-    if (route.screen === 'elec-profile') {
-      renderProfile();
-      goTo('elec-profile', { replace: route.source !== 'popstate' });
-      return;
-    }
+      if (route.screen === 'elec-profile') {
+        renderProfile();
+        goTo('elec-profile', { replace: route.source !== 'popstate' });
+        return;
+      }
 
-    if (route.screen === 'elec-pending') {
-      goTo('elec-dashboard', { replace: true });
-      return;
-    }
+      if (route.screen === 'elec-pending') {
+        goTo('elec-dashboard', { replace: true });
+        return;
+      }
 
-    await loadDashboard();
-    goTo('elec-dashboard', { replace: route.source !== 'popstate' });
+      await loadDashboard();
+      goTo('elec-dashboard', { replace: route.source !== 'popstate' });
+    } finally {
+      finishLoading();
+    }
   }
 
   function bindEvents() {
@@ -421,30 +433,35 @@ const ElecApp = (() => {
   }
 
   async function resumeSession(route) {
-    const electrician = Store.getCurrentElectrician();
-    if (!electrician) {
-      goTo('elec-login', { replace: true });
-      return;
-    }
+    const finishLoading = showElectricianLoading('Syncing dashboard...');
+    try {
+      const electrician = Store.getCurrentElectrician();
+      if (!electrician) {
+        goTo('elec-login', { replace: true });
+        return;
+      }
 
-    if (electrician.status === 'pending') {
-      renderPendingDashboard(electrician);
-      goTo('elec-pending', { replace: true });
-      return;
-    }
-    if (electrician.status === 'suspended') {
-      await renderAppealScreen(electrician);
-      goTo('elec-appeal', { replace: true });
-      return;
-    }
-    if (electrician.status === 'rejected') {
-      renderPendingDashboard(electrician);
-      goTo('elec-pending', { replace: true });
-      return;
-    }
+      if (electrician.status === 'pending') {
+        renderPendingDashboard(electrician);
+        goTo('elec-pending', { replace: true });
+        return;
+      }
+      if (electrician.status === 'suspended') {
+        await renderAppealScreen(electrician);
+        goTo('elec-appeal', { replace: true });
+        return;
+      }
+      if (electrician.status === 'rejected') {
+        renderPendingDashboard(electrician);
+        goTo('elec-pending', { replace: true });
+        return;
+      }
 
-    await loadDashboard();
-    await handleElectricianRouteActivation(route || { screen: 'elec-dashboard', data: null, source: 'resume' });
+      await loadDashboard();
+      await handleElectricianRouteActivation(route || { screen: 'elec-dashboard', data: null, source: 'resume' });
+    } finally {
+      finishLoading();
+    }
   }
 
   async function handleLogin() {

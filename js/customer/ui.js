@@ -12,6 +12,7 @@
   let ratingValue = 0;
   let selectedRatingTags = [];
   let screenBusy = false;
+  let screenBusyFinish = null;
   let addressMode = 'gps';
   let authScreenIntent = 'default';
   let pendingCustomerRoute = null;

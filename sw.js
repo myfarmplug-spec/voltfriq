@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voltfriq-shell-v20260508-production-checklist';
+const CACHE_NAME = 'voltfriq-shell-v20260509-loader-fix';
 const APP_SHELL = [
   '/offline.html',
   '/manifest.json',

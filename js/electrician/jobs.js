@@ -1,11 +1,16 @@
   async function openJob(jobId) {
-    currentJob = await Store.getJob(jobId);
-    bindJobSubscription(jobId);
-    renderJobDetail();
-    goTo('elec-job-detail', {
-      routeData: { ticket: currentJob.ticket }
-    });
-    return currentJob;
+    const finishLoading = showElectricianLoading('Syncing dashboard...');
+    try {
+      currentJob = await Store.getJob(jobId);
+      bindJobSubscription(jobId);
+      renderJobDetail();
+      goTo('elec-job-detail', {
+        routeData: { ticket: currentJob.ticket }
+      });
+      return currentJob;
+    } finally {
+      finishLoading();
+    }
   }
 
   async function openJobByTicket(ticket) {
@@ -341,4 +346,3 @@
       renderConfirmScreen();
     });
   }
-

@@ -33,6 +33,29 @@ const Store = (() => {
     platform_bank_name: '',
     platform_account_number: '',
     platform_account_name: '',
+    payment_configuration: {
+      active_provider: 'manual',
+      preferred_provider: '',
+      providers: {
+        manual: {
+          enabled: true
+        },
+        paystack: {
+          enabled: false,
+          public_key: '',
+          secret_key: '',
+          webhook_secret: '',
+          subaccount_code: ''
+        },
+        remita: {
+          enabled: false,
+          merchant_id: '',
+          service_type_id: '',
+          api_key: '',
+          gateway_url: ''
+        }
+      }
+    },
     workmanship_prices: [],
     trust_settings: {
       negative_rating_limit: 3,
@@ -551,6 +574,16 @@ const Store = (() => {
     next.supported_cities = Array.isArray(next.supported_cities) ? next.supported_cities.map((item) => String(item || '').trim()).filter(Boolean) : [];
     next.launch_cities = Array.isArray(next.launch_cities) ? next.launch_cities.map((item) => String(item || '').trim()).filter(Boolean) : [];
     next.disabled_service_areas = Array.isArray(next.disabled_service_areas) ? next.disabled_service_areas.map((item) => String(item || '').trim()).filter(Boolean) : [];
+    const paymentConfig = next.payment_configuration || {};
+    next.payment_configuration = {
+      active_provider: paymentConfig.active_provider || 'manual',
+      preferred_provider: paymentConfig.preferred_provider || '',
+      providers: {
+        manual: Object.assign({}, DEFAULT_SETTINGS.payment_configuration.providers.manual, paymentConfig.providers && paymentConfig.providers.manual || {}),
+        paystack: Object.assign({}, DEFAULT_SETTINGS.payment_configuration.providers.paystack, paymentConfig.providers && paymentConfig.providers.paystack || {}),
+        remita: Object.assign({}, DEFAULT_SETTINGS.payment_configuration.providers.remita, paymentConfig.providers && paymentConfig.providers.remita || {})
+      }
+    };
     return next;
   }
 

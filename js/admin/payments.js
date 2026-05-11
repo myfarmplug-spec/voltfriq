@@ -2,6 +2,8 @@
     const payoutJobs = currentJobs.filter((job) => ['customer_confirmed', 'payout_pending'].includes(job.status));
     const completedJobs = currentJobs.filter(isCompletedJob);
     const totalRevenue = completedJobs.reduce((sum, job) => sum + Number((job.quote && job.quote.total) || 0), 0);
+    const paymentConfig = getPaymentConfiguration();
+    const providerLabel = paymentProviderLabel(paymentConfig.preferred_provider);
 
     $('#finance-summary').innerHTML =
       '<div class="admin-finance-summary">' +
@@ -11,6 +13,7 @@
           '<div class="admin-finance-metric"><div class="admin-finance-metric-value">' + Store.formatCurrency(totalRevenue) + '</div><div class="admin-finance-metric-label">Completed revenue</div></div>' +
           '<div class="admin-finance-metric"><div class="admin-finance-metric-value">' + payoutJobs.length + '</div><div class="admin-finance-metric-label">Payouts waiting</div></div>' +
         '</div>' +
+        '<div class="admin-feed-text" style="margin-top:12px">Live mode: Manual verification. ' + (providerLabel ? (providerLabel + ' is staged in settings for later implementation.') : 'Paystack or Remita can be staged in settings when the team is ready.') + '</div>' +
       '</div>';
 
     $('#finance-tx-list').innerHTML = currentPayments.length ? currentPayments.map(paymentCard).join('') : emptyState('No payments waiting for verification.');
@@ -89,11 +92,25 @@
   function renderSettings() {
     const settings = Store.getSettings();
     const trustSettings = settings.trust_settings || {};
+    const paymentConfig = getPaymentConfiguration();
+    const paystackConfig = paymentConfig.providers.paystack || {};
+    const remitaConfig = paymentConfig.providers.remita || {};
     $('#settings-form').innerHTML =
       formField('Assessment Fee (₦)', '<input type="number" class="form-input" id="set-assessment-fee" value="' + Number(settings.assessment_fee || 0) + '" />') +
       formField('Platform Bank Name', '<input type="text" class="form-input" id="set-bank-name" value="' + escapeAttribute(settings.platform_bank_name || '') + '" />') +
       formField('Platform Account Number', '<input type="text" class="form-input" id="set-account-number" value="' + escapeAttribute(settings.platform_account_number || '') + '" />') +
       formField('Platform Account Name', '<input type="text" class="form-input" id="set-account-name" value="' + escapeAttribute(settings.platform_account_name || '') + '" />') +
+      '<div style="margin:20px 0 8px" class="admin-section-title">Payment Providers</div>' +
+      formField('Live Collection Mode', '<input type="text" class="form-input" value="Manual verification" disabled />') +
+      formField('Provider In Preparation', '<select class="form-input" id="set-preferred-provider"><option value=""' + (!paymentConfig.preferred_provider ? ' selected' : '') + '>None yet</option><option value="paystack"' + (paymentConfig.preferred_provider === 'paystack' ? ' selected' : '') + '>Paystack</option><option value="remita"' + (paymentConfig.preferred_provider === 'remita' ? ' selected' : '') + '>Remita</option></select>') +
+      formField('Paystack Public Key', '<input type="text" class="form-input" id="set-paystack-public-key" value="' + escapeAttribute(paystackConfig.public_key || '') + '" placeholder="pk_live_..." />') +
+      formField('Paystack Secret Key', '<input type="password" class="form-input" id="set-paystack-secret-key" value="' + escapeAttribute(paystackConfig.secret_key || '') + '" placeholder="sk_live_..." />') +
+      formField('Paystack Webhook Secret', '<input type="password" class="form-input" id="set-paystack-webhook-secret" value="' + escapeAttribute(paystackConfig.webhook_secret || '') + '" placeholder="Webhook signing secret" />') +
+      formField('Paystack Subaccount Code', '<input type="text" class="form-input" id="set-paystack-subaccount" value="' + escapeAttribute(paystackConfig.subaccount_code || '') + '" placeholder="Optional split-payment setup" />') +
+      formField('Remita Merchant ID', '<input type="text" class="form-input" id="set-remita-merchant-id" value="' + escapeAttribute(remitaConfig.merchant_id || '') + '" placeholder="Merchant ID" />') +
+      formField('Remita Service Type ID', '<input type="text" class="form-input" id="set-remita-service-type-id" value="' + escapeAttribute(remitaConfig.service_type_id || '') + '" placeholder="Service type ID" />') +
+      formField('Remita API Key', '<input type="password" class="form-input" id="set-remita-api-key" value="' + escapeAttribute(remitaConfig.api_key || '') + '" placeholder="API key" />') +
+      formField('Remita Gateway URL', '<input type="text" class="form-input" id="set-remita-gateway-url" value="' + escapeAttribute(remitaConfig.gateway_url || '') + '" placeholder="https://..." />') +
       formField('Supported States', '<textarea class="form-input" rows="4" id="set-supported-states">' + escapeHtml((settings.supported_states || settings.service_areas || []).join(', ')) + '</textarea>') +
       formField('Cities / LGAs', '<textarea class="form-input" rows="4" id="set-supported-cities">' + escapeHtml((settings.supported_cities || []).join(', ')) + '</textarea>') +
       formField('Enabled Launch Cities', '<textarea class="form-input" rows="3" id="set-launch-cities">' + escapeHtml((settings.launch_cities || []).join(', ')) + '</textarea>') +
@@ -135,11 +152,33 @@
         negative_rating_max_score: Number($('#set-negative-score').value || 2),
         watchlist_rank_penalty_km: Number($('#set-watchlist-penalty').value || 8)
       });
+      const existingPaymentConfig = getPaymentConfiguration();
       await Store.saveSettings({
         assessment_fee: Number($('#set-assessment-fee').value || 0),
         platform_bank_name: $('#set-bank-name').value.trim(),
         platform_account_number: $('#set-account-number').value.trim(),
         platform_account_name: $('#set-account-name').value.trim(),
+        payment_configuration: {
+          active_provider: 'manual',
+          preferred_provider: $('#set-preferred-provider').value.trim(),
+          providers: {
+            manual: Object.assign({}, existingPaymentConfig.providers.manual || {}, { enabled: true }),
+            paystack: {
+              enabled: false,
+              public_key: $('#set-paystack-public-key').value.trim(),
+              secret_key: $('#set-paystack-secret-key').value.trim(),
+              webhook_secret: $('#set-paystack-webhook-secret').value.trim(),
+              subaccount_code: $('#set-paystack-subaccount').value.trim()
+            },
+            remita: {
+              enabled: false,
+              merchant_id: $('#set-remita-merchant-id').value.trim(),
+              service_type_id: $('#set-remita-service-type-id').value.trim(),
+              api_key: $('#set-remita-api-key').value.trim(),
+              gateway_url: $('#set-remita-gateway-url').value.trim()
+            }
+          }
+        },
         supported_states: $('#set-supported-states').value.split(',').map((item) => item.trim()).filter(Boolean),
         supported_cities: $('#set-supported-cities').value.split(',').map((item) => item.trim()).filter(Boolean),
         launch_cities: $('#set-launch-cities').value.split(',').map((item) => item.trim()).filter(Boolean),
@@ -381,6 +420,50 @@
       cardMetaRow('Skills: ' + ((electrician.electrician_skills || []).map((skill) => humanizeIssue(skill.category)).join(', ') || 'None yet')) +
       cardFooter(String(electrician.completed_jobs || 0) + ' completed jobs', '★ ' + (electrician.average_rating ? Number(electrician.average_rating).toFixed(1) : '--')) +
     '</div>';
+  }
+
+  function customerCard(customer) {
+    const stats = customerJobSummary(customer);
+    const name = customer.profile && customer.profile.full_name ? customer.profile.full_name : 'Registered user';
+    return '<div class="admin-job-card">' +
+      cardHeader(name, customer.trust_status || 'registered', statusClass(customer.trust_status || 'requested')) +
+      cardMetaRow((customer.primary_service_area || 'No primary service area set') + ' · ' + (customer.profile && customer.profile.phone ? customer.profile.phone : 'No phone saved')) +
+      cardMetaRow('Bookings: ' + String(stats.total) + ' · Completed: ' + String(stats.completed)) +
+      cardMetaRow('Open jobs: ' + String(stats.active) + ' · Disputes: ' + String(customer.dispute_count || 0)) +
+      cardMetaRow('Payment issues: ' + String(customer.payment_issue_count || 0) + ' · No-shows: ' + String(customer.no_show_reports || 0)) +
+      cardFooter(String(customer.completed_requests || stats.completed || 0) + ' completed requests', customer.updated_at ? formatRelative(customer.updated_at) : 'Recently added') +
+    '</div>';
+  }
+
+  function customerJobSummary(customer) {
+    const customerId = customer && customer.id;
+    const rows = currentJobs.filter((job) => job.customerId === customerId);
+    return {
+      total: rows.length,
+      active: rows.filter((job) => !isCompletedJob(job) && job.status !== 'cancelled').length,
+      completed: rows.filter(isCompletedJob).length
+    };
+  }
+
+  function getPaymentConfiguration() {
+    const settings = Store.getSettings();
+    return settings && settings.payment_configuration
+      ? settings.payment_configuration
+      : {
+          active_provider: 'manual',
+          preferred_provider: '',
+          providers: {
+            manual: { enabled: true },
+            paystack: {},
+            remita: {}
+          }
+        };
+  }
+
+  function paymentProviderLabel(value) {
+    if (value === 'paystack') return 'Paystack';
+    if (value === 'remita') return 'Remita';
+    return '';
   }
 
   function paymentCard(payment) {

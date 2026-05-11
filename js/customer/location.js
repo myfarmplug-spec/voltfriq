@@ -237,19 +237,28 @@
       return;
     }
 
+    const finishLoading = window.VoltFriqMotion && typeof window.VoltFriqMotion.showGlobalLoading === 'function'
+      ? window.VoltFriqMotion.showGlobalLoading('Finding your location...')
+      : () => {};
+
     navigator.geolocation.getCurrentPosition(async (position) => {
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-      const readableLocation = await reverseGeocode(latitude, longitude);
-      const fallbackLabel = 'GPS location (' + latitude.toFixed(4) + ', ' + longitude.toFixed(4) + ')';
-      applyAddressSelection({
-        label: 'Current location',
-        addressText: readableLocation || fallbackLabel,
-        locationLabel: readableLocation || fallbackLabel,
-        latitude,
-        longitude
-      }, 'gps');
+      try {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        const readableLocation = await reverseGeocode(latitude, longitude);
+        const fallbackLabel = 'GPS location (' + latitude.toFixed(4) + ', ' + longitude.toFixed(4) + ')';
+        applyAddressSelection({
+          label: 'Current location',
+          addressText: readableLocation || fallbackLabel,
+          locationLabel: readableLocation || fallbackLabel,
+          latitude,
+          longitude
+        }, 'gps');
+      } finally {
+        finishLoading();
+      }
     }, () => {
+      finishLoading();
       setAddressMode('manual');
       updateAvailabilityCard();
     }, {

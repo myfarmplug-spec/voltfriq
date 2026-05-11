@@ -369,6 +369,53 @@ a { color: inherit; }
   white-space: nowrap;
 }
 
+.vf-global-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  pointer-events: auto;
+  opacity: 0;
+  visibility: hidden;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 184, 0, 0.16), transparent 28%),
+    rgba(5, 10, 20, 0.66);
+  backdrop-filter: blur(10px);
+  transition: opacity 0.16s ease, visibility 0.16s ease;
+}
+
+.vf-global-loader.is-active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.vf-global-loader[hidden] {
+  display: none;
+}
+
+.vf-global-loader-panel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-width: min(320px, calc(100vw - 48px));
+  min-height: 108px;
+  padding: 22px 24px;
+  border: 1px solid rgba(255, 184, 0, 0.36);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(11, 23, 39, 0.96), rgba(5, 10, 20, 0.96));
+  color: var(--text-primary);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.44),
+    0 0 36px rgba(255, 184, 0, 0.14);
+  font-size: 0.98rem;
+  font-weight: 800;
+  text-align: center;
+}
+
 .vf-status-message.is-operating {
   display: flex !important;
   align-items: center;

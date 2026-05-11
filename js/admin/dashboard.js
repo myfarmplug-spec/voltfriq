@@ -4,6 +4,7 @@
   'use strict';
 
   let currentJobs = [];
+  let currentCustomers = [];
   let currentElectricians = [];
 	  let currentPayments = [];
 	  let currentNotifications = [];
@@ -52,6 +53,13 @@
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => document.querySelectorAll(selector);
+
+  function showAdminLoading(message) {
+    if (window.VoltFriqMotion && typeof window.VoltFriqMotion.showGlobalLoading === 'function') {
+      return window.VoltFriqMotion.showGlobalLoading(message || 'Syncing operations...');
+    }
+    return () => {};
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init, { once: true });
@@ -231,11 +239,16 @@
   }
 
   async function showApp(route) {
-    $('#admin-bottom-nav').style.display = 'flex';
-    bindAdminReconnectRefresh();
-    renderAdminLoadingState();
-    await loadData();
-    await activateAdminRoute(route && route.screen ? route : { screen: 'admin-dashboard', data: null, source: 'app' });
+    const finishLoading = showAdminLoading('Syncing operations...');
+    try {
+      $('#admin-bottom-nav').style.display = 'flex';
+      bindAdminReconnectRefresh();
+      renderAdminLoadingState();
+      await loadData();
+      await activateAdminRoute(route && route.screen ? route : { screen: 'admin-dashboard', data: null, source: 'app' });
+    } finally {
+      finishLoading();
+    }
   }
 
   function bindAdminReconnectRefresh() {
@@ -270,6 +283,7 @@
 	  async function loadData() {
 	    const [
 	      jobs,
+	      customers,
 	      electricians,
 	      payments,
 	      notifications,
@@ -280,6 +294,7 @@
 	      operationalQueues
 	    ] = await Promise.all([
 	      Store.listAdminJobs({ includeProtectedAssets: false }),
+	      Store.listCustomers(),
 	      Store.listElectricians('all', { includeDocumentUrls: false }),
 	      Store.listPaymentsNeedingVerification(),
 	      Store.listNotifications(),
@@ -290,6 +305,7 @@
 	      Store.getOperationalQueues()
 	    ]);
 	    currentJobs = jobs || [];
+	    currentCustomers = customers || [];
 	    currentElectricians = electricians || [];
 	    currentPayments = payments || [];
 	    currentNotifications = notifications || [];

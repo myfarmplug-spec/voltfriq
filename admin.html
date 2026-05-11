@@ -11,9 +11,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/shared.css?v=20260506-apply-test" />
+  <link rel="stylesheet" href="/css/shared.css?v=20260509-loader-fix" />
   <link rel="stylesheet" href="/css/chat.css?v=20260503-ia3" />
-  <link rel="stylesheet" href="/css/admin.css?v=20260508-auditor-location-hotfix" />
+  <link rel="stylesheet" href="/css/admin.css?v=20260509-loader-fix" />
 </head>
 <body>
 
@@ -112,7 +112,14 @@
   <!-- ═══ SCREEN: ELECTRICIANS ════════════════════════════════════ -->
   <div id="screen-admin-electricians" class="screen">
     <div class="admin-body">
-      <div class="admin-screen-title">Electricians</div>
+      <div class="admin-screen-title">People <small>Registered users and electricians in one place.</small></div>
+      <div class="admin-section">
+        <div class="admin-section-title">Registered Users <span class="count-badge" id="registered-user-count">0</span></div>
+        <div class="admin-card-list admin-list-table" id="customer-list">
+          <!-- JS fills -->
+        </div>
+      </div>
+      <div class="admin-section-title">Electricians <span class="count-badge" id="electrician-count">0</span></div>
       <div class="admin-filter-tabs" id="elec-filter-tabs">
         <button class="admin-filter-tab active" data-filter="all">All</button>
         <button class="admin-filter-tab" data-filter="active">Active</button>
@@ -340,7 +347,7 @@
       <span class="admin-nav-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 19v-2a6 6 0 0112 0v2"/><circle cx="12" cy="7" r="4"/></svg>
       </span>
-      <span class="admin-nav-label">Pending</span>
+      <span class="admin-nav-label">People</span>
     </button>
     <button class="admin-nav-item" data-screen="admin-finance">
       <span class="admin-nav-icon" aria-hidden="true">
@@ -356,6 +363,6 @@
     </button>
   </nav>
 
-  <script type="module" src="/js/entries/admin.js?v=20260509-final-pass"></script>
+  <script type="module" src="/js/entries/admin.js?v=20260509-loader-fix"></script>
 </body>
 </html>

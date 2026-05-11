@@ -698,20 +698,30 @@
   }
 
   function setScreenBusy(nextBusy, message) {
-    screenBusy = nextBusy;
-    if (!nextBusy) return;
-    clearError();
-    const authError = document.getElementById('auth-error');
-    authError.style.display = 'block';
-    if (window.VoltFriqMotion) {
-      window.VoltFriqMotion.setStatusLoading(authError, message || 'Transmitting...');
-    } else {
-      authError.textContent = message || 'Transmitting...';
+    if (!nextBusy) {
+      finishScreenBusy();
+      return;
     }
+    clearError();
+    screenBusy = true;
+    if (screenBusyFinish) {
+      screenBusyFinish();
+    }
+    screenBusyFinish = window.VoltFriqMotion && typeof window.VoltFriqMotion.showGlobalLoading === 'function'
+      ? window.VoltFriqMotion.showGlobalLoading(message || 'Transmitting...')
+      : null;
+  }
+
+  function finishScreenBusy() {
+    screenBusy = false;
+    if (!screenBusyFinish) return;
+    const finish = screenBusyFinish;
+    screenBusyFinish = null;
+    finish();
   }
 
   function clearError() {
-    if (screenBusy) screenBusy = false;
+    if (screenBusy) finishScreenBusy();
     const authError = document.getElementById('auth-error');
     if (authError) {
       authError.classList.remove('is-success');

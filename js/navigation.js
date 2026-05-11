@@ -5,6 +5,8 @@ let screenHistory = [];
 let routeConfig = null;
 let routePopstateBound = false;
 let handlingRoutePopstate = false;
+let navigationTransitionId = 0;
+const NAVIGATION_ACTIVATION_DELAY_MS = 80;
 
 function getScreenKey(element) {
   if (!element || !element.id) return null;
@@ -70,6 +72,32 @@ function routeTitleForScreen(screen, routeData) {
   return routeConfig.titleResolver(screen, routeData || null) || document.title;
 }
 
+function startNavigationLoading(message) {
+  if (typeof window === 'undefined' || !window.VoltFriqMotion || typeof window.VoltFriqMotion.showGlobalLoading !== 'function') {
+    return () => {};
+  }
+  return window.VoltFriqMotion.showGlobalLoading(message || 'Routing...');
+}
+
+function screenExists(id) {
+  return !!document.getElementById(`screen-${id}`);
+}
+
+function delayNavigationActivation(callback, finishLoading) {
+  if (typeof window === 'undefined') {
+    callback(finishLoading);
+    return;
+  }
+  const transitionId = ++navigationTransitionId;
+  window.setTimeout(() => {
+    if (transitionId !== navigationTransitionId) {
+      finishLoading();
+      return;
+    }
+    callback(finishLoading);
+  }, NAVIGATION_ACTIVATION_DELAY_MS);
+}
+
 function syncRoute(screen, options) {
   if (!routeConfig || typeof window === 'undefined') return;
 
@@ -98,7 +126,7 @@ function syncRoute(screen, options) {
 
 function activateScreen(id, options) {
   const next = document.getElementById(`screen-${id}`);
-  if (!next) return;
+  if (!next) return false;
 
   const fallbackPrev = document.querySelector('.screen.active');
   const prevId = currentScreen || getScreenKey(fallbackPrev);
@@ -130,13 +158,26 @@ function activateScreen(id, options) {
   }
 
   currentScreen = id;
+  return true;
 }
 
 function goTo(id, options) {
-  activateScreen(id, options || {});
-  if (routeConfig && !handlingRoutePopstate && !(options && options.skipRoute)) {
-    syncRoute(id, options || {});
-  }
+  if (!screenExists(id)) return;
+  const finishLoading = startNavigationLoading('Routing...');
+  delayNavigationActivation((finish) => {
+    const activated = activateScreen(id, options || {});
+    if (!activated) {
+      finish();
+      return;
+    }
+    try {
+      if (routeConfig && !handlingRoutePopstate && !(options && options.skipRoute)) {
+        syncRoute(id, options || {});
+      }
+    } finally {
+      finish();
+    }
+  }, finishLoading);
 }
 
 function handleRoutePopstate(event) {
@@ -149,26 +190,43 @@ function handleRoutePopstate(event) {
 
   if (!route || !route.screen) return;
 
-  activateScreen(route.screen, {
-    restoreStack: state && Array.isArray(state.stack) ? state.stack : [],
-    skipStackPush: true
-  });
-
-  const title = routeTitleForScreen(route.screen, route.data);
-  if (title) {
-    document.title = title;
-  }
-
-  if (typeof routeConfig.onRouteActivated === 'function') {
-    handlingRoutePopstate = true;
-    Promise.resolve(routeConfig.onRouteActivated({
-      screen: route.screen,
-      data: route.data || null,
-      source: 'popstate'
-    })).finally(() => {
-      handlingRoutePopstate = false;
+  if (!screenExists(route.screen)) return;
+  const finishLoading = startNavigationLoading('Routing...');
+  delayNavigationActivation((finish) => {
+    const activated = activateScreen(route.screen, {
+      restoreStack: state && Array.isArray(state.stack) ? state.stack : [],
+      skipStackPush: true
     });
-  }
+    if (!activated) {
+      finish();
+      return;
+    }
+
+    const title = routeTitleForScreen(route.screen, route.data);
+    if (title) {
+      document.title = title;
+    }
+
+    if (typeof routeConfig.onRouteActivated === 'function') {
+      handlingRoutePopstate = true;
+      try {
+        Promise.resolve(routeConfig.onRouteActivated({
+          screen: route.screen,
+          data: route.data || null,
+          source: 'popstate'
+        })).finally(() => {
+          handlingRoutePopstate = false;
+          finish();
+        });
+      } catch (error) {
+        handlingRoutePopstate = false;
+        finish();
+        throw error;
+      }
+    } else {
+      finish();
+    }
+  }, finishLoading);
 }
 
 function goBack() {
@@ -187,16 +245,20 @@ function goBack() {
     const prevId = screenHistory.pop();
     const curr = document.getElementById(`screen-${currentScreen}`);
     const prev = document.getElementById(`screen-${prevId}`);
-    if (curr) {
-      curr.classList.remove('active');
-      curr.classList.add('prev');
-      setTimeout(() => curr.classList.remove('prev'), 400);
-    }
-    if (prev) {
-      prev.classList.add('active');
-      prev.scrollTop = 0;
-    }
-    currentScreen = prevId;
+    const finishLoading = curr || prev ? startNavigationLoading('Routing...') : () => {};
+    delayNavigationActivation((finish) => {
+      if (curr) {
+        curr.classList.remove('active');
+        curr.classList.add('prev');
+        setTimeout(() => curr.classList.remove('prev'), 400);
+      }
+      if (prev) {
+        prev.classList.add('active');
+        prev.scrollTop = 0;
+      }
+      currentScreen = prevId;
+      finish();
+    }, finishLoading);
   }
 }
 

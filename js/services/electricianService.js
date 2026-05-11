@@ -106,6 +106,17 @@
     return electricians;
   }
 
+  async function listCustomers() {
+    requireRole('admin');
+    const client = ensureClient();
+    const result = await client
+      .from('customers')
+      .select('*, profile:profiles(full_name, phone, avatar_url)')
+      .order('created_at', { ascending: false });
+    if (result.error) throw normalizeError(result.error, 'Could not load registered users.');
+    return result.data || [];
+  }
+
   async function hydrateElectricianDocuments(electrician) {
     if (!electrician) return electrician;
     const docs = electrician.electrician_documents || [];
@@ -166,4 +177,3 @@
     if (result.error) throw normalizeError(result.error, 'Could not apply the referral code.');
     return result.data;
   }
-

@@ -896,6 +896,7 @@
     setElectricianWatchlist,
     updateCurrentElectrician,
     replaceCurrentElectricianSkills,
+    listCustomers,
     listElectricians,
     hydrateElectricianDocuments,
     getWalletSummary,
