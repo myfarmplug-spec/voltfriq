@@ -362,11 +362,15 @@
 
   function bindJobCards(containerSelector, handler) {
     $(containerSelector).querySelectorAll('.admin-job-card').forEach((card) => {
-      card.addEventListener('click', () => handler(card.dataset.jobId));
+      card.addEventListener('click', (event) => {
+        if (event.target.closest('button, a, input, select, textarea')) return;
+        handler(card.dataset.jobId);
+      });
     });
   }
 
   function dispatchJobCard(job) {
+    const actionLabel = job.assignedElectrician ? 'Reassign' : 'Assign';
     return '<div class="admin-job-card" data-job-id="' + job.id + '">' +
       cardHeader(humanizeIssue(job.issueCategory), job.statusLabel, statusClass(job.status)) +
       cardMetaRow(job.ticket + ' · ' + (job.customer && job.customer.name ? job.customer.name : 'Customer')) +
@@ -374,6 +378,7 @@
       cardMetaRow('Assigned: ' + (job.assignedElectrician ? job.assignedElectrician.name : 'Unassigned')) +
       cardMetaRow('Alert: ' + nextAction(job)) +
       cardFooter(formatRelative(job.updatedAt), hasTimeoutTimeline(job) ? 'Timeout' : hasRejectedTimeline(job) ? 'Rejected' : job.needsManualAssignment ? 'Manual override' : 'Matching') +
+      '<div class="admin-card-action-row"><button class="btn-primary btn-full" id="btn-dispatch-assign-' + job.id + '" data-dispatch-assign-job="' + escapeAttribute(job.id) + '">' + actionLabel + ' Electrician</button></div>' +
     '</div>';
   }
 
@@ -426,6 +431,7 @@
   function electricianCard(electrician) {
     const activeJobs = electricianActiveJobs(electrician).filter((job) => !['rated', 'cancelled', 'payout_complete'].includes(job.status));
     const liveState = activeJobs.length ? 'Active on ' + activeJobs.length + ' job' + (activeJobs.length === 1 ? '' : 's') : (electrician.availability_status === 'available' ? 'Idle and available' : 'Offline or paused');
+    const actionMarkup = electricianListActionMarkup(electrician);
     return '<div class="admin-job-card" data-elec-id="' + electrician.id + '">' +
       cardHeader((electrician.profile && electrician.profile.full_name) || 'VoltFriq', electrician.status, statusClass(electrician.status)) +
       cardMetaRow((electrician.service_areas || []).join(', ') || 'No service area selected') +
@@ -435,7 +441,25 @@
       cardMetaRow('Last offered: ' + (electrician.last_offered_at ? formatRelative(electrician.last_offered_at) : 'Never')) +
       cardMetaRow('Skills: ' + ((electrician.electrician_skills || []).map((skill) => humanizeIssue(skill.category)).join(', ') || 'None yet')) +
       cardFooter(String(electrician.completed_jobs || 0) + ' completed jobs', '★ ' + (electrician.average_rating ? Number(electrician.average_rating).toFixed(1) : '--')) +
+      actionMarkup +
     '</div>';
+  }
+
+  function electricianListActionMarkup(electrician) {
+    const electricianId = escapeAttribute(electrician.id);
+    if (electrician.status === 'pending') {
+      return '<div class="admin-card-action-row">' +
+        '<button class="btn-primary btn-full" id="btn-list-approve-' + electricianId + '" data-elec-list-action="approved" data-elec-id="' + electricianId + '">Approve Electrician</button>' +
+        '<button class="btn-secondary btn-full" id="btn-list-open-' + electricianId + '" data-elec-list-action="open" data-elec-id="' + electricianId + '">Review Details</button>' +
+      '</div>';
+    }
+    if (electrician.status === 'rejected' || electrician.status === 'suspended') {
+      return '<div class="admin-card-action-row">' +
+        '<button class="btn-primary btn-full" id="btn-list-restore-' + electricianId + '" data-elec-list-action="approved" data-elec-id="' + electricianId + '">Approve Electrician</button>' +
+        '<button class="btn-secondary btn-full" id="btn-list-open-' + electricianId + '" data-elec-list-action="open" data-elec-id="' + electricianId + '">Review Details</button>' +
+      '</div>';
+    }
+    return '<div class="admin-card-action-row"><button class="btn-secondary btn-full" id="btn-list-open-' + electricianId + '" data-elec-list-action="open" data-elec-id="' + electricianId + '">Open Details</button></div>';
   }
 
   function customerCard(customer) {
@@ -499,7 +523,7 @@
     '</div>';
   }
 
-  function assignmentCard(matches, job) {
+  function assignmentCard(matches, job, warning) {
     const blockedReason = assignmentBlockedReason(job);
     if (blockedReason) {
       return '<div class="admin-assign-section">' +
@@ -511,6 +535,7 @@
     return '<div class="admin-assign-section">' +
       '<div class="admin-assign-title">Assign Electrician</div>' +
       '<div class="admin-assign-copy">Assign an approved VoltFriq to this client order. Force deploy only overrides an active offer before it is accepted.</div>' +
+      (warning ? '<div class="admin-inline-warning">' + escapeHtml(warning) + '</div>' : '') +
       dispatchPoolSection('Recommended matches', 'Best fit by issue, location, urgency, and response performance.', pools.recommended, 'recommended') +
       dispatchPoolSection('Approved & available', 'Approved VoltFriqs who are available now and serve this area.', pools.available, 'available') +
       dispatchPoolSection('Admin override', 'Approved VoltFriqs outside the recommended or available pool. Use only when manual judgment is required.', pools.override, 'override') +
@@ -1112,8 +1137,13 @@
 
   async function openRequestDetailByTicket(ticket) {
     const cleanTicket = String(ticket || '').trim().toUpperCase();
-    const match = currentJobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
+    let match = currentJobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
     if (!match) {
+      await loadData({ sections: ['jobs', 'electricians'] });
+      match = currentJobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
+    }
+    if (!match) {
+      showLoginError('Dispatch order ' + cleanTicket + ' could not be found. Refresh the queue and try again.');
       navigateTo('admin-requests', { replace: true });
       return;
     }
@@ -1122,8 +1152,13 @@
 
   async function openJobDetailByTicket(ticket) {
     const cleanTicket = String(ticket || '').trim().toUpperCase();
-    const match = currentJobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
+    let match = currentJobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
     if (!match) {
+      await loadData({ sections: ['jobs'] });
+      match = currentJobs.find((job) => String(job.ticket || '').toUpperCase() === cleanTicket);
+    }
+    if (!match) {
+      showLoginError('Job ' + cleanTicket + ' could not be found. Refresh the jobs list and try again.');
       navigateTo('admin-jobs', { replace: true });
       return;
     }

@@ -481,6 +481,18 @@
   color: var(--text-primary);
 }
 
+.admin-card-action-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.admin-card-action-row .btn-primary,
+.admin-card-action-row .btn-secondary {
+  min-height: 44px;
+}
+
 .large-contract-flag {
   display: inline-flex;
   align-items: center;
@@ -551,6 +563,17 @@
   grid-template-columns: 1fr;
   gap: 10px;
   margin-top: 12px;
+}
+
+.admin-inline-warning {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 184, 0, 0.35);
+  border-radius: 10px;
+  color: #ffd978;
+  background: rgba(255, 184, 0, 0.08);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .admin-empty-inline {

@@ -10,7 +10,17 @@
 
     $('#requests-list').innerHTML = jobs.length ? jobs.map(dispatchJobCard).join('') : emptyState('No jobs in the dispatch queue.');
     bindJobCards('#requests-list', openRequestDetail);
+    bindDispatchListActions();
     bindFilterTabs('#requests-filter-tabs', 'requests');
+  }
+
+  function bindDispatchListActions() {
+    $('#requests-list').querySelectorAll('[data-dispatch-assign-job]').forEach((button) => {
+      button.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        await openRequestDetail(button.dataset.dispatchAssignJob);
+      });
+    });
   }
 
   async function openRequestDetail(jobId) {
@@ -18,13 +28,20 @@
     try {
       selectedJob = await Store.getJob(jobId);
       upsertCurrentJob(selectedJob);
-      const matches = await Store.previewMatches({
-        serviceArea: selectedJob.serviceArea,
-        issueCategory: selectedJob.issueCategory,
-        latitude: selectedJob.latitude,
-        longitude: selectedJob.longitude,
-        limit: 8
-      });
+      let matches = [];
+      let matchWarning = '';
+      try {
+        matches = await Store.previewMatches({
+          serviceArea: selectedJob.serviceArea,
+          issueCategory: selectedJob.issueCategory,
+          latitude: selectedJob.latitude,
+          longitude: selectedJob.longitude,
+          limit: 8
+        });
+      } catch (error) {
+        console.warn('Dispatch match preview failed; showing approved electrician fallback.', error);
+        matchWarning = 'Live match scoring could not load. Showing approved VoltFriqs so assignment can continue.';
+      }
 
       $('#request-detail-body').innerHTML =
         infoCard('Customer', [
@@ -41,7 +58,7 @@
           ['Matching note', nextAction(selectedJob)],
           ['Dispatch attempts', String(selectedJob.dispatchAttempts || 0)]
         ]) +
-        assignmentCard(matches, selectedJob) +
+        assignmentCard(matches, selectedJob, matchWarning) +
         photoCard(selectedJob.photos) +
   	      timelineCard(selectedJob.internalEvents && selectedJob.internalEvents.length ? selectedJob.internalEvents : selectedJob.timeline);
 
