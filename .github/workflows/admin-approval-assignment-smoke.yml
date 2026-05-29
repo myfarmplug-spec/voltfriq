@@ -19,6 +19,7 @@ on:
       - 'js/services/**'
       - 'scripts/smoke-admin-approval-assignment.mjs'
       - 'supabase/migrations/**'
+      - '.github/workflows/admin-approval-assignment-smoke.yml'
       - 'package.json'
       - 'package-lock.json'
   pull_request:
@@ -27,6 +28,7 @@ on:
       - 'js/services/**'
       - 'scripts/smoke-admin-approval-assignment.mjs'
       - 'supabase/migrations/**'
+      - '.github/workflows/admin-approval-assignment-smoke.yml'
       - 'package.json'
       - 'package-lock.json'
 
