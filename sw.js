@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voltfriq-shell-v20260509-loader-fix';
+const CACHE_NAME = 'voltfriq-shell-v20260529-admin-cache-bypass';
 const APP_SHELL = [
   '/offline.html',
   '/manifest.json',
@@ -30,12 +30,24 @@ self.addEventListener('activate', (event) => {
         .filter((key) => key !== CACHE_NAME)
         .map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
+      .then((clients) => Promise.all(clients.map((client) => {
+        const url = new URL(client.url);
+        if (!isAdminRequest(url) || typeof client.navigate !== 'function') return null;
+        return client.navigate(client.url).catch(() => null);
+      })))
   );
 });
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  if (url.origin === self.location.origin && isAdminRequest(url)) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   if (request.mode === 'navigate') {
     event.respondWith(
@@ -50,7 +62,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
@@ -63,3 +74,11 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(request))
   );
 });
+
+function isAdminRequest(url) {
+  return url.pathname === '/admin' ||
+    url.pathname === '/admin.html' ||
+    url.pathname.startsWith('/admin/') ||
+    url.pathname.startsWith('/assets/admin-') ||
+    url.pathname === '/css/admin.css';
+}
