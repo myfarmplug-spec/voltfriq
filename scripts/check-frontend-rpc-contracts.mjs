@@ -52,6 +52,7 @@ const anonAllowed = new Set([
 ]);
 
 const internalOrAuthenticatedOnly = new Set([
+  'admin_assign_electrician_to_job',
   'admin_set_electrician_status',
   'admin_set_electrician_watchlist',
   'append_job_timeline',

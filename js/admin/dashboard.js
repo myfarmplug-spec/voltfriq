@@ -6,12 +6,14 @@
   let currentJobs = [];
   let currentCustomers = [];
   let currentElectricians = [];
-	  let currentPayments = [];
-	  let currentNotifications = [];
-	  let currentDisputes = [];
-	  let currentAppeals = [];
-	  let currentOperationalSummary = null;
-	  let currentOperationalQueues = null;
+  let currentPayments = [];
+  let currentNotifications = [];
+  let currentDisputes = [];
+  let currentAppeals = [];
+  let currentOperationalSummary = null;
+  let currentOperationalQueues = null;
+  let currentAdminDataWarnings = [];
+  let adminDataFailuresByKey = {};
   let selectedJob = null;
   let selectedElectrician = null;
   let portalSubscription = null;
@@ -19,6 +21,8 @@
   let pendingAdminRoute = null;
   let adminReconnectBound = false;
   let adminReconnectRefreshTimer = null;
+  let adminDataRefreshTimer = null;
+  let adminOperationalRefreshTimer = null;
 
   function wantsPasswordReset() {
     const query = new URLSearchParams(window.location.search || '');
@@ -194,10 +198,24 @@
       if (realtimeRefreshTimer) window.clearTimeout(realtimeRefreshTimer);
       realtimeRefreshTimer = window.setTimeout(async () => {
         realtimeRefreshTimer = null;
-        await loadData();
+        await loadData({ includeCore: true, includeOperational: false });
         refreshScreen(currentScreen || 'admin-dashboard');
+        scheduleAdminDataRefresh({ includeCore: false, includeOperational: true, delayMs: 900 });
       }, 700);
     });
+  }
+
+  function adminAccessErrorMessage(profile, profileLoadError) {
+    if (profileLoadError && !profile) {
+      return 'Admin access could not be verified because your profile did not load: ' + profileLoadError.message;
+    }
+    if (!profile) {
+      return 'Admin access could not be verified because no profile was loaded for this account.';
+    }
+    if (profile.role !== 'admin') {
+      return 'This account is signed in as ' + (profile.role || 'unknown') + ', not admin.';
+    }
+    return 'This account does not have admin access.';
   }
 
   async function handleLogin() {
@@ -215,9 +233,12 @@
       }
       if (!email || !password) throw new Error('Enter admin email and password.');
       await Store.signIn(email, password);
-      if ((Store.getCurrentProfile() || {}).role !== 'admin') {
+      const profile = Store.getCurrentProfile();
+      if (!profile || profile.role !== 'admin') {
+        const profileLoadError = Store.getProfileLoadError ? Store.getProfileLoadError() : null;
+        const accessErrorMessage = adminAccessErrorMessage(profile, profileLoadError);
         await Store.signOut();
-        throw new Error('This account does not have admin access.');
+        throw new Error(accessErrorMessage);
       }
       attachRealtime();
       await showApp((pendingAdminRoute && pendingAdminRoute.screen && pendingAdminRoute.screen !== 'admin-login')
@@ -244,11 +265,13 @@
       $('#admin-bottom-nav').style.display = 'flex';
       bindAdminReconnectRefresh();
       renderAdminLoadingState();
-      await loadData();
+      clearLoginError();
       await activateAdminRoute(route && route.screen ? route : { screen: 'admin-dashboard', data: null, source: 'app' });
     } finally {
       finishLoading();
     }
+    scheduleAdminDataRefresh({ includeCore: true, includeOperational: false, delayMs: 0 });
+    scheduleAdminDataRefresh({ includeCore: false, includeOperational: true, delayMs: 1200 });
   }
 
   function bindAdminReconnectRefresh() {
@@ -261,8 +284,9 @@
         try {
           const profile = Store.getCurrentProfile && Store.getCurrentProfile();
           if (!profile || profile.role !== 'admin') return;
-          await loadData();
+          await loadData({ includeCore: true, includeOperational: false });
           refreshScreen(currentScreen || 'admin-dashboard');
+          scheduleAdminDataRefresh({ includeCore: false, includeOperational: true, delayMs: 900 });
         } catch (error) {
           console.warn('Admin refresh after reconnect failed', error);
         }
@@ -280,41 +304,144 @@
     });
   }
 
-	  async function loadData() {
-	    const [
-	      jobs,
-	      customers,
-	      electricians,
-	      payments,
-	      notifications,
-	      disputes,
-	      appeals,
-	      expertiseCategories,
-	      operationalSummary,
-	      operationalQueues
-	    ] = await Promise.all([
-	      Store.listAdminJobs({ includeProtectedAssets: false }),
-	      Store.listCustomers(),
-	      Store.listElectricians('all', { includeDocumentUrls: false }),
-	      Store.listPaymentsNeedingVerification(),
-	      Store.listNotifications(),
-	      Store.listDisputes(),
-	      Store.listAppeals(),
-	      Store.loadExpertiseCategories(),
-	      Store.getOperationalSummary(),
-	      Store.getOperationalQueues()
-	    ]);
-	    currentJobs = jobs || [];
-	    currentCustomers = customers || [];
-	    currentElectricians = electricians || [];
-	    currentPayments = payments || [];
-	    currentNotifications = notifications || [];
-	    currentDisputes = disputes || [];
-	    currentAppeals = appeals || [];
-	    currentOperationalSummary = operationalSummary || null;
-	    currentOperationalQueues = operationalQueues || null;
-	    clearLoginError();
-	  }
+  function scheduleAdminDataRefresh(options) {
+    const refreshOptions = Object.assign({
+      includeCore: true,
+      includeOperational: true,
+      delayMs: 0
+    }, options || {});
+    const operationalOnly = refreshOptions.includeCore === false && refreshOptions.includeOperational !== false;
+    const delayMs = Math.max(Number(refreshOptions.delayMs || 0), 0);
+    if (operationalOnly) {
+      if (adminOperationalRefreshTimer) window.clearTimeout(adminOperationalRefreshTimer);
+      adminOperationalRefreshTimer = window.setTimeout(async () => {
+        adminOperationalRefreshTimer = null;
+        try {
+          await loadData(refreshOptions);
+          refreshScreen(currentScreen || 'admin-dashboard');
+        } catch (error) {
+          console.warn('Admin operational refresh failed', error);
+        }
+      }, delayMs);
+      return;
+    }
+    if (adminDataRefreshTimer) window.clearTimeout(adminDataRefreshTimer);
+    adminDataRefreshTimer = window.setTimeout(async () => {
+      adminDataRefreshTimer = null;
+      try {
+        await loadData(refreshOptions);
+        refreshScreen(currentScreen || 'admin-dashboard');
+      } catch (error) {
+        console.warn('Admin data refresh failed', error);
+      }
+    }, delayMs);
+  }
+
+  function formatDataLoadError(error) {
+    const message = error && error.message ? error.message : String(error || 'Unknown error');
+    return message.replace(/\s+/g, ' ').trim() || 'Unknown error';
+  }
+
+  function trimDataLoadMessage(message) {
+    const clean = String(message || '').replace(/\s+/g, ' ').trim();
+    return clean.length > 120 ? clean.slice(0, 117) + '...' : clean;
+  }
+
+  function setDataLoadFailure(key, label, error) {
+    adminDataFailuresByKey[key] = {
+      key,
+      label,
+      message: formatDataLoadError(error)
+    };
+    currentAdminDataWarnings = Object.keys(adminDataFailuresByKey).map((failureKey) => adminDataFailuresByKey[failureKey]);
+  }
+
+  function clearDataLoadFailure(key) {
+    if (adminDataFailuresByKey[key]) {
+      delete adminDataFailuresByKey[key];
+      currentAdminDataWarnings = Object.keys(adminDataFailuresByKey).map((failureKey) => adminDataFailuresByKey[failureKey]);
+    }
+  }
+
+  function adminDataWarningText() {
+    if (!currentAdminDataWarnings.length) return '';
+    if (currentAdminDataWarnings.length === 1) {
+      const warning = currentAdminDataWarnings[0];
+      return 'DATA REFRESH WARNING: ' + warning.label + ' could not refresh. Showing last available data. ' + trimDataLoadMessage(warning.message);
+    }
+    return 'DATA REFRESH WARNING: ' + currentAdminDataWarnings.length + ' admin sections could not refresh. Showing last available data.';
+  }
+
+  function addRefreshTask(tasks, requestedSections, group, refreshOptions, task) {
+    if (requestedSections) {
+      if (requestedSections.has(task.key)) tasks.push(task);
+      return;
+    }
+    if (group === 'core' && refreshOptions.includeCore !== false) tasks.push(task);
+    if (group === 'operational' && refreshOptions.includeOperational !== false) tasks.push(task);
+  }
+
+  function upsertCurrentJob(job) {
+    if (!job || !job.id) return;
+    const existingIndex = currentJobs.findIndex((entry) => entry.id === job.id);
+    if (existingIndex >= 0) {
+      currentJobs[existingIndex] = job;
+    } else {
+      currentJobs.unshift(job);
+    }
+    if (selectedJob && selectedJob.id === job.id) {
+      selectedJob = job;
+    }
+  }
+
+  async function loadData(options) {
+    const refreshOptions = Object.assign({
+      includeCore: true,
+      includeOperational: true
+    }, options || {});
+    const requestedSections = Array.isArray(refreshOptions.sections) && refreshOptions.sections.length
+      ? new Set(refreshOptions.sections)
+      : null;
+    const tasks = [];
+
+    [
+      { key: 'jobs', label: 'Jobs', run: () => Store.listAdminJobs({ includeProtectedAssets: false }), apply: (value) => { currentJobs = value || []; } },
+      { key: 'customers', label: 'Customers', run: () => Store.listCustomers(), apply: (value) => { currentCustomers = value || []; } },
+      { key: 'electricians', label: 'Electricians', run: () => Store.listElectricians('all', { includeDocumentUrls: false }), apply: (value) => { currentElectricians = value || []; } },
+      { key: 'payments', label: 'Payment queue', run: () => Store.listPaymentsNeedingVerification(), apply: (value) => { currentPayments = value || []; } },
+      { key: 'notifications', label: 'Notifications', run: () => Store.listNotifications(), apply: (value) => { currentNotifications = value || []; } },
+      { key: 'disputes', label: 'Disputes', run: () => Store.listDisputes(), apply: (value) => { currentDisputes = value || []; } },
+      { key: 'appeals', label: 'Appeals', run: () => Store.listAppeals(), apply: (value) => { currentAppeals = value || []; } },
+      { key: 'expertise', label: 'Expertise settings', run: () => Store.loadExpertiseCategories(), apply: () => {} }
+    ].forEach((task) => addRefreshTask(tasks, requestedSections, 'core', refreshOptions, task));
+
+    [
+      { key: 'operationalSummary', label: 'Operational metrics', run: () => Store.getOperationalSummary(), apply: (value) => { currentOperationalSummary = value || null; } },
+      { key: 'operationalQueues', label: 'Operational queues', run: () => Store.getOperationalQueues(), apply: (value) => { currentOperationalQueues = value || null; } }
+    ].forEach((task) => addRefreshTask(tasks, requestedSections, 'operational', refreshOptions, task));
+
+    if (!tasks.length) {
+      return {
+        warnings: currentAdminDataWarnings.slice()
+      };
+    }
+
+    const settled = await Promise.allSettled(tasks.map((task) => task.run()));
+    settled.forEach((result, index) => {
+      const task = tasks[index];
+      if (result.status === 'fulfilled') {
+        task.apply(result.value);
+        clearDataLoadFailure(task.key);
+        return;
+      }
+      setDataLoadFailure(task.key, task.label, result.reason);
+      console.warn('Admin data section failed', task.label, result.reason);
+    });
+    clearLoginError();
+    return {
+      warnings: currentAdminDataWarnings.slice()
+    };
+  }
 
   function refreshScreen(screen) {
     Chat.destroy();
@@ -367,12 +494,13 @@
 		      snapshotDriftCount ? snapshotDriftCount + ' snapshot drift' + (snapshotDriftCount === 1 ? '' : 's') : null,
 		      predictiveAlertCount ? predictiveAlertCount + ' predictive risk' + (predictiveAlertCount === 1 ? '' : 's') : null,
 		      operationalDisputeCount ? operationalDisputeCount + ' dispute' + (operationalDisputeCount === 1 ? '' : 's') + ' open' : null
-		    ].filter(Boolean);
+    ].filter(Boolean);
 
     if ($('#admin-action-banner')) {
-      $('#admin-action-banner').textContent = actionSummary.length
+      const dataWarning = adminDataWarningText();
+      $('#admin-action-banner').textContent = dataWarning || (actionSummary.length
         ? 'LIVE OPERATIONS: ' + actionSummary.join(' • ')
-        : 'LIVE OPERATIONS: No urgent items right now';
+        : 'LIVE OPERATIONS: No urgent items right now');
     }
 
     $('#pending-count').textContent = String(alerts.length);

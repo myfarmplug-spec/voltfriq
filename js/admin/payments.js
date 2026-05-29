@@ -186,7 +186,7 @@
         issue_categories: $('#set-issue-categories').value.split(',').map((item) => item.trim()).filter(Boolean),
         trust_settings: trustSettings
       });
-      await loadData();
+      await Store.loadExpertiseCategories();
       renderSettings();
     });
   }
@@ -402,9 +402,25 @@
 
   function electricianAssignableJobs() {
     return currentJobs
-      .filter((job) => !['rated', 'cancelled', 'payout_complete'].includes(job.status))
-      .filter((job) => job.status === 'matching' || job.status === 'assigned' || !job.assignedElectricianId || job.needsManualAssignment)
+      .filter(isAssignableJobStatus)
       .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  }
+
+  function isAssignableJobStatus(job) {
+    return !!job && ['requested', 'matching', 'assigned'].includes(job.status);
+  }
+
+  function activeAssignmentIsLive(job) {
+    return !!(job && job.status === 'assigned' && job.assignmentExpiresAt && new Date(job.assignmentExpiresAt).getTime() > Date.now());
+  }
+
+  function assignmentBlockedReason(job) {
+    if (!job) return 'This client order could not be loaded.';
+    if (isAssignableJobStatus(job)) return '';
+    if (job.status === 'cancelled') return 'This client order was cancelled and cannot be assigned.';
+    if (job.status === 'payout_complete' || job.status === 'rated') return 'This client order is completed and cannot be reassigned.';
+    if (job.status === 'accepted') return 'The electrician already accepted this order. Assignment is locked.';
+    return 'This client order is already in progress or past dispatch. Current status: ' + (job.statusLabel || job.status) + '.';
   }
 
   function electricianCard(electrician) {
@@ -484,13 +500,20 @@
   }
 
   function assignmentCard(matches, job) {
+    const blockedReason = assignmentBlockedReason(job);
+    if (blockedReason) {
+      return '<div class="admin-assign-section">' +
+        '<div class="admin-assign-title">Assign Electrician</div>' +
+        '<div class="admin-empty-inline">' + escapeHtml(blockedReason) + '</div>' +
+      '</div>';
+    }
     const pools = buildDispatchPools(job, matches);
     return '<div class="admin-assign-section">' +
-      '<div class="admin-assign-title">Dispatch Control</div>' +
-      '<div class="admin-assign-copy">Automatic dispatch is the default. Admin can rerun matching, reassign to another approved available VoltFriq, or force deploy an override choice.</div>' +
+      '<div class="admin-assign-title">Assign Electrician</div>' +
+      '<div class="admin-assign-copy">Assign an approved VoltFriq to this client order. Force deploy only overrides an active offer before it is accepted.</div>' +
       dispatchPoolSection('Recommended matches', 'Best fit by issue, location, urgency, and response performance.', pools.recommended, 'recommended') +
-      dispatchPoolSection('Approved & available', 'Approved VoltFriqs who are available now even if they were not top-ranked.', pools.available, 'available') +
-      dispatchPoolSection('Admin override', 'Approved VoltFriqs outside the recommended pool or currently off-policy. Use only when manual judgment is required.', pools.override, 'override') +
+      dispatchPoolSection('Approved & available', 'Approved VoltFriqs who are available now and serve this area.', pools.available, 'available') +
+      dispatchPoolSection('Admin override', 'Approved VoltFriqs outside the recommended or available pool. Use only when manual judgment is required.', pools.override, 'override') +
       '<div class="admin-action-row">' +
         '<button class="btn-secondary btn-full" id="btn-admin-auto-assign">Assign next available</button>' +
         '<button class="btn-primary btn-full" id="btn-admin-assign">' + (job.assignedElectrician ? 'Reassign selected VoltFriq' : 'Assign selected VoltFriq') + '</button>' +
@@ -515,11 +538,12 @@
     const recommendedIds = new Set(recommended.map((item) => item.id));
     const approved = currentElectricians.filter((electrician) => electrician.status === 'approved');
     const available = approved
-      .filter((electrician) => electrician.availability_status === 'available' && !recommendedIds.has(electrician.id))
+      .filter((electrician) => electrician.availability_status === 'available' && serviceAreaMatch(electrician, job.serviceArea) && !recommendedIds.has(electrician.id))
       .map((electrician) => normalizeDispatchElectrician(electrician, 'available', job));
+    const availableIds = new Set(available.map((item) => item.id));
     const override = approved
-      .filter((electrician) => electrician.availability_status !== 'available' || !serviceAreaMatch(electrician, job.serviceArea))
       .filter((electrician) => !recommendedIds.has(electrician.id))
+      .filter((electrician) => !availableIds.has(electrician.id))
       .map((electrician) => normalizeDispatchElectrician(electrician, 'override', job));
 
     return { recommended, available, override };
@@ -631,27 +655,72 @@
 
   function electricianAssignmentQueueCard(electrician) {
     if (electrician.status !== 'approved') {
-      return '<div class="admin-info-card"><div class="admin-info-card-title">Assign jobs</div><div class="admin-empty-inline">Approve this VoltFriq before assigning jobs.</div></div>';
+      return '<div class="admin-info-card admin-assignment-card"><div class="admin-info-card-title">Assign to Client Order</div><div class="admin-empty-inline">Approve this VoltFriq before assigning client orders.</div></div>';
     }
-    const jobs = electricianAssignableJobs().filter((job) => job.assignedElectricianId !== electrician.id).slice(0, 6);
-    return '<div class="admin-info-card">' +
-      '<div class="admin-info-card-title">Assign or reassign jobs</div>' +
+    const jobs = electricianAssignableJobs();
+    return '<div class="admin-info-card admin-assignment-card">' +
+      '<div class="admin-info-card-title">Assign to Client Order</div>' +
+      '<input class="form-input admin-order-search" id="elec-order-search" type="search" placeholder="Search ticket, customer, area, or issue" autocomplete="off" />' +
+      '<div class="admin-order-list" id="elec-assignable-orders">' +
       (jobs.length
-        ? jobs.map((job) => '<div class="admin-job-mini">' +
-            '<div><strong>' + escapeHtml(job.ticket) + '</strong><span>' + escapeHtml(humanizeIssue(job.issueCategory) + ' · ' + job.serviceArea + ' · ' + (job.assignedElectrician ? 'Assigned to ' + job.assignedElectrician.name : 'Unassigned')) + '</span></div>' +
-            '<button class="btn-secondary" type="button" id="btn-assign-' + job.id + '" data-assign-job="' + escapeAttribute(job.id) + '">Assign</button>' +
-          '</div>').join('')
-        : '<div class="admin-empty-inline">No matching or unassigned jobs are waiting right now.</div>') +
+        ? jobs.map((job) => electricianAssignmentOrderRow(job, electrician.id)).join('')
+        : '<div class="admin-empty-inline">No open client orders are waiting right now.</div>') +
+      '</div>' +
+    '</div>';
+  }
+
+  function electricianAssignmentOrderRow(job, electricianId) {
+    const alreadyAssigned = job.assignedElectricianId === electricianId;
+    const forceRequired = activeAssignmentIsLive(job) && job.assignedElectricianId && job.assignedElectricianId !== electricianId;
+    const searchText = [
+      job.ticket,
+      humanizeIssue(job.issueCategory),
+      job.serviceArea,
+      job.statusLabel,
+      job.customer && job.customer.name,
+      job.assignedElectrician && job.assignedElectrician.name
+    ].filter(Boolean).join(' ').toLowerCase();
+    const buttonMarkup = alreadyAssigned
+      ? '<button class="btn-secondary" type="button" disabled>Assigned</button>'
+      : forceRequired
+        ? '<button class="btn-primary" type="button" id="btn-force-assign-' + job.id + '" data-force-assign-job="' + escapeAttribute(job.id) + '">Force assign</button>'
+        : '<button class="btn-secondary" type="button" id="btn-assign-' + job.id + '" data-assign-job="' + escapeAttribute(job.id) + '">Assign</button>';
+    return '<div class="admin-job-mini admin-order-option" data-order-search="' + escapeAttribute(searchText) + '">' +
+      '<div><strong>' + escapeHtml(job.ticket) + '</strong><span>' + escapeHtml(humanizeIssue(job.issueCategory) + ' · ' + job.serviceArea + ' · ' + (job.assignedElectrician ? 'Assigned to ' + job.assignedElectrician.name : 'Unassigned') + ' · ' + job.statusLabel) + '</span></div>' +
+      '<div class="admin-job-mini-actions">' + buttonMarkup + '</div>' +
     '</div>';
   }
 
   function bindElectricianAssignmentQueue(electricianId) {
-    document.querySelectorAll('[data-assign-job]').forEach((button) => {
+    const detailBody = $('#elec-detail-body');
+    const searchInput = $('#elec-order-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        const query = String(searchInput.value || '').trim().toLowerCase();
+        document.querySelectorAll('#elec-assignable-orders .admin-order-option').forEach((row) => {
+          row.classList.toggle('is-hidden', !!query && !String(row.dataset.orderSearch || '').includes(query));
+        });
+      });
+    }
+    if (!detailBody) return;
+    detailBody.querySelectorAll('[data-assign-job]').forEach((button) => {
       button.addEventListener('click', async () => {
         await withButtonLoading(button.id, 'Assigning...', async () => {
-          await Store.setManualAssignment(button.dataset.assignJob, electricianId);
-          await loadData();
+          const updatedJob = await Store.setManualAssignment(button.dataset.assignJob, electricianId);
+          upsertCurrentJob(updatedJob);
           await openElectricianDetail(electricianId);
+          showAdminNotice('Electrician assigned to the client order.');
+        });
+      });
+    });
+    detailBody.querySelectorAll('[data-force-assign-job]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        await withButtonLoading(button.id, 'Force assigning...', async () => {
+          const assign = Store.forceAssignElectrician || Store.setManualAssignment;
+          const updatedJob = await assign(button.dataset.forceAssignJob, electricianId);
+          upsertCurrentJob(updatedJob);
+          await openElectricianDetail(electricianId);
+          showAdminNotice('Electrician force assigned to the client order.');
         });
       });
     });
@@ -852,13 +921,15 @@
 	    if (autoButton) {
 	      autoButton.addEventListener('click', async () => {
 	        await withButtonLoading('btn-admin-auto-assign', 'Assigning...', async () => {
+	          let updatedJob;
 	          if (Store.retryDispatchJob) {
-	            await Store.retryDispatchJob(job.id);
+	            updatedJob = await Store.retryDispatchJob(job.id);
 	          } else {
-	            await Store.rerunAutomaticAssignment(job.id);
+	            updatedJob = await Store.rerunAutomaticAssignment(job.id);
 	          }
-	          await loadData();
+	          upsertCurrentJob(updatedJob);
 	          await openRequestDetail(job.id);
+	          showAdminNotice('Dispatch retry started for this client order.');
 	        });
 	      });
 	    }
@@ -875,9 +946,10 @@
           return;
         }
         await withButtonLoading('btn-admin-assign', job.assignedElectrician ? 'Reassigning...' : 'Assigning...', async () => {
-          await Store.setManualAssignment(job.id, selectedOption.dataset.elecId);
-          await loadData();
+          const updatedJob = await Store.setManualAssignment(job.id, selectedOption.dataset.elecId);
+          upsertCurrentJob(updatedJob);
           await openRequestDetail(job.id);
+          showAdminNotice('Electrician assigned to the client order.');
         });
       });
     }
@@ -890,9 +962,11 @@
           return;
         }
         await withButtonLoading('btn-admin-force-assign', 'Force deploying...', async () => {
-          await Store.setManualAssignment(job.id, selectedOption.dataset.elecId);
-          await loadData();
+          const assign = Store.forceAssignElectrician || Store.setManualAssignment;
+          const updatedJob = await assign(job.id, selectedOption.dataset.elecId);
+          upsertCurrentJob(updatedJob);
           await openRequestDetail(job.id);
+          showAdminNotice('Electrician force assigned to the client order.');
         });
       });
     }
@@ -905,7 +979,7 @@
       verify.addEventListener('click', async () => {
         await withButtonLoading('btn-verify-payment', 'Approving...', async () => {
           await Store.verifyPayment(verify.dataset.paymentId, true, 'Payment manually verified by admin.');
-          await loadData();
+          await loadData({ sections: ['payments'] });
           await openJobDetail(job.id);
         });
       });
@@ -914,7 +988,7 @@
       reject.addEventListener('click', async () => {
         await withButtonLoading('btn-reject-payment', 'Rejecting...', async () => {
           await Store.verifyPayment(reject.dataset.paymentId, false, 'Payment proof was rejected by admin.');
-          await loadData();
+          await loadData({ sections: ['payments'] });
           await openJobDetail(job.id);
         });
       });
@@ -927,7 +1001,7 @@
     release.addEventListener('click', async () => {
       await withButtonLoading('btn-release-payout', 'Updating...', async () => {
         await Store.markPayoutComplete(job.id);
-        await loadData();
+        await loadData({ sections: ['payments'] });
         await openJobDetail(job.id);
       });
     });
@@ -948,8 +1022,9 @@
       const text = status === 'approved' ? 'Approving...' : status === 'rejected' ? 'Rejecting...' : 'Suspending...';
       await withButtonLoading(buttonId, text, async () => {
         await Store.setElectricianStatus(electricianId, status);
-        await loadData();
+        await loadData({ sections: ['electricians', 'appeals'] });
         await openElectricianDetail(electricianId);
+        showAdminNotice(status === 'approved' ? 'Electrician approved and available for assignment.' : 'Electrician status updated.');
       });
     });
   }
@@ -960,7 +1035,7 @@
     button.addEventListener('click', async () => {
       await withButtonLoading(buttonId, watchlist ? 'Adding...' : 'Removing...', async () => {
         await Store.setElectricianWatchlist(electricianId, watchlist, watchlist ? 'Admin quality monitoring.' : null);
-        await loadData();
+        await loadData({ sections: ['electricians', 'appeals'] });
         await openElectricianDetail(electricianId);
       });
     });
@@ -1123,7 +1198,7 @@
 
   async function resolveDisputeAction(disputeId, status, resolutionAction, resolutionNote) {
     await Store.resolveDispute(disputeId, status, resolutionAction, resolutionNote);
-    await loadData();
+    await loadData({ sections: ['disputes'] });
     renderDisputes();
   }
 
@@ -1293,7 +1368,7 @@
   function showLoginError(message) {
     const loginError = $('#admin-login-error');
     if (currentScreen && currentScreen !== 'admin-login') {
-      window.alert(message);
+      showAdminToast(message, 'error');
       return;
     }
     loginError.classList.remove('is-success');
@@ -1306,6 +1381,30 @@
     loginError.classList.add('is-success');
     loginError.style.display = 'block';
     loginError.textContent = message;
+  }
+
+  function showAdminNotice(message) {
+    if (currentScreen === 'admin-login') {
+      showLoginNotice(message);
+      return;
+    }
+    showAdminToast(message, 'success');
+  }
+
+  function showAdminToast(message, type) {
+    let toast = $('#admin-action-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'admin-action-toast';
+      document.body.appendChild(toast);
+    }
+    toast.className = 'admin-action-toast ' + (type === 'success' ? 'is-success' : 'is-error');
+    toast.textContent = message;
+    toast.style.display = 'block';
+    clearTimeout(showAdminToast.timer);
+    showAdminToast.timer = setTimeout(() => {
+      toast.style.display = 'none';
+    }, 5200);
   }
 
   function clearLoginError() {

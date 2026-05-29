@@ -1,12 +1,22 @@
-  async function setManualAssignment(jobId, electricianId) {
+  async function assignElectricianToJob(jobId, electricianId, options) {
     requireRole('admin');
     const client = ensureClient();
-    const result = await client.rpc('dispatch_job', {
+    const force = options && Object.prototype.hasOwnProperty.call(options, 'force') ? !!options.force : true;
+    const result = await client.rpc('admin_assign_electrician_to_job', {
       p_job_id: jobId,
-      p_manual_electrician_id: electricianId
+      p_electrician_id: electricianId,
+      p_force: force
     });
-    if (result.error) throw normalizeError(result.error, 'Could not reassign the VoltFriq.');
+    if (result.error) throw normalizeError(result.error, 'Could not assign the VoltFriq to this order.');
     return getJob(result.data.id);
+  }
+
+  async function setManualAssignment(jobId, electricianId) {
+    return assignElectricianToJob(jobId, electricianId, { force: false });
+  }
+
+  async function forceAssignElectrician(jobId, electricianId) {
+    return assignElectricianToJob(jobId, electricianId, { force: true });
   }
 
   async function rerunAutomaticAssignment(jobId) {

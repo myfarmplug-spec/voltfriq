@@ -16,7 +16,7 @@
           : 'Appeal rejected after admin review.';
         await withButtonLoading(button.id, approved ? 'Approving...' : 'Rejecting...', async () => {
           await Store.resolveElectricianAppeal(button.dataset.appealId, approved, note);
-          await loadData();
+          await loadData({ sections: ['electricians', 'appeals'] });
           renderTrust();
         });
       });
@@ -37,7 +37,15 @@
     const finishLoading = showAdminLoading('Syncing operations...');
     try {
       selectedElectrician = currentElectricians.find((electrician) => electrician.id === electricianId);
-      if (!selectedElectrician) return;
+      if (!selectedElectrician) {
+        await loadData({ sections: ['electricians', 'jobs', 'appeals'] });
+        selectedElectrician = currentElectricians.find((electrician) => electrician.id === electricianId);
+      }
+      if (!selectedElectrician) {
+        showLoginError('Electrician profile could not be found. Refresh the electricians list and try again.');
+        navigateTo('admin-electricians', { replace: true });
+        return;
+      }
       await Store.hydrateElectricianDocuments(selectedElectrician).catch(() => selectedElectrician);
 
       const docs = (selectedElectrician.electrician_documents || []).map((documentItem) => {
@@ -69,16 +77,16 @@
           ['Onboarding score', selectedElectrician.onboarding_score ? Number(selectedElectrician.onboarding_score).toFixed(0) + '%' : '--'],
           ['Onboarding review', selectedElectrician.onboarding_review_status || 'pending']
         ]) +
+        electricianActionsCard(selectedElectrician) +
+        electricianAssignmentQueueCard(selectedElectrician) +
         infoCard('Trust history', electricianTrustRows(selectedElectrician)) +
         electricianActivityCard(selectedElectrician) +
-        electricianAssignmentQueueCard(selectedElectrician) +
         appealsCard(selectedElectrician) +
         infoCard('Skills', (selectedElectrician.electrician_skills || []).length
           ? selectedElectrician.electrician_skills.map((skill) => [humanizeIssue(skill.category), 'Matched skill'])
           : [['Skills', 'No skills listed']]) +
         infoCard('Certifications', certifications) +
-        '<div class="admin-info-card"><div class="admin-info-card-title">Documents</div>' + docs + '</div>' +
-        electricianActionsCard(selectedElectrician);
+        '<div class="admin-info-card"><div class="admin-info-card-title">Documents</div>' + docs + '</div>';
 
       bindElectricianAction('btn-approve-elec', electricianId, 'approved');
       bindElectricianAction('btn-reject-elec', electricianId, 'rejected');
@@ -116,6 +124,7 @@
     const finishLoading = showAdminLoading('Syncing operations...');
     try {
       selectedJob = await Store.getJob(jobId);
+      upsertCurrentJob(selectedJob);
       $('#job-detail-title').textContent = selectedJob.ticket;
       $('#job-detail-body').innerHTML =
         infoCard('Job summary', [

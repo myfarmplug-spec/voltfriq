@@ -110,18 +110,34 @@
       onboarding_answers: payload.onboardingAnswers || []
     };
 
-    let electricianInsert = await client
+    const existingElectrician = await client
       .from('electricians')
-      .upsert(electricianPayload, { onConflict: 'profile_id' })
-      .select('*')
-      .single();
+      .select('id,status')
+      .eq('profile_id', profileId)
+      .maybeSingle();
+    if (existingElectrician.error) throw normalizeError(existingElectrician.error, 'Could not load the electrician account.');
+
+    const electricianWritePayload = Object.assign({}, electricianPayload, {
+      status: existingElectrician.data && existingElectrician.data.status ? existingElectrician.data.status : 'pending'
+    });
+
+    let electricianInsert = existingElectrician.data
+      ? await client
+        .from('electricians')
+        .update(electricianWritePayload)
+        .eq('profile_id', profileId)
+        .select('*')
+        .single()
+      : await client
+        .from('electricians')
+        .insert(electricianWritePayload)
+        .select('*')
+        .single();
 
     if (electricianInsert.error && isMissingSchemaError(electricianInsert.error)) {
-      electricianInsert = await client
-        .from('electricians')
-        .upsert({
+      const legacyElectricianPayload = {
           profile_id: electricianPayload.profile_id,
-          status: electricianPayload.status,
+          status: electricianWritePayload.status,
           years_experience: electricianPayload.years_experience,
           service_areas: electricianPayload.service_areas,
           location_label: electricianPayload.location_label,
@@ -131,9 +147,19 @@
           bank_account_number: electricianPayload.bank_account_number,
           bank_account_name: electricianPayload.bank_account_name,
           availability_status: electricianPayload.availability_status
-        }, { onConflict: 'profile_id' })
-        .select('*')
-        .single();
+      };
+      electricianInsert = existingElectrician.data
+        ? await client
+          .from('electricians')
+          .update(legacyElectricianPayload)
+          .eq('profile_id', profileId)
+          .select('*')
+          .single()
+        : await client
+          .from('electricians')
+          .insert(legacyElectricianPayload)
+          .select('*')
+          .single();
     }
 
     if (electricianInsert.error) throw normalizeError(electricianInsert.error, 'Could not create the electrician account.');
@@ -298,6 +324,7 @@
     await client.auth.signOut();
     state.session = null;
     state.profile = null;
+    state.profileLoadError = null;
     state.customer = null;
     state.electrician = null;
     state.wallet = null;
@@ -401,4 +428,3 @@
     if (uploadResult.error) throw normalizeError(uploadResult.error, 'File upload failed.');
     return uploadResult.data.path;
   }
-

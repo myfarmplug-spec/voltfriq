@@ -17,6 +17,7 @@
     const finishLoading = showAdminLoading('Syncing operations...');
     try {
       selectedJob = await Store.getJob(jobId);
+      upsertCurrentJob(selectedJob);
       const matches = await Store.previewMatches({
         serviceArea: selectedJob.serviceArea,
         issueCategory: selectedJob.issueCategory,
@@ -40,8 +41,8 @@
           ['Matching note', nextAction(selectedJob)],
           ['Dispatch attempts', String(selectedJob.dispatchAttempts || 0)]
         ]) +
-        photoCard(selectedJob.photos) +
         assignmentCard(matches, selectedJob) +
+        photoCard(selectedJob.photos) +
   	      timelineCard(selectedJob.internalEvents && selectedJob.internalEvents.length ? selectedJob.internalEvents : selectedJob.timeline);
 
       bindAssignmentControls(selectedJob);

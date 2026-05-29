@@ -121,6 +121,7 @@ const Store = (() => {
     configured: false,
     session: null,
     profile: null,
+    profileLoadError: null,
     customer: null,
     electrician: null,
     wallet: null,
@@ -455,6 +456,7 @@ const Store = (() => {
     }
     if (!state.session) {
       state.profile = null;
+      state.profileLoadError = null;
       state.customer = null;
       state.electrician = null;
       state.wallet = null;
@@ -465,21 +467,33 @@ const Store = (() => {
     const user = seedUser || (userResult && userResult.data.user);
     if (!user) {
       state.profile = null;
+      state.profileLoadError = null;
       state.customer = null;
       state.electrician = null;
       state.wallet = null;
       return null;
     }
 
-    await ensureProfile(user);
+    const ensuredProfile = await ensureProfile(user);
+    let profileReadError = null;
+    let profileResult = null;
+    try {
+      profileResult = await withAuthLockRetry(() => client
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle());
+    } catch (error) {
+      profileReadError = normalizeError(error, 'Could not read your profile.');
+    }
+    if (profileResult && profileResult.error) {
+      profileReadError = normalizeError(profileResult.error, 'Could not read your profile.');
+    }
 
-    const profileResult = await withAuthLockRetry(() => client
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle());
-
-    const nextProfile = profileResult.data || null;
+    const nextProfile = (profileResult && profileResult.data) || ensuredProfile || null;
+    state.profileLoadError = nextProfile
+      ? null
+      : profileReadError || new Error('No profile was returned for this account.');
     let nextCustomer = null;
     let nextElectrician = null;
     let nextWallet = null;
@@ -527,6 +541,10 @@ const Store = (() => {
 
   function getCurrentProfile() {
     return state.profile;
+  }
+
+  function getProfileLoadError() {
+    return state.profileLoadError;
   }
 
   function getCurrentCustomer() {

@@ -1,0 +1,118 @@
+name: Admin Approval Assignment Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Supabase project to test
+        type: choice
+        required: true
+        default: staging
+        options:
+          - staging
+          - production
+  push:
+    branches:
+      - main
+    paths:
+      - 'js/admin/**'
+      - 'js/services/**'
+      - 'scripts/smoke-admin-approval-assignment.mjs'
+      - 'supabase/migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    paths:
+      - 'js/admin/**'
+      - 'js/services/**'
+      - 'scripts/smoke-admin-approval-assignment.mjs'
+      - 'supabase/migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run static checks
+        run: npm run check:js && npm run check:backend && npm run check:rpc
+
+  staging-smoke:
+    needs: checks
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run staging admin approval and assignment smoke
+        env:
+          RUN_ADMIN_FLOW_SMOKE: '1'
+          ADMIN_FLOW_SMOKE_TARGET: staging
+          SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::Staging Supabase smoke secrets are not configured; skipping admin flow smoke."
+            exit 0
+          fi
+          npm run smoke:admin-flow
+
+  production-smoke:
+    needs: checks
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run production admin approval and assignment smoke
+        env:
+          RUN_ADMIN_FLOW_SMOKE: '1'
+          ADMIN_FLOW_SMOKE_TARGET: production
+          CONFIRM_PRODUCTION_ADMIN_FLOW_SMOKE: '1'
+          SUPABASE_URL: ${{ secrets.PRODUCTION_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.PRODUCTION_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PRODUCTION_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::Production Supabase smoke secrets are not configured; skipping admin flow smoke."
+            exit 0
+          fi
+          npm run smoke:admin-flow
